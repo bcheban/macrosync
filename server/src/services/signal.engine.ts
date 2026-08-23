@@ -243,14 +243,29 @@ export async function getSignals(
   const profiles = strategy ? [STRATEGY_PROFILES[strategy]] : STRATEGIES.map((key) => STRATEGY_PROFILES[key]);
 
   const pairs = profiles.flatMap((profile) => symbols.map((symbol) => ({ profile, symbol })));
-  const signals = await Promise.all(
+
+  /*
+   * `allSettled`, not `all`: one symbol failing must never empty the whole
+   * grid. A rejected pair is dropped and the rest of the tape still renders —
+   * partial data beats an error screen for a dashboard that is polled.
+   */
+  const settled = await Promise.allSettled(
     pairs.map(async ({ profile, symbol }) => {
       const set = await getKlines(symbol, profile.interval, 180);
       return buildSignal(symbol, profile, set);
     }),
   );
 
-  return signals.sort((a, b) => b.confidence - a.confidence);
+  for (const result of settled) {
+    if (result.status === 'rejected') {
+      console.warn('[signals] dropped one symbol:', (result.reason as Error)?.message);
+    }
+  }
+
+  return settled
+    .filter((result): result is PromiseFulfilledResult<Signal> => result.status === 'fulfilled')
+    .map((result) => result.value)
+    .sort((a, b) => b.confidence - a.confidence);
 }
 
 /** Average ATR% across the tape — the volatility regime the AI layer reasons about. */

@@ -1,14 +1,29 @@
-# MacroSync — Macro-Synced Signal & Risk Terminal
+<div align="center">
 
-A crypto trading dashboard built around a single premise: **technical analysis breaks
-when the news hits.** Indicators can only describe what already happened, so they are
-structurally blind to a rate decision that lands in forty minutes.
+# MacroSync
 
-MacroSync exists to close that gap — it keeps the chart in sync with the macro calendar.
-It puts three things on one screen:
+### Macro-Synced Signal &amp; Risk Terminal
+
+**Technical analysis breaks when the news hits.** Indicators only describe what already
+happened, so they are structurally blind to a rate decision that lands in forty minutes.
+MacroSync keeps the chart in sync with the macro calendar.
+
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white&style=for-the-badge)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white&style=for-the-badge)](https://www.typescriptlang.org)
+[![Vite](https://img.shields.io/badge/Vite-7-646CFF?logo=vite&logoColor=white&style=for-the-badge)](https://vite.dev)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss&logoColor=white&style=for-the-badge)](https://tailwindcss.com)
+[![Node.js](https://img.shields.io/badge/Node.js-20.19+-5FA04E?logo=nodedotjs&logoColor=white&style=for-the-badge)](https://nodejs.org)
+[![Express](https://img.shields.io/badge/Express-5-000000?logo=express&logoColor=white&style=for-the-badge)](https://expressjs.com)
+[![Vercel](https://img.shields.io/badge/Vercel-deployed-000000?logo=vercel&logoColor=white&style=for-the-badge)](https://vercel.com)
+
+</div>
+
+---
+
+## What it does
 
 1. **Strategy Signals** — technical setups computed live from Binance candles, separated by
-   Scalping (5m), Day Trading (1h) and Swing (4h).
+   Scalping (5m), Day Trading (1h) and Swing (4h), narrowable to any single asset.
 2. **News Countdown Radar** — a hero timer ticking down to the next macro or political catalyst,
    with the expected impact and an explicit warning when a setup's horizon overlaps the release.
 3. **AI Actionable Insights** — headlines translated by an LLM into *risk-management scenarios*
@@ -16,24 +31,112 @@ It puts three things on one screen:
    conditional posture: `Bearish tone + high volatility → tighten stops to 0.8× ATR, cut size 50%,
    no new leveraged longs until the print clears.`
 
-Two cross-cutting features shape the UI: a **28-asset universe** with a switcher that re-scopes
-every panel at once, and full **English / Ukrainian localization** — including the sentences the
-signal engine and the AI risk layer generate.
+Three cross-cutting features shape the product: a **28-asset universe** with a switcher that
+re-scopes every panel at once, **live prices straight from the exchange socket**, and full
+**English / Ukrainian localization** — down to the sentences the signal engine and the AI risk
+layer generate.
 
 ---
 
-## Stack
+## Tech stack
 
-| Layer     | Choice                                                                    |
-| --------- | ------------------------------------------------------------------------- |
-| Frontend  | React 19 · TypeScript · Vite · Tailwind CSS v4 · Framer Motion · Lucide    |
-| i18n      | i18next · react-i18next · browser language detector (EN · UA)              |
-| SEO       | Static + runtime meta, OG image, `robots.txt`, generated `sitemap.xml`      |
-| Analytics | GA4 via `gtag`, injected on idle and gated on consent signals              |
-| Backend   | Node · Express 5 · TypeScript (ESM) · Zod                                 |
-| Market    | Binance public REST (`/api/v3/klines`, `/api/v3/ticker/24hr`) — no API key |
-| News      | Mock fixtures (`server/src/data/news.ts`, `server/src/data/calendar.ts`)   |
-| AI        | Anthropic (`claude-opus-5`) or OpenAI, with a deterministic rule engine as the default fallback |
+### Frontend
+
+<img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white" align="left" height="24" /> &nbsp;
+Renders the whole dashboard. Everything is a function component driven by hooks — there is no
+class component and no external state library; shared state lives in one small context
+(`AssetScope`) and everything else is local or derived.
+
+<br />
+
+<img src="https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white" align="left" height="24" /> &nbsp;
+The API contract. `types/domain.ts` is mirrored between server and client, so a change to a
+payload shape breaks the build on both sides rather than at runtime. Locale files are typed too:
+a missing translation key is a compile error, not a `[missing]` string in the UI.
+
+<br />
+
+<img src="https://img.shields.io/badge/Vite-7-646CFF?logo=vite&logoColor=white" align="left" height="24" /> &nbsp;
+Dev server and production bundler. It also hosts a small custom plugin (`web/vite/seo.ts`) that
+generates `robots.txt` and `sitemap.xml` at build time and injects absolute canonical URLs into
+the HTML.
+
+<br />
+
+<img src="https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4?logo=tailwindcss&logoColor=white" align="left" height="24" /> &nbsp;
+The entire design system, with no config file — tokens live in `@theme` inside `index.css`, and
+the glassmorphism primitives (`glass`, `glass-overlay`, `edge-light`) are custom `@utility`
+rules. Breakpoint prefixes carry all the responsive behaviour.
+
+<br />
+
+<img src="https://img.shields.io/badge/Framer_Motion-12-0055FF?logo=framer&logoColor=white" align="left" height="24" /> &nbsp;
+Motion that carries meaning: the shared-element `layoutId` pill on every tab strip, the
+digit-roll on the countdown, card entrance/exit in the signal grid, and the mobile sheet's
+slide-over. All of it collapses under `prefers-reduced-motion`.
+
+<br />
+
+<img src="https://img.shields.io/badge/i18next-25-26A69A?logo=i18next&logoColor=white" align="left" height="24" /> &nbsp;
+English and Ukrainian, including *generated* copy. The deterministic engines emit translation
+keys with parameters rather than sentences, so signal rationale and risk scenarios are
+translated client-side; the LLM is simply asked to answer in the active language.
+
+<br />
+
+<img src="https://img.shields.io/badge/Lucide-icons-F56565?logo=lucide&logoColor=white" align="left" height="24" /> &nbsp;
+Every icon in the interface. Tree-shaken per import, so only the ~25 glyphs actually used reach
+the bundle.
+
+### Backend
+
+<img src="https://img.shields.io/badge/Node.js-20.19+-5FA04E?logo=nodedotjs&logoColor=white" align="left" height="24" /> &nbsp;
+The runtime for the API — ESM throughout. It runs as a long-lived process locally and as a
+serverless function in deployment, from the same source.
+
+<br />
+
+<img src="https://img.shields.io/badge/Express-5-000000?logo=express&logoColor=white" align="left" height="24" /> &nbsp;
+The HTTP layer: nine routes, one router. The app is exported without a listener
+(`server/src/app.ts`) precisely so the same instance can be wrapped as a serverless handler.
+
+<br />
+
+<img src="https://img.shields.io/badge/Zod-4-3E67B1?logo=zod&logoColor=white" align="left" height="24" /> &nbsp;
+Schema for the LLM's structured output. The model is bound to it, so the risk breakdown arrives
+already shaped — the route never parses prose or guards against a malformed field.
+
+<br />
+
+<img src="https://img.shields.io/badge/Binance-market_data-F0B90B?logo=binance&logoColor=white" align="left" height="24" /> &nbsp;
+Price truth, used twice. The server pulls candles over REST to compute indicators; the browser
+subscribes to the `miniTicker` WebSocket directly, so displayed prices are the exact live rate
+rather than a cached poll.
+
+<br />
+
+<img src="https://img.shields.io/badge/Claude-Opus_5-D97757?logo=anthropic&logoColor=white" align="left" height="24" /> &nbsp;
+The risk analyst. Given a headline plus the live volatility regime it returns posture, scenarios,
+controls and an invalidation — never a direction. Swappable for OpenAI, and a deterministic rule
+engine covers the no-key case with the identical contract.
+
+### Tooling
+
+<img src="https://img.shields.io/badge/npm-workspaces-CB3837?logo=npm&logoColor=white" align="left" height="24" /> &nbsp;
+Two packages (`server`, `web`) under one lockfile, so a single `npm ci` reproduces the whole
+toolchain and the shared domain contract stays in step.
+
+<br />
+
+<img src="https://img.shields.io/badge/Vercel-serverless-000000?logo=vercel&logoColor=white" align="left" height="24" /> &nbsp;
+One project hosts both halves: static output for the dashboard, the Express app as a function on
+`/api` of the same origin — no second host, no CORS, no API base URL to configure.
+
+<br />
+
+<img src="https://img.shields.io/badge/GA4-analytics-E37400?logo=googleanalytics&logoColor=white" align="left" height="24" /> &nbsp;
+Product analytics, injected on idle after first paint so it never competes with the app bundle,
+and skipped entirely when unconfigured or when the browser sends Do Not Track.
 
 ---
 
@@ -81,6 +184,9 @@ Everything lives in `server/.env` (see `server/.env.example`). Every value has a
 | `SYMBOLS`               | 8 majors + SHIB         | Default watchlist, drawn from the asset catalogue           |
 | `MAX_SYMBOLS_PER_REQUEST` | `16`                  | Cap per request — one kline fetch per symbol                |
 | `USE_LIVE_MARKET_DATA`  | `true`                  | `false` forces the offline simulator                        |
+| `BINANCE_API_BASE`      | `data-api.binance.vision` | Market-data mirror — not geo-blocked for datacenter IPs   |
+| `BINANCE_API_FALLBACK`  | `api.binance.com`       | Tried when the primary host fails                           |
+| `UPSTREAM_COOLDOWN_MS`  | `30000`                 | Skip upstream for this long after every host fails          |
 | `LLM_PROVIDER`          | `auto`                  | `auto` · `anthropic` · `openai` · `heuristic`                |
 | `ANTHROPIC_API_KEY`     | —                       | Enables the Claude risk analyst                             |
 | `ANTHROPIC_MODEL`       | `claude-opus-5`         |                                                             |
@@ -93,6 +199,12 @@ The dashboard has its own configuration in `web/.env` (see `web/.env.example`):
 | `VITE_SITE_URL`          | `https://macrosync.io` | Absolute origin — canonical URLs, OG tags, sitemap, `hreflang`   |
 | `VITE_GA_MEASUREMENT_ID` | —                      | GA4 id, e.g. `G-XXXXXXXXXX`. Empty disables analytics completely |
 | `VITE_API_BASE`          | `/api`                 | Set when the API is on another origin                            |
+
+**Why two hosts?** `api.binance.com` geo-blocks datacenter IPs, so an API deployed to a cloud
+provider silently degrades to simulated prices — BTC at the hardcoded anchor instead of the real
+rate. `data-api.binance.vision` is Binance's own market-data mirror: same payloads, no key, and
+reachable from cloud IPs. The first host that answers wins; if none do, a cooldown stops every
+subsequent symbol in the request from paying the full timeout.
 
 **Offline / rate-limited?** The market service falls back to a seeded simulator automatically
 when Binance is unreachable (some regions block the API). The UI labels the feed as
@@ -166,6 +278,22 @@ The system prompt (`server/src/services/llm/prompt.ts`) forbids directional advi
 every scenario to be *conditional*: a market condition paired with a defensive response. The
 heuristic engine follows the same contract, so the product behaves identically with or without a
 key — and any provider failure degrades silently instead of emptying the feed.
+
+### Live prices — `web/src/hooks/useLivePrices.ts`
+
+Prices come from two places on purpose. The server pulls candles over REST to compute
+indicators, 24h stats and the sparkline; the browser subscribes to Binance's public
+`miniTicker` WebSocket directly and overlays the last price on top
+(`useMarketTickers`).
+
+That split exists because a server poll is a cache interval behind at best, and if the API is
+hosted where the exchange geo-blocks the IP it falls back to simulated candles — which is how a
+dashboard ends up confidently showing a price that is 25% wrong. The socket runs from the
+visitor's own connection, so the number on screen is the live rate regardless of what the
+backend can reach. Ticks are buffered and flushed once a second rather than committed
+per-message, the subscription is debounced so ticking assets in the picker cannot burn through
+the exchange's connection limit, and a quote counts as live only while ticks keep arriving —
+after which the header badge honestly drops back to `Binance live` or `Simulated feed`.
 
 ### Asset universe — `server/src/data/assets.ts`
 

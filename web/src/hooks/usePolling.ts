@@ -39,7 +39,15 @@ export function usePolling<T>(
     let cancelled = false;
 
     const run = async () => {
-      if (document.hidden) return;
+      /*
+       * Polling pauses while the tab is hidden — but a first load in a
+       * background tab must not leave the skeletons up forever, so the loading
+       * flag is released even when the fetch itself is skipped.
+       */
+      if (document.hidden) {
+        if (!hasData.current) setLoading(false);
+        return;
+      }
       if (hasData.current) setRefreshing(true);
       try {
         const result = await fetcherRef.current(controller.signal);

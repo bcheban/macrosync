@@ -9,6 +9,8 @@ const VOL_TONE = { low: 'bull', elevated: 'cyber', high: 'warn', extreme: 'bear'
 interface MarketStatusProps {
   context?: MarketContext;
   live: boolean;
+  /** Live exchange socket, as opposed to a REST poll. */
+  streaming?: boolean;
   /**
    * `bar` progressively reveals badges as the header widens; `stacked` shows
    * all of them, for the mobile sheet where there is room.
@@ -24,7 +26,7 @@ interface MarketStatusProps {
  * sheet below `md`, so the same information is reachable at every size instead
  * of being dropped on small viewports.
  */
-export function MarketStatus({ context, live, variant = 'bar', className }: MarketStatusProps) {
+export function MarketStatus({ context, live, streaming = false, variant = 'bar', className }: MarketStatusProps) {
   const { t } = useTranslation();
   const breadth = context ? Math.round(context.breadth * 100) : undefined;
   const stacked = variant === 'stacked';
@@ -59,7 +61,13 @@ export function MarketStatus({ context, live, variant = 'bar', className }: Mark
 
       <Badge tone={live ? 'bull' : 'warn'} size="md" className={cn('max-w-full', !stacked && 'hidden md:inline-flex')}>
         <LiveDot tone={live ? 'bull' : 'warn'} />
-        <span className="min-w-0 truncate">{live ? t('topbar.binanceLive') : t('topbar.simulatedFeed')}</span>
+        <span className="min-w-0 truncate">
+          {streaming
+            ? t('topbar.streaming')
+            : live
+              ? t('topbar.binanceLive')
+              : t('topbar.simulatedFeed')}
+        </span>
       </Badge>
     </div>
   );

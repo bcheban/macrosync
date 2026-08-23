@@ -37,6 +37,7 @@ export const en = {
   topbar: {
     volatility: 'Volatility',
     breadth: 'Breadth {{value}}%',
+    streaming: 'Live stream',
     binanceLive: 'Binance live',
     simulatedFeed: 'Simulated feed',
     atr: 'ATR {{value}}%',
@@ -88,7 +89,14 @@ export const en = {
     title: 'Strategy Signals',
     live: '{{count}} live',
     error: 'Signal engine unreachable — {{message}}',
-    empty: 'Pick at least one asset to compute signals.',
+    empty: 'No signals for this selection',
+    allAssets: 'All',
+    focusAria: 'Focus on one asset',
+    emptyHint:
+      'The engine returns no setup for the current selection. Try another strategy timeframe, or widen the asset universe in the header.',
+    emptyFocus: 'No {{asset}} signal on this timeframe',
+    emptyFocusHint: 'The other tracked assets may still have setups — switch back to All to see them.',
+    showAll: 'Show all assets',
     confluence: 'Confluence',
     entry: 'Entry',
     stop: 'Stop',

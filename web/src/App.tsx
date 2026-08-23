@@ -10,6 +10,7 @@ import { Watchlist } from '@/components/market/Watchlist';
 import { SignalsPanel } from '@/components/signals/SignalsPanel';
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { useDocumentMeta } from '@/hooks/useDocumentMeta';
+import { useMarketTickers } from '@/hooks/useMarketTickers';
 import { usePolling } from '@/hooks/usePolling';
 import { currentLocale } from '@/i18n';
 import { api } from '@/lib/api';
@@ -27,6 +28,8 @@ function Dashboard() {
 
   const symbolKey = selected.join(',');
   const tickers = usePolling((signal) => api.tickers(selected, signal), 10_000, [symbolKey]);
+  // REST snapshot overlaid with the exchange's live socket, so prices are exact.
+  const market = useMarketTickers(tickers.data?.tickers ?? []);
   const events = usePolling((signal) => api.events(signal), 30_000);
   // Re-fetched on a language switch: model-written insights come back translated.
   const insights = usePolling((signal) => api.insights(locale, signal), 60_000, [i18n.resolvedLanguage]);
@@ -45,11 +48,12 @@ function Dashboard() {
 
       <TopBar
         context={insights.data?.context}
-        tickers={tickers.data?.tickers ?? []}
+        tickers={market.tickers}
+        streaming={market.streaming}
         refreshing={refreshing}
         onRefresh={refreshAll}
       />
-      <TickerStrip tickers={tickers.data?.tickers ?? []} />
+      <TickerStrip tickers={market.tickers} />
 
       <main className="mx-auto w-full max-w-[1600px] space-y-5 px-3 py-5 sm:space-y-6 sm:px-6 sm:py-6 lg:space-y-8 lg:py-8">
         <CountdownRadar event={events.data?.headline} loading={events.loading} />
@@ -58,7 +62,7 @@ function Dashboard() {
           <SignalsPanel />
 
           <aside className="min-w-0 space-y-5 sm:space-y-6 lg:sticky lg:top-24 lg:self-start">
-            <Watchlist tickers={tickers.data?.tickers ?? []} loading={tickers.loading} />
+            <Watchlist tickers={market.tickers} loading={tickers.loading} />
             <EventQueue events={events.data?.events ?? []} loading={events.loading} />
           </aside>
         </div>

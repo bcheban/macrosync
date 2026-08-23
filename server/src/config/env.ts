@@ -13,11 +13,25 @@ export const env = {
   port: Number(process.env.PORT ?? 4000),
   corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
 
-  /** Public Binance REST base. No key required for the endpoints we touch. */
-  binanceBase: process.env.BINANCE_API_BASE ?? 'https://api.binance.com',
+  /**
+   * Public Binance market-data base. `data-api.binance.vision` is Binance's own
+   * market-data mirror: same payloads, no key, and — unlike `api.binance.com` —
+   * it is not geo-blocked for datacenter IPs, which is what a serverless deploy
+   * runs on. `api.binance.com` is kept as an automatic fallback.
+   */
+  binanceBase: process.env.BINANCE_API_BASE ?? 'https://data-api.binance.vision',
+  binanceFallbackBase: process.env.BINANCE_API_FALLBACK ?? 'https://api.binance.com',
+  /**
+   * How long to stop calling upstream after every host has failed. Without this
+   * every symbol in a request pays the full timeout, which is what turns one
+   * unreachable exchange into a serverless function timeout.
+   */
+  upstreamCooldownMs: Number(process.env.UPSTREAM_COOLDOWN_MS ?? 30_000),
   /** Set to `false` to force the deterministic simulator (useful offline / in CI). */
   useLiveMarketData: (process.env.USE_LIVE_MARKET_DATA ?? 'true') !== 'false',
-  marketTimeoutMs: Number(process.env.MARKET_TIMEOUT_MS ?? 4000),
+  /** Per-host budget. Binance normally answers in ~300ms; two hosts must still
+   *  fit inside a serverless function's limit on the very first (cold) request. */
+  marketTimeoutMs: Number(process.env.MARKET_TIMEOUT_MS ?? 2500),
 
   /** Default watchlist. The client may request any subset of the asset catalog. */
   symbols: parseList(process.env.SYMBOLS, DEFAULT_SYMBOLS),

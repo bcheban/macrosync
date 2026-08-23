@@ -13,6 +13,7 @@ import type { MarketContext } from '@/types/domain';
 interface MobileControlsProps {
   context?: MarketContext;
   live: boolean;
+  streaming?: boolean;
   className?: string;
 }
 
@@ -29,7 +30,7 @@ interface MobileControlsProps {
  * which makes that element the containing block for `position: fixed`
  * descendants — an in-place overlay would be clipped to the height of the bar.
  */
-export function MobileControls({ context, live, className }: MobileControlsProps) {
+export function MobileControls({ context, live, streaming = false, className }: MobileControlsProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const titleId = useId();
@@ -119,7 +120,7 @@ export function MobileControls({ context, live, className }: MobileControlsProps
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                className="absolute inset-0 h-full w-full cursor-default bg-void/80 backdrop-blur-sm"
+                className="absolute inset-0 h-full w-full cursor-default bg-black/80 backdrop-blur-md"
               />
 
               <motion.div
@@ -131,7 +132,7 @@ export function MobileControls({ context, live, className }: MobileControlsProps
                 animate={{ x: 0 }}
                 exit={{ x: '100%' }}
                 transition={{ type: 'spring', stiffness: 320, damping: 34 }}
-                className="glass absolute inset-y-0 right-0 flex w-[min(21rem,100vw)] flex-col border-l border-white/10"
+                className="glass-overlay absolute inset-y-0 right-0 flex w-[min(21rem,100vw)] flex-col border-y-0 border-r-0"
               >
                 <div className="flex items-center justify-between gap-3 border-b border-white/8 px-4 py-3">
                   <h2 id={titleId} className="min-w-0 truncate text-sm font-semibold text-white">
@@ -151,7 +152,7 @@ export function MobileControls({ context, live, className }: MobileControlsProps
                 <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-4">
                   <section className="space-y-2">
                     <h3 className="text-[10px] tracking-[0.16em] text-white/35 uppercase">{t('topbar.status')}</h3>
-                    <MarketStatus context={context} live={live} variant="stacked" />
+                    <MarketStatus context={context} live={live} streaming={streaming} variant="stacked" />
                   </section>
 
                   <section>

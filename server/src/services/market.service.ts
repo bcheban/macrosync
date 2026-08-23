@@ -80,7 +80,31 @@ function simulateCandles(symbol: string, interval: Interval, limit: number): Can
   return candles;
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
+/**
+ * Upstream health, shared by every market call.
+ *
+ * When the exchange is unreachable — the usual case is a datacenter IP being
+ * geo-blocked — the first failure trips a cooldown so the remaining symbols in
+ * the same request fall straight through to the simulator instead of each
+ * paying the full timeout. One slow upstream must not become a function
+ * timeout.
+ */
+let upstreamDownUntil = 0;
+
+export const upstreamAvailable = (): boolean => Date.now() >= upstreamDownUntil;
+
+const markUpstreamDown = (): void => {
+  upstreamDownUntil = Date.now() + env.upstreamCooldownMs;
+};
+
+const markUpstreamUp = (): void => {
+  upstreamDownUntil = 0;
+};
+
+/** Hosts to try in order: the market-data mirror first, the main API second. */
+const HOSTS = [...new Set([env.binanceBase, env.binanceFallbackBase].filter(Boolean))];
+
+async function fetchOnce<T>(url: string): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), env.marketTimeoutMs);
   try {
@@ -92,11 +116,28 @@ async function fetchJson<T>(url: string): Promise<T> {
   }
 }
 
+/** Tries every host for one path, then trips the cooldown if all of them fail. */
+async function fetchJson<T>(path: string): Promise<T> {
+  let lastError: Error | undefined;
+
+  for (const host of HOSTS) {
+    try {
+      const value = await fetchOnce<T>(`${host}${path}`);
+      markUpstreamUp();
+      return value;
+    } catch (error) {
+      lastError = error as Error;
+    }
+  }
+
+  markUpstreamDown();
+  throw lastError ?? new Error('no upstream host configured');
+}
+
 type RawKline = [number, string, string, string, string, string, ...unknown[]];
 
 async function fetchKlines(symbol: string, interval: Interval, limit: number): Promise<Candle[]> {
-  const url = `${env.binanceBase}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
-  const raw = await fetchJson<RawKline[]>(url);
+  const raw = await fetchJson<RawKline[]>(`/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
   return raw.map((row) => ({
     openTime: row[0],
     open: Number(row[1]),
@@ -113,7 +154,8 @@ export async function getKlines(symbol: string, interval: Interval, limit = 180)
   const ttl = Math.min(INTERVAL_MS[interval] / 10, 30_000);
 
   return cache.wrap(key, ttl, async () => {
-    if (env.useLiveMarketData) {
+    // `upstreamAvailable()` short-circuits the cooldown window.
+    if (env.useLiveMarketData && upstreamAvailable()) {
       try {
         const candles = await fetchKlines(symbol, interval, limit);
         if (candles.length) return { symbol, interval, candles, source: 'binance' as const };
@@ -166,10 +208,10 @@ export async function getTickers(symbols: string[] = [...env.symbols]): Promise<
     const bySymbol = new Map(sparkSets.map((set) => [set.symbol, set]));
     const simulated = sparkSets.some((set) => set.source === 'simulated');
 
-    if (env.useLiveMarketData && !simulated) {
+    if (env.useLiveMarketData && upstreamAvailable() && !simulated) {
       try {
         const query = encodeURIComponent(JSON.stringify(symbols));
-        const raw = await fetchJson<Raw24h[]>(`${env.binanceBase}/api/v3/ticker/24hr?symbols=${query}`);
+        const raw = await fetchJson<Raw24h[]>(`/api/v3/ticker/24hr?symbols=${query}`);
         return raw.map((row) => {
           const { base, quote } = splitSymbol(row.symbol);
           const set = bySymbol.get(row.symbol);
