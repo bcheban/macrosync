@@ -1,7 +1,7 @@
 import { env } from '../config/env.js';
-import { getHeadlineEvent } from '../data/calendar.js';
+import { getHeadlineEvent } from './calendar.service.js';
 import { getKlines, splitSymbol, type Interval } from './market.service.js';
-import type { Direction, I18nText, Signal, Strategy } from '../types/domain.js';
+import type { Direction, I18nText, MacroEvent, Signal, Strategy } from '../types/domain.js';
 import { atr, clamp, ema, macd, round, roundPrice, rsi, sma } from '../utils/indicators.js';
 
 interface StrategyProfile {
@@ -163,7 +163,12 @@ function scoreComponents(profile: StrategyProfile, closes: number[], volumes: nu
   };
 }
 
-function buildSignal(symbol: string, profile: StrategyProfile, set: Awaited<ReturnType<typeof getKlines>>): Signal {
+function buildSignal(
+  symbol: string,
+  profile: StrategyProfile,
+  set: Awaited<ReturnType<typeof getKlines>>,
+  headline: MacroEvent | undefined,
+): Signal {
   const closes = set.candles.map((candle) => candle.close);
   const volumes = set.candles.map((candle) => candle.volume);
   const read = scoreComponents(profile, closes, volumes, set.candles);
@@ -193,11 +198,10 @@ function buildSignal(symbol: string, profile: StrategyProfile, set: Awaited<Retu
     .slice(0, 3)
     .map((component) => component.note);
 
-  const headline = getHeadlineEvent();
-  const minutesToEvent = (Date.parse(headline.startsAt) - Date.now()) / 60_000;
+  const minutesToEvent = headline ? (Date.parse(headline.startsAt) - Date.now()) / 60_000 : Number.NaN;
   const minutes = Math.round(minutesToEvent);
   const eventWarning: I18nText | undefined =
-    minutesToEvent > 0 && minutesToEvent < profile.horizonMinutes
+    headline && minutesToEvent > 0 && minutesToEvent < profile.horizonMinutes
       ? {
           key: 'signals.eventWarning',
           // `eventKey` is resolved client-side into a translated `event` title.
@@ -249,10 +253,13 @@ export async function getSignals(
    * grid. A rejected pair is dropped and the rest of the tape still renders —
    * partial data beats an error screen for a dashboard that is polled.
    */
+  // Fetched once for the whole batch rather than per signal.
+  const headline = await getHeadlineEvent();
+
   const settled = await Promise.allSettled(
     pairs.map(async ({ profile, symbol }) => {
       const set = await getKlines(symbol, profile.interval, 180);
-      return buildSignal(symbol, profile, set);
+      return buildSignal(symbol, profile, set, headline);
     }),
   );
 

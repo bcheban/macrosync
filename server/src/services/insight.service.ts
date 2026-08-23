@@ -1,5 +1,5 @@
 import { env } from '../config/env.js';
-import { getHeadlineEvent } from '../data/calendar.js';
+import { getHeadlineEvent } from './calendar.service.js';
 import { getNews } from './news/news.service.js';
 import type { AiInsight, Locale, MarketContext, NewsItem, VolatilityRegime } from '../types/domain.js';
 import { cache } from '../utils/cache.js';
@@ -13,19 +13,28 @@ const regimeFor = (avgAtrPct: number): VolatilityRegime =>
   avgAtrPct >= 2.4 ? 'extreme' : avgAtrPct >= 1.4 ? 'high' : avgAtrPct >= 0.8 ? 'elevated' : 'low';
 
 export async function getMarketContext(): Promise<MarketContext> {
-  const { avgAtrPct, breadth } = await getVolatilitySnapshot();
-  const event = getHeadlineEvent();
+  const [{ avgAtrPct, breadth }, event] = await Promise.all([
+    getVolatilitySnapshot(),
+    getHeadlineEvent(),
+  ]);
+
   return {
     avgAtrPct,
     breadth,
     volatility: regimeFor(avgAtrPct),
-    nextEvent: {
-      id: event.id,
-      title: event.title,
-      startsAt: event.startsAt,
-      minutesAway: Math.max(0, Math.round((Date.parse(event.startsAt) - Date.now()) / 60_000)),
-      importance: event.importance,
-    },
+    // Omitted entirely when nothing is scheduled, so the risk layer never
+    // reasons about an event that does not exist.
+    ...(event
+      ? {
+          nextEvent: {
+            id: event.id,
+            title: event.title,
+            startsAt: event.startsAt,
+            minutesAway: Math.max(0, Math.round((Date.parse(event.startsAt) - Date.now()) / 60_000)),
+            importance: event.importance,
+          },
+        }
+      : {}),
   };
 }
 

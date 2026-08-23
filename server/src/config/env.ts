@@ -81,6 +81,12 @@ export const env = {
   newsTtlMs: positiveInt(process.env.NEWS_TTL_MS, 300_000),
   newsTimeoutMs: positiveInt(process.env.NEWS_TIMEOUT_MS, 6000),
 
+  /* --- economic calendar -------------------------------------------------- */
+
+  /** The feed covers one rolling week; there is nothing to gain from polling it hard. */
+  calendarTtlMs: positiveInt(process.env.CALENDAR_TTL_MS, 1_800_000),
+  calendarTimeoutMs: positiveInt(process.env.CALENDAR_TIMEOUT_MS, 6000),
+
   /* --- AI risk layer ----------------------------------------------------- */
 
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',

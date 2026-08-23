@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { env } from '../config/env.js';
 import { ASSET_GROUPS, assetCatalog, isKnownSymbol } from '../data/assets.js';
-import { getUpcomingEvents, getHeadlineEvent } from '../data/calendar.js';
+import { calendarStatus, getUpcomingEvents, getHeadlineEvent } from '../services/calendar.service.js';
 import { getNews, newsStatus } from '../services/news/news.service.js';
 import { getTickers, upstreamStatus } from '../services/market.service.js';
 import { getInsights, getMarketContext, invalidateInsights } from '../services/insight.service.js';
@@ -50,6 +50,7 @@ api.get('/health', (_req, res) => {
     status: 'ok',
     market: upstreamStatus(),
     news: newsStatus(),
+    calendar: calendarStatus(),
     marketTimeoutMs: env.marketTimeoutMs,
     maxSymbolsPerRequest: env.maxSymbolsPerRequest,
     symbols: env.symbols,
@@ -101,10 +102,19 @@ api.get(
   }),
 );
 
-api.get('/events', (req, res) => {
-  const limit = Number(req.query.limit ?? 8);
-  res.json({ events: getUpcomingEvents(Number.isFinite(limit) ? limit : 8), headline: getHeadlineEvent() });
-});
+api.get(
+  '/events',
+  route(async (req, res) => {
+    const limit = Number(req.query.limit ?? 8);
+    const [events, headline] = await Promise.all([
+      getUpcomingEvents(Number.isFinite(limit) ? limit : 8),
+      getHeadlineEvent(),
+    ]);
+    // `headline` is absent when the feed's week has run out — the dashboard
+    // renders that as "nothing scheduled" instead of an empty countdown.
+    res.json({ events, ...(headline ? { headline } : {}) });
+  }),
+);
 
 api.get(
   '/news',

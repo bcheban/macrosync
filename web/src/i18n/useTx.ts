@@ -47,13 +47,13 @@ export function useTx() {
 
   const text = useCallback((node: I18nText | undefined) => renderI18nText(t, node), [t]);
 
+  /**
+   * Event names come from the calendar feed in English. A locale may translate
+   * the common indicators by slug (`events.cpi-m-m.title`); anything it has no
+   * entry for falls back to what the feed published.
+   */
   const eventTitle = useCallback(
     (event: Pick<MacroEvent, 'id' | 'title'>) => t(`events.${event.id}.title`, { defaultValue: event.title }),
-    [t],
-  );
-
-  const eventDetail = useCallback(
-    (event: Pick<MacroEvent, 'id' | 'detail'>) => t(`events.${event.id}.detail`, { defaultValue: event.detail }),
     [t],
   );
 
@@ -64,7 +64,7 @@ export function useTx() {
   );
 
   return useMemo(
-    () => ({ t: typedT, tx: t, i18n, text, eventTitle, eventDetail, assetName }),
-    [typedT, t, i18n, text, eventTitle, eventDetail, assetName],
+    () => ({ t: typedT, tx: t, i18n, text, eventTitle, assetName }),
+    [typedT, t, i18n, text, eventTitle, assetName],
   );
 }

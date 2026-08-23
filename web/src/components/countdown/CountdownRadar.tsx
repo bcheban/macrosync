@@ -1,5 +1,5 @@
 import { m } from 'framer-motion';
-import { AlertTriangle, BarChart3, Bitcoin, Landmark, Megaphone, Radar } from 'lucide-react';
+import { AlertTriangle, BarChart3, Bitcoin, CalendarOff, Landmark, Megaphone, Radar } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Badge, LiveDot } from '@/components/ui/Badge';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -39,7 +39,7 @@ const WINDOW_MS = 72 * 60 * 60 * 1000;
 const HERO_ROW_HEIGHT = 'min-h-[571px] sm:min-h-[542px] lg:min-h-[364px]';
 
 export function CountdownRadar({ event, loading }: { event?: MacroEvent; loading: boolean }) {
-  const { t, eventTitle, eventDetail } = useTx();
+  const { t, eventTitle } = useTx();
   const countdown = useCountdown(event?.startsAt);
 
   /*
@@ -49,6 +49,23 @@ export function CountdownRadar({ event, loading }: { event?: MacroEvent; loading
    * replaced it, and because the hero sits above everything else that gap
    * moved the entire page on load.
    */
+  if (!loading && !event) {
+    return (
+      <GlassCard className="relative p-4 sm:p-6 lg:p-8">
+        <div
+          className={cn(
+            'flex min-w-0 flex-col items-center justify-center gap-2 text-center',
+            HERO_ROW_HEIGHT,
+          )}
+        >
+          <CalendarOff className="size-7 text-white/20" />
+          <p className="text-base font-semibold text-white/80">{t('countdown.noEvent')}</p>
+          <p className="max-w-md text-[13px] leading-relaxed text-white/40">{t('countdown.noEventHint')}</p>
+        </div>
+      </GlassCard>
+    );
+  }
+
   if (loading || !event) {
     return (
       <GlassCard className="relative p-4 sm:p-6 lg:p-8">
@@ -175,12 +192,17 @@ export function CountdownRadar({ event, loading }: { event?: MacroEvent; loading
             {eventTitle(event)}
           </h1>
           {/*
-            Same reservation for the detail: clamped to three lines and always
-            three lines tall, so nothing below the hero moves when the language
-            changes.
+            The calendar feed publishes a name, a currency and an impact rating
+            — no prose. Rather than invent a description, this states what the
+            feed actually said. Height stays reserved so nothing below the hero
+            moves when the language or the event changes.
           */}
           <p className="mt-1.5 line-clamp-3 min-h-[3lh] max-w-2xl text-[13px] leading-normal text-balance text-white/50 sm:text-sm">
-            {eventDetail(event)}
+            {t('countdown.summary', {
+              currency: event.currency,
+              region: event.region,
+              level: t(`importance.${event.importance}`),
+            })}
           </p>
 
           {/*
@@ -210,7 +232,7 @@ export function CountdownRadar({ event, loading }: { event?: MacroEvent; loading
                 {formatClock(event.startsAt)}
               </span>
               <span className="max-w-[22ch] truncate text-[11px] text-white/30">
-                {t('countdown.affects', { assets: event.affects.join(' · ') })}
+                {t('countdown.scheduleSource')}
               </span>
             </div>
           </div>
@@ -224,9 +246,7 @@ export function CountdownRadar({ event, loading }: { event?: MacroEvent; loading
             <span className="tnum shrink-0 font-mono whitespace-nowrap text-white/45">
               {formatClock(event.startsAt)}
             </span>
-            <span className="min-w-0 truncate text-white/30">
-              {t('countdown.affects', { assets: event.affects.join(' · ') })}
-            </span>
+            <span className="min-w-0 truncate text-white/30">{t('countdown.scheduleSource')}</span>
           </div>
 
           {(event.forecast || event.previous) && (

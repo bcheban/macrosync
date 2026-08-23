@@ -95,17 +95,22 @@ export interface Signal {
 export type EventCategory = 'monetary' | 'macro' | 'political' | 'crypto';
 
 export interface MacroEvent {
+  /** Slug of the print's name — stable across the feed's weekly rollover. */
   id: string;
-  /** English copy. Clients translate by id via `events.<id>.title`. */
+  /** As published by the calendar feed. Clients may translate by `events.<id>.title`. */
   title: string;
-  detail: string;
   category: EventCategory;
   importance: 'high' | 'medium' | 'low';
+  /** Country/bloc the print comes from, derived from the feed's currency code. */
   region: string;
+  currency: string;
   startsAt: string;
-  /** 0–100 heuristic for the volatility this print usually injects. */
+  /** 0–100 volatility expectation, derived from the feed's own impact rating. */
   expectedImpact: number;
-  affects: string[];
+  /**
+   * Only present when the calendar actually published them. Never inferred —
+   * a forecast the market has not made is not a forecast.
+   */
   previous?: string;
   forecast?: string;
 }
@@ -184,7 +189,8 @@ export interface SignalsResponse {
 }
 export interface EventsResponse {
   events: MacroEvent[];
-  headline: MacroEvent;
+  /** Absent when the calendar has nothing left this week. */
+  headline?: MacroEvent;
 }
 export interface InsightsResponse {
   insights: AiInsight[];

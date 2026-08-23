@@ -153,7 +153,10 @@ export const en = {
     seconds: 'Sec',
     forecast: 'Forecast',
     previous: 'Previous',
-    affects: 'Affects {{assets}}',
+    summary: '{{currency}} · {{region}} · {{level}} expected impact',
+    scheduleSource: 'Economic calendar',
+    noEvent: 'No scheduled catalyst',
+    noEventHint: 'The calendar has nothing left this week. Technical setups carry their usual weight until the next print is published.',
     riskWindow: 'Risk window open',
     importance: '{{level}} impact · {{region}}',
     warning:
@@ -177,49 +180,12 @@ export const en = {
     subtitle: 'Scheduled macro & political catalysts',
   },
 
-  /** Keyed by `MacroEvent.id` from `server/src/data/calendar.ts`. */
-  events: {
-    'fomc-rate-decision': {
-      title: 'FOMC Interest Rate Decision',
-      detail: 'Federal funds target range + statement. Dot plot on quarterly meetings.',
-    },
-    'fed-chair-presser': {
-      title: 'Fed Chair Press Conference',
-      detail: 'Unscripted Q&A — historically the widest intraday range of the session.',
-    },
-    'us-cpi': {
-      title: 'US CPI (YoY)',
-      detail: 'Headline and core inflation print. Primary driver of rate-cut repricing.',
-    },
-    'us-nfp': {
-      title: 'US Non-Farm Payrolls',
-      detail: 'Labour market strength — moves the dollar and, by extension, crypto beta.',
-    },
-    'ecb-decision': {
-      title: 'ECB Monetary Policy Decision',
-      detail: 'Euro-area rates. Second-order impact through the EUR/USD channel.',
-    },
-    'sec-policy-hearing': {
-      title: 'Senate Banking Hearing — Digital Assets',
-      detail: 'Political headline risk. Single sentences here have moved alt-caps 8%+.',
-    },
-    'g7-statement': {
-      title: 'G7 Leaders — Joint Statement on Tariffs',
-      detail: 'Geopolitical tape bomb risk; timing is announced but content is not.',
-    },
-    'btc-options-expiry': {
-      title: 'BTC & ETH Options Expiry (Deribit)',
-      detail: 'Large open-interest roll-off. Pinning into expiry, gamma release after.',
-    },
-    'etf-flows': {
-      title: 'US Spot ETF Net Flow Print',
-      detail: 'Daily creations/redemptions across issuers — the clean spot-demand read.',
-    },
-    'boj-decision': {
-      title: 'Bank of Japan Policy Decision',
-      detail: 'Carry-trade unwind risk — the 2024 playbook for sudden crypto air pockets.',
-    },
-  },
+  /**
+   * Event names come from the calendar feed already in English, so there is
+   * nothing to translate here — other locales add entries keyed by the slug of
+   * the title (see `uk.ts`), and anything missing falls back to the feed.
+   */
+  events: {},
 
 
   insights: {

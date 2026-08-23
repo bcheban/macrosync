@@ -258,20 +258,22 @@ sentences, so a trader can see *why* a signal fired.
 If a high-impact calendar event falls inside the strategy's holding horizon, the signal carries an
 `eventWarning` — this is the connective tissue between the technical and news halves of the app.
 
-### Countdown radar — `server/src/data/calendar.ts`
+### Countdown radar — `server/src/services/calendar.service.ts`
 
-> **The one remaining fixture.** Prices, candles and news are live; the macro calendar is not.
-> The events are real (FOMC, CPI, NFP, ECB, BoJ, options expiry) and their cadences are real, but
-> the dates are computed by rolling a known anchor forward rather than read from an economic
-> calendar feed — every provider of those (Trading Economics, Finnhub, FMP) requires a paid key.
-> Swapping this module for a real feed touches nothing else; the API and UI only depend on the
-> `MacroEvent` shape.
+Real prints from ForexFactory's public weekly feed: dates, impact ratings,
+forecasts and prior readings, none of them inferred.
 
+This replaced a fixture that computed dates by rolling an anchor forward and — worse — carried
+hand-written `forecast` and `previous` values. A trading dashboard stating "Forecast 4.00%–4.25%"
+as fact when nobody published that number is the most damaging kind of wrong, so the rule here is
+that anything the feed does not supply is simply absent: no description prose, no list of "affected
+assets", no forecast the market has not made.
 
-Calendar entries are templates with an anchor plus a cadence (FOMC every 42 days, CPI ~30, options
-expiry weekly…). `nextOccurrence()` rolls each anchor forward until it lands in the future, so the
-countdown is always live no matter when the project is run. Swap this module for a real calendar
-feed (Trading Economics, Finnhub) without touching the API or the UI.
+Events are keyed by a slug of the print's name (`core-pce-price-index-m-m`) so ids survive the
+feed's weekly rollover and translations stay attached; `uk.ts` translates the recurring indicators
+and anything else falls back to the feed's own wording. The feed covers one rolling week, so late
+in the week the queue runs short — the hero then renders an explicit "nothing scheduled" state
+rather than an empty countdown.
 
 ### AI risk layer — `server/src/services/insight.service.ts`
 

@@ -157,7 +157,10 @@ export const uk: Translation = {
     seconds: 'Сек',
     forecast: 'Прогноз',
     previous: 'Попереднє',
-    affects: 'Впливає на {{assets}}',
+    summary: '{{currency}} · {{region}} · очікуваний вплив {{level}}',
+    scheduleSource: 'Економічний календар',
+    noEvent: 'Немає запланованих подій',
+    noEventHint: 'На цьому тижні календар порожній. До публікації наступних даних технічні сетапи мають звичайну вагу.',
     riskWindow: 'Вікно ризику відкрите',
     importance: 'вплив {{level}} · {{region}}',
     warning:
@@ -181,47 +184,33 @@ export const uk: Translation = {
     subtitle: 'Заплановані макро- та політичні каталізатори',
   },
 
+  /**
+   * Event names arrive from the calendar feed in English, keyed by a slug of
+   * the title. Only the recurring indicators are translated; anything else
+   * falls back to what the feed published.
+   */
   events: {
-    'fomc-rate-decision': {
-      title: 'Рішення FOMC щодо процентної ставки',
-      detail: 'Цільовий діапазон ставки ФРС і супровідна заява. Точкова діаграма — на квартальних засіданнях.',
-    },
-    'fed-chair-presser': {
-      title: 'Пресконференція голови ФРС',
-      detail: 'Запитання без сценарію — історично найширший внутрішньоденний діапазон сесії.',
-    },
-    'us-cpi': {
-      title: 'Інфляція CPI у США (р/р)',
-      detail: 'Загальна та базова інфляція. Головний драйвер переоцінки очікувань щодо зниження ставки.',
-    },
-    'us-nfp': {
-      title: 'Зайнятість поза сільським господарством у США (NFP)',
-      detail: 'Сила ринку праці — рухає долар, а через нього й бету крипторинку.',
-    },
-    'ecb-decision': {
-      title: 'Рішення ЄЦБ щодо монетарної політики',
-      detail: 'Ставки єврозони. Вплив другого порядку через канал EUR/USD.',
-    },
-    'sec-policy-hearing': {
-      title: 'Слухання банківського комітету Сенату — цифрові активи',
-      detail: 'Політичний ризик заголовків. Окремі фрази звідси рухали альткоїни на 8%+.',
-    },
-    'g7-statement': {
-      title: 'Лідери G7 — спільна заява щодо тарифів',
-      detail: 'Ризик геополітичного вкидання: час відомий, зміст — ні.',
-    },
-    'btc-options-expiry': {
-      title: 'Експірація опціонів BTC та ETH (Deribit)',
-      detail: 'Закриття великого відкритого інтересу. Притискання ціни до експірації, вивільнення гамми після.',
-    },
-    'etf-flows': {
-      title: 'Чисті потоки у спотові ETF США',
-      detail: 'Щоденні створення та погашення паїв — найчистіший показник спотового попиту.',
-    },
-    'boj-decision': {
-      title: 'Рішення Банку Японії щодо політики',
-      detail: 'Ризик згортання керрі-трейду — сценарій 2024 року для раптових провалів у крипті.',
-    },
+    'cpi-m-m': { title: 'Індекс споживчих цін (м/м)' },
+    'cpi-y-y': { title: 'Індекс споживчих цін (р/р)' },
+    'core-cpi-m-m': { title: 'Базовий ІСЦ (м/м)' },
+    'core-pce-price-index-m-m': { title: 'Базовий ціновий індекс PCE (м/м)' },
+    'federal-funds-rate': { title: 'Ставка ФРС' },
+    'fomc-statement': { title: 'Заява FOMC' },
+    'fomc-press-conference': { title: 'Пресконференція FOMC' },
+    'fomc-meeting-minutes': { title: 'Протокол засідання FOMC' },
+    'non-farm-employment-change': { title: 'Зайнятість поза с/г (NFP)' },
+    'unemployment-rate': { title: 'Рівень безробіття' },
+    'unemployment-claims': { title: 'Заявки на допомогу з безробіття' },
+    'prelim-gdp-q-q': { title: 'Попередній ВВП (кв/кв)' },
+    'advance-gdp-q-q': { title: 'Перша оцінка ВВП (кв/кв)' },
+    'retail-sales-m-m': { title: 'Роздрібні продажі (м/м)' },
+    'ppi-m-m': { title: 'Індекс цін виробників (м/м)' },
+    'main-refinancing-rate': { title: 'Основна ставка рефінансування ЄЦБ' },
+    'ecb-press-conference': { title: 'Пресконференція ЄЦБ' },
+    'boj-policy-rate': { title: 'Ставка Банку Японії' },
+    'cb-consumer-confidence': { title: 'Індекс споживчої довіри CB' },
+    'ism-manufacturing-pmi': { title: 'ISM PMI у виробництві' },
+    'ism-services-pmi': { title: 'ISM PMI у послугах' },
   },
 
 
