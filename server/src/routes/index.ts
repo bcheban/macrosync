@@ -35,8 +35,14 @@ const parseSymbols = (req: Request): string[] | undefined => {
   const symbols = raw
     .split(',')
     .map((symbol) => symbol.trim().toUpperCase())
-    .filter((symbol) => isKnownSymbol(symbol));
-  return symbols.length ? symbols.slice(0, env.maxSymbolsPerRequest) : undefined;
+    .filter((symbol) => isKnownSymbol(symbol))
+    .slice(0, env.maxSymbolsPerRequest);
+  /*
+   * `undefined`, never an empty array: the caller reads this as "no preference"
+   * and falls back to the default watchlist. Returning `[]` would ask the
+   * services for nothing and hand the dashboard an empty grid.
+   */
+  return symbols.length ? symbols : undefined;
 };
 
 api.get('/health', (_req, res) => {

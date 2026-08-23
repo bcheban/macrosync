@@ -1,6 +1,20 @@
 import 'dotenv/config';
 import { DEFAULT_SYMBOLS } from '../data/assets.js';
 
+/**
+ * A positive integer from the environment, or the fallback.
+ *
+ * `Number(process.env.X ?? 12)` looks safe but is not: a variable that exists
+ * and is empty is `''`, which `??` passes through and `Number` turns into 0.
+ * A deploy with an empty `MAX_SYMBOLS_PER_REQUEST` silently capped every
+ * request at zero symbols, so the dashboard asked for eight assets and got an
+ * empty array back. Anything unparseable or non-positive falls back.
+ */
+const positiveInt = (value: string | undefined, fallback: number): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+};
+
 const parseList = (value: string | undefined, fallback: string[]): string[] =>
   value
     ? value
@@ -10,7 +24,7 @@ const parseList = (value: string | undefined, fallback: string[]): string[] =>
     : fallback;
 
 export const env = {
-  port: Number(process.env.PORT ?? 4000),
+  port: positiveInt(process.env.PORT, 4000),
   corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
 
   /**
@@ -26,17 +40,17 @@ export const env = {
    * every symbol in a request pays the full timeout, which is what turns one
    * unreachable exchange into a serverless function timeout.
    */
-  upstreamCooldownMs: Number(process.env.UPSTREAM_COOLDOWN_MS ?? 30_000),
+  upstreamCooldownMs: positiveInt(process.env.UPSTREAM_COOLDOWN_MS, 30_000),
   /** Set to `false` to force the deterministic simulator (useful offline / in CI). */
   useLiveMarketData: (process.env.USE_LIVE_MARKET_DATA ?? 'true') !== 'false',
   /** Per-host budget. Binance normally answers in ~300ms; two hosts must still
    *  fit inside a serverless function's limit on the very first (cold) request. */
-  marketTimeoutMs: Number(process.env.MARKET_TIMEOUT_MS ?? 2500),
+  marketTimeoutMs: positiveInt(process.env.MARKET_TIMEOUT_MS, 2500),
 
   /** Default watchlist. The client may request any subset of the asset catalog. */
   symbols: parseList(process.env.SYMBOLS, DEFAULT_SYMBOLS),
   /** Upper bound on symbols per request — one kline fetch per symbol adds up. */
-  maxSymbolsPerRequest: Number(process.env.MAX_SYMBOLS_PER_REQUEST ?? 16),
+  maxSymbolsPerRequest: positiveInt(process.env.MAX_SYMBOLS_PER_REQUEST, 16),
 
   /** LLM placeholder — when no key is present the heuristic risk engine is used. */
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',
