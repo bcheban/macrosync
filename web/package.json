@@ -10,6 +10,9 @@
     "typecheck": "tsc -b --pretty",
     "og:image": "node scripts/generate-og-image.mjs"
   },
+  "engines": {
+    "node": ">=20.19"
+  },
   "dependencies": {
     "clsx": "^2.1.1",
     "framer-motion": "^12.23.12",

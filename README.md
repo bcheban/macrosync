@@ -287,8 +287,11 @@ the code to `LOCALES` there and to the server's locale list in `server/src/route
 
 ```
 macrosync/
+├── api/index.mjs                   # Vercel serverless entry — re-exports the Express app
+├── vercel.json                     # install/build/output + /api rewrite
 ├── server/
 │   └── src/
+│       ├── app.ts                     # the Express app (no listener — reused by api/)
 │       ├── config/env.ts              # typed configuration
 │       ├── data/assets.ts             # the tradable universe + simulator anchors
 │       ├── data/{calendar,news}.ts    # mock feeds — replace with real providers
@@ -323,6 +326,77 @@ macrosync/
 
 `web/src/types/domain.ts` mirrors `server/src/types/domain.ts`. Keep them in sync, or extract a
 shared workspace package when the contract stabilises.
+
+---
+
+## Deployment (Vercel)
+
+The whole monorepo ships as **one Vercel project**: the dashboard as static output, the
+Express API as a serverless function on the same origin. Nothing else has to be hosted, the
+browser calls `/api` relative (so `VITE_API_BASE` is unnecessary) and there is no CORS hop.
+
+`vercel.json` holds the configuration, so it lives in the repo rather than the dashboard UI:
+
+```jsonc
+{
+  "framework": "vite",
+  "installCommand": "npm ci",             // root lockfile → reproducible
+  "buildCommand": "npm run build",        // server (tsc) then web (vite)
+  "outputDirectory": "web/dist",
+  "functions": { "api/index.mjs": { "includeFiles": "server/dist/**" } },
+  "rewrites": [{ "source": "/api/:path*", "destination": "/api" }]
+}
+```
+
+How the API half fits together:
+
+- `server/src/app.ts` exports the Express app with no server attached; `server/src/index.ts`
+  only adds `listen()` for local development and `npm start`.
+- The router is mounted at **both** `/api` and `/`, so the function works whether or not the
+  platform consumes the `/api` prefix during the rewrite.
+- `api/index.mjs` re-exports the compiled app — an Express app already *is* a
+  `(req, res)` handler. It imports `server/dist`, which `buildCommand` produces before Vercel
+  packages the function, so the platform bundler never has to resolve the server's ESM `.js`
+  specifiers back onto TypeScript sources. The `.mjs` extension makes it ESM without forcing
+  `"type": "module"` on the repo root.
+
+Project settings — **Root Directory must be empty (the repo root)** for `vercel.json` to
+apply; leave the command fields blank so the file wins:
+
+| Setting          | Value                   |
+| ---------------- | ----------------------- |
+| Framework Preset | Vite                    |
+| Root Directory   | *(empty — repo root)*   |
+| Build / Install / Output | *(blank — vercel.json)* |
+
+### Two things that break the build
+
+- **`NODE_ENV=production` as a project environment variable.** The whole toolchain
+  (`typescript`, `vite`, `@vitejs/plugin-react`, `@tailwindcss/vite`, `@types/*`) lives in
+  `devDependencies`, so npm omits it and `tsc -b` fails with `TS2688: Cannot find type
+  definition file for 'node'` and `TS7016: Could not find a declaration file for module
+  'react/jsx-runtime'`. Vercel already sets `NODE_ENV=production` at *runtime*; never set it
+  yourself as a build-time variable.
+- **Node older than 20.19.** Vite 7 and `@vitejs/plugin-react` 5 require
+  `^20.19.0 || >=22.12.0`. Both `package.json` files declare `"engines": { "node": ">=20.19" }`
+  — keep them, especially if Root Directory is ever pointed at `web`, since Vercel then reads
+  only `web/package.json`.
+
+### Environment variables
+
+`.env` is git-ignored, so these are configured in the Vercel project. Both halves now run in
+the same project, so server and client variables live side by side:
+
+| Variable                                        | Half   | Notes                                                       |
+| ----------------------------------------------- | ------ | ----------------------------------------------------------- |
+| `VITE_SITE_URL`                                 | client | Real origin. Wrong value ⇒ wrong canonical/OG/sitemap URLs  |
+| `VITE_GA_MEASUREMENT_ID`                        | client | Omit to ship without analytics                               |
+| `SYMBOLS`, `MAX_SYMBOLS_PER_REQUEST`, `MARKET_TIMEOUT_MS`, `USE_LIVE_MARKET_DATA` | server | Optional — every one has a default |
+| `LLM_PROVIDER`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `OPENAI_API_KEY`, `OPENAI_MODEL` | server | Optional — without keys the deterministic risk engine is used |
+
+Anything prefixed `VITE_` is **inlined into the public JavaScript bundle** at build time.
+Never give an API key that prefix; Vercel's "Sensitive" flag hides a value in the dashboard,
+not in the browser. The unprefixed server variables above are only read by the function.
 
 ---
 
