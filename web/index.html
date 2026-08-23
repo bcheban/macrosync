@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#05060a" />
+    <meta name="color-scheme" content="dark" />
+
+    <title>MacroSync · Macro-Synced Signal &amp; Risk Terminal</title>
+    <meta
+      name="description"
+      content="MacroSync — technical signals, a macro-news countdown radar and AI risk management for crypto traders."
+    />
+    <meta name="application-name" content="MacroSync" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+
+    <!-- Social scrapers never run JS, so these ship in the static HTML. -->
+    <meta property="og:site_name" content="MacroSync" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="MacroSync · Macro-Synced Signal &amp; Risk Terminal" />
+    <meta
+      property="og:description"
+      content="Trade the calendar, not just the chart: live technical signals synced to the macro release schedule."
+    />
+    <meta property="og:url" content="%SITE_URL%/" />
+    <meta property="og:image" content="%OG_IMAGE%" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="MacroSync — Macro-Synced Signal &amp; Risk Terminal" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale:alternate" content="uk_UA" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@macrosync" />
+    <meta name="twitter:title" content="MacroSync · Macro-Synced Signal &amp; Risk Terminal" />
+    <meta
+      name="twitter:description"
+      content="Trade the calendar, not just the chart: live technical signals synced to the macro release schedule."
+    />
+    <meta name="twitter:image" content="%OG_IMAGE%" />
+
+    <!-- canonical + hreflang alternates, injected from the site config at build time -->
+    <!--%SEO_LINKS%-->
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!--
+      Marked with the same `data-seo` key the runtime meta hook looks for, so
+      the app updates this block per language instead of appending a second one.
+    -->
+    <script type="application/ld+json" data-seo="structured-data">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "MacroSync",
+        "applicationCategory": "FinanceApplication",
+        "operatingSystem": "Any",
+        "description": "Technical signals, a macro-news countdown radar and AI risk management for crypto traders.",
+        "inLanguage": ["en", "uk"],
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <div style="max-width: 44rem; margin: 4rem auto; padding: 0 1.5rem; font-family: system-ui, sans-serif; color: #e5e7eb">
+        <h1 style="font-size: 1.5rem; margin-bottom: 0.75rem">MacroSync — Macro-Synced Signal &amp; Risk Terminal</h1>
+        <p style="line-height: 1.6; color: #9ca3af">
+          A crypto trading dashboard that puts technical signals, a countdown radar to the next macro or political
+          catalyst, and AI risk-management scenarios on one screen. JavaScript is required to view the live dashboard.
+        </p>
+      </div>
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
