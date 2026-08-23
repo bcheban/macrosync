@@ -90,15 +90,34 @@ function simulateCandles(symbol: string, interval: Interval, limit: number): Can
  * timeout.
  */
 let upstreamDownUntil = 0;
+let lastUpstreamError: string | undefined;
+let lastUpstreamHost: string | undefined;
 
 export const upstreamAvailable = (): boolean => Date.now() >= upstreamDownUntil;
 
-const markUpstreamDown = (): void => {
+/**
+ * Why the tape is simulated, in a form the /health route can report.
+ *
+ * Falling back is meant to be invisible to the UI but not to the operator: a
+ * deploy whose IP the exchange geo-blocks looks identical to a healthy one from
+ * the outside, right up until someone notices the prices are wrong.
+ */
+export const upstreamStatus = () => ({
+  available: upstreamAvailable(),
+  host: lastUpstreamHost ?? null,
+  lastError: lastUpstreamError ?? null,
+  retryInMs: Math.max(0, upstreamDownUntil - Date.now()),
+});
+
+const markUpstreamDown = (error?: Error): void => {
   upstreamDownUntil = Date.now() + env.upstreamCooldownMs;
+  lastUpstreamError = error?.message ?? 'unknown error';
 };
 
-const markUpstreamUp = (): void => {
+const markUpstreamUp = (host: string): void => {
   upstreamDownUntil = 0;
+  lastUpstreamError = undefined;
+  lastUpstreamHost = host;
 };
 
 /** Hosts to try in order: the market-data mirror first, the main API second. */
@@ -123,14 +142,14 @@ async function fetchJson<T>(path: string): Promise<T> {
   for (const host of HOSTS) {
     try {
       const value = await fetchOnce<T>(`${host}${path}`);
-      markUpstreamUp();
+      markUpstreamUp(host);
       return value;
     } catch (error) {
       lastError = error as Error;
     }
   }
 
-  markUpstreamDown();
+  markUpstreamDown(lastError);
   throw lastError ?? new Error('no upstream host configured');
 }
 

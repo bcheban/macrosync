@@ -3,7 +3,7 @@ import { env } from '../config/env.js';
 import { ASSET_GROUPS, assetCatalog, isKnownSymbol } from '../data/assets.js';
 import { getUpcomingEvents, getHeadlineEvent } from '../data/calendar.js';
 import { getNews } from '../data/news.js';
-import { getTickers } from '../services/market.service.js';
+import { getTickers, upstreamStatus } from '../services/market.service.js';
 import { getInsights, getMarketContext, invalidateInsights } from '../services/insight.service.js';
 import { getSignals, isStrategy, STRATEGY_PROFILES } from '../services/signal.engine.js';
 import type { Locale } from '../types/domain.js';
@@ -49,6 +49,9 @@ api.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
     liveMarketData: env.useLiveMarketData,
+    upstream: upstreamStatus(),
+    marketTimeoutMs: env.marketTimeoutMs,
+    maxSymbolsPerRequest: env.maxSymbolsPerRequest,
     symbols: env.symbols,
     universe: assetCatalog().length,
     locales: LOCALES,
