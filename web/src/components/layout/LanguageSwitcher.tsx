@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { Languages } from 'lucide-react';
 import { LOCALES } from '@/i18n';
@@ -46,7 +46,7 @@ export function LanguageSwitcher({ className }: { className?: string }) {
             )}
           >
             {selected && (
-              <motion.span
+              <m.span
                 layoutId="language-pill"
                 className="absolute inset-0 rounded-lg border border-accent/30 bg-linear-to-b from-accent/25 to-accent/10 shadow-[0_0_18px_-8px] shadow-accent/80"
                 transition={{ type: 'spring', stiffness: 380, damping: 32 }}

@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { ArrowDownRight, ArrowUpRight, Minus, ShieldAlert } from 'lucide-react';
 import { Badge, LiveDot } from '@/components/ui/Badge';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -136,7 +136,7 @@ export function SignalCard({ signal, index }: { signal: Signal; index: number })
       </ul>
 
       {signal.eventWarning && (
-        <motion.div
+        <m.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="mt-3.5 flex items-start gap-2 rounded-lg border border-warn/20 bg-warn/6 px-2.5 py-2"
@@ -145,7 +145,7 @@ export function SignalCard({ signal, index }: { signal: Signal; index: number })
           <p className="line-clamp-3 min-w-0 text-[11px] leading-relaxed text-warn/85">
             {text(signal.eventWarning)}
           </p>
-        </motion.div>
+        </m.div>
       )}
     </GlassCard>
   );

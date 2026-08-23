@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { LineChart } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -9,7 +9,14 @@ import { cn } from '@/lib/cn';
 import { formatCompact, formatPct, formatPrice } from '@/lib/format';
 import type { Ticker } from '@/types/domain';
 
-export function Watchlist({ tickers, loading }: { tickers: Ticker[]; loading: boolean }) {
+interface WatchlistProps {
+  tickers: Ticker[];
+  loading: boolean;
+  /** How many rows to reserve while loading, so the card keeps its height. */
+  expected?: number;
+}
+
+export function Watchlist({ tickers, loading, expected = 4 }: WatchlistProps) {
   const { t } = useTranslation();
 
   return (
@@ -19,11 +26,13 @@ export function Watchlist({ tickers, loading }: { tickers: Ticker[]; loading: bo
       {/* Scrolls once the selection grows past a handful of assets. */}
       <div className="mt-4 max-h-104 space-y-1 overflow-y-auto pr-1">
         {loading && !tickers.length
-          ? Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-14 w-full" />)
+          ? Array.from({ length: Math.min(expected, 8) }).map((_, index) => (
+              <Skeleton key={index} className="h-14 w-full" />
+            ))
           : tickers.map((ticker, index) => {
               const up = ticker.changePct24h >= 0;
               return (
-                <motion.div
+                <m.div
                   key={ticker.symbol}
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -51,7 +60,7 @@ export function Watchlist({ tickers, loading }: { tickers: Ticker[]; loading: bo
                       {t('watchlist.volume', { value: formatCompact(ticker.quoteVolume24h) })}
                     </span>
                   </div>
-                </motion.div>
+                </m.div>
               );
             })}
 

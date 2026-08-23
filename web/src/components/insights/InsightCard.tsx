@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, m } from 'framer-motion';
 import {
   ArrowRight,
   ChevronDown,
@@ -89,7 +89,7 @@ export function InsightCard({ insight, index }: { insight: AiInsight; index: num
         <p className="text-[10px] tracking-[0.16em] text-white/35 uppercase">{t('insights.riskScenarios')}</p>
         <AnimatePresence initial={false}>
           {visible.map((scenario) => (
-            <motion.div
+            <m.div
               key={scenario.trigger.key ?? scenario.trigger.text}
               layout
               initial={{ opacity: 0, height: 0 }}
@@ -109,7 +109,7 @@ export function InsightCard({ insight, index }: { insight: AiInsight; index: num
                   <p className="min-w-0">{text(scenario.response)}</p>
                 </div>
               </div>
-            </motion.div>
+            </m.div>
           ))}
         </AnimatePresence>
 
@@ -129,7 +129,7 @@ export function InsightCard({ insight, index }: { insight: AiInsight; index: num
 
       <AnimatePresence initial={false}>
         {expanded && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
@@ -154,7 +154,7 @@ export function InsightCard({ insight, index }: { insight: AiInsight; index: num
                 {text(insight.invalidation)}
               </p>
             </div>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
 

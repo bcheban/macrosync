@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, m } from 'framer-motion';
 import { ChevronDown, Coins } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -56,7 +56,7 @@ export function AssetSelector({ className }: { className?: string }) {
 
       <AnimatePresence>
         {open && (
-          <motion.div
+          <m.div
             role="dialog"
             aria-label={t('assets.title')}
             initial={{ opacity: 0, y: -6, scale: 0.98 }}
@@ -66,7 +66,7 @@ export function AssetSelector({ className }: { className?: string }) {
             className="glass-overlay rounded-card absolute right-0 z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] p-3"
           >
             <AssetPicker />
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>

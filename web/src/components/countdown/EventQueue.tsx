@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { CalendarClock } from 'lucide-react';
 import { useTx } from '@/i18n/useTx';
 import { Badge } from '@/components/ui/Badge';
@@ -20,9 +20,10 @@ export function EventQueue({ events, loading }: { events: MacroEvent[]; loading:
 
       <div className="mt-4 space-y-2">
         {loading && !events.length
-          ? Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-16 w-full" />)
+          ? // The queue is requested with limit=6; reserve exactly that.
+            Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-16 w-full" />)
           : events.map((event, index) => (
-              <motion.div
+              <m.div
                 key={event.id}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -55,7 +56,7 @@ export function EventQueue({ events, loading }: { events: MacroEvent[]; loading:
                     <Badge tone={IMPORTANCE_TONE[event.importance]}>{event.region}</Badge>
                   </div>
                 </div>
-              </motion.div>
+              </m.div>
             ))}
       </div>
     </GlassCard>

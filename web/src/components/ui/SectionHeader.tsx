@@ -26,7 +26,7 @@ export function SectionHeader({ icon: Icon, title, subtitle, actions, className 
             unbounded third line would shift everything below the header when
             the language changes.
           */}
-          {subtitle && <p className="mt-0.5 line-clamp-2 text-[11.5px] text-white/45 sm:text-xs">{subtitle}</p>}
+          {subtitle && <p className="mt-0.5 line-clamp-2 text-[11.5px] text-white/55 sm:text-xs">{subtitle}</p>}
         </div>
       </div>
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}

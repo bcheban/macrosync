@@ -1,4 +1,4 @@
-import { motion, type HTMLMotionProps } from 'framer-motion';
+import { m, type HTMLMotionProps } from 'framer-motion';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
@@ -29,7 +29,7 @@ export function GlassCard({
   ...props
 }: GlassCardProps) {
   return (
-    <motion.div
+    <m.div
       className={cn(
         'group glass edge-light relative overflow-hidden rounded-card',
         interactive && 'transition-colors duration-300 hover:border-white/15',
@@ -47,6 +47,6 @@ export function GlassCard({
         />
       )}
       <div className="relative">{children}</div>
-    </motion.div>
+    </m.div>
   );
 }

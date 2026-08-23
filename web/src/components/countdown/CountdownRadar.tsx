@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { AlertTriangle, BarChart3, Bitcoin, Landmark, Megaphone, Radar } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Badge, LiveDot } from '@/components/ui/Badge';
@@ -22,22 +22,78 @@ const CATEGORY_ICON: Record<EventCategory, LucideIcon> = {
 /** 72h is the window over which the radar arc fills. */
 const WINDOW_MS = 72 * 60 * 60 * 1000;
 
+/*
+ * The hero is the first block on the page, so any height difference between its
+ * loading and loaded states moves everything below it — worth 0.51 of
+ * cumulative layout shift on desktop, because what it pushes is nearly the
+ * whole page.
+ *
+ * The reservation goes on the flex ROW rather than the card: the row is
+ * `items-center`, so a row whose height changes re-centres the dial and the
+ * ambient wash, and those move even when the card around them does not. Fixing
+ * the row height makes the centring constant and the card follows.
+ *
+ * Values are the measured content heights at each breakpoint (mobile / tablet /
+ * desktop) — re-measure if the hero gains or loses a row.
+ */
+const HERO_ROW_HEIGHT = 'min-h-[571px] sm:min-h-[542px] lg:min-h-[364px]';
+
 export function CountdownRadar({ event, loading }: { event?: MacroEvent; loading: boolean }) {
   const { t, eventTitle, eventDetail } = useTx();
   const countdown = useCountdown(event?.startsAt);
 
+  /*
+   * The placeholder mirrors the real hero row for row — dial, badge strip,
+   * two-line title, three-line detail, the countdown tiles and the forecast
+   * chips. A generic block here was ~90px shorter than the content that
+   * replaced it, and because the hero sits above everything else that gap
+   * moved the entire page on load.
+   */
   if (loading || !event) {
     return (
-      <GlassCard className="p-4 sm:p-6 lg:p-8">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
-          <Skeleton className="size-36 rounded-full" />
-          <div className="flex-1 space-y-4">
-            <Skeleton className="h-4 w-40" />
-            <Skeleton className="h-8 w-3/4" />
-            <div className="flex gap-3">
+      <GlassCard className="relative p-4 sm:p-6 lg:p-8">
+        {/*
+          The same decorative wash the loaded hero renders. Present in only one
+          of the two states it counted as an appearing element, and because it
+          is 384px across that alone was 0.26 of layout shift.
+        */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-32 -right-24 size-96 rounded-full bg-accent/12 blur-3xl"
+        />
+
+        <div
+          className={cn(
+            'relative flex min-w-0 flex-col gap-6 sm:gap-7 lg:flex-row lg:items-center lg:gap-10',
+            HERO_ROW_HEIGHT,
+          )}
+        >
+          <Skeleton className="size-36 shrink-0 rounded-full sm:size-40" />
+
+          <div className="min-w-0 flex-1">
+            <div className="flex gap-2">
+              <Skeleton className="h-6 w-40 rounded-full" />
+              <Skeleton className="h-6 w-28 rounded-full" />
+              <Skeleton className="hidden h-6 w-32 rounded-full sm:block" />
+            </div>
+
+            <Skeleton className="mt-3.5 h-[50px] w-3/4 sm:h-[60px] lg:h-[70px]" />
+            <Skeleton className="mt-1.5 h-[59px] w-full max-w-2xl sm:h-[63px]" />
+
+            <div className="mt-6 grid grid-cols-4 items-end gap-2 sm:flex sm:gap-4">
               {Array.from({ length: 4 }).map((_, index) => (
-                <Skeleton key={index} className="h-20 w-16 rounded-2xl" />
+                <div key={index} className="flex flex-col items-center gap-1.5">
+                  <Skeleton className="h-16 w-full rounded-2xl sm:h-20 sm:w-[4.5rem]" />
+                  <Skeleton className="h-2.5 w-8" />
+                </div>
               ))}
+            </div>
+
+            <div className="mt-4 h-4 sm:hidden" />
+
+            <div className="mt-5 flex gap-2.5">
+              <Skeleton className="h-8 w-40 rounded-xl" />
+              <Skeleton className="h-8 w-44 rounded-xl" />
             </div>
           </div>
         </div>
@@ -67,7 +123,12 @@ export function CountdownRadar({ event, loading }: { event?: MacroEvent; loading
         )}
       />
 
-      <div className="relative flex min-w-0 flex-col gap-6 sm:gap-7 lg:flex-row lg:items-center lg:gap-10">
+      <div
+        className={cn(
+          'relative flex min-w-0 flex-col gap-6 sm:gap-7 lg:flex-row lg:items-center lg:gap-10',
+          HERO_ROW_HEIGHT,
+        )}
+      >
         <RadarDial
           impact={event.expectedImpact}
           proximity={proximity}
@@ -118,7 +179,7 @@ export function CountdownRadar({ event, loading }: { event?: MacroEvent; loading
             three lines tall, so nothing below the hero moves when the language
             changes.
           */}
-          <p className="mt-1.5 line-clamp-3 min-h-[3lh] max-w-2xl text-[13px] text-balance text-white/50 sm:text-sm">
+          <p className="mt-1.5 line-clamp-3 min-h-[3lh] max-w-2xl text-[13px] leading-normal text-balance text-white/50 sm:text-sm">
             {eventDetail(event)}
           </p>
 
@@ -190,14 +251,14 @@ export function CountdownRadar({ event, loading }: { event?: MacroEvent; loading
           )}
 
           {soon && (
-            <motion.div
+            <m.div
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               className="mt-5 flex items-start gap-2.5 rounded-xl border border-warn/20 bg-warn/6 px-3.5 py-2.5"
             >
               <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warn" />
               <p className="text-[11.5px] leading-relaxed text-white/70 sm:text-xs">{t('countdown.warning')}</p>
-            </motion.div>
+            </m.div>
           )}
         </div>
       </div>

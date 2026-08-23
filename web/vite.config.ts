@@ -22,6 +22,24 @@ export default defineConfig(({ mode }) => {
         gaId: env.VITE_GA_MEASUREMENT_ID,
       }),
     ],
+    build: {
+      rollupOptions: {
+        output: {
+          /*
+           * Stable vendor chunks for code that changes far less often than the
+           * app, so it stays cached across deploys.
+           *
+           * framer-motion is deliberately NOT listed: it is loaded through
+           * `LazyMotion`, and naming it here would pull the whole library back
+           * into an eagerly-fetched chunk, undoing the split.
+           */
+          manualChunks: {
+            react: ['react', 'react-dom'],
+            i18n: ['i18next', 'react-i18next', 'i18next-browser-languagedetector'],
+          },
+        },
+      },
+    },
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -29,6 +47,14 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5173,
+      proxy: {
+        '/api': { target: API_TARGET, changeOrigin: true },
+      },
+    },
+    // `vite preview` serves the real production bundle; proxying the API too
+    // means a Lighthouse run measures the page as users actually get it.
+    preview: {
+      port: 4173,
       proxy: {
         '/api': { target: API_TARGET, changeOrigin: true },
       },

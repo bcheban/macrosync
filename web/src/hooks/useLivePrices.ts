@@ -69,11 +69,23 @@ export function useLivePrices(symbols: string[]): Record<string, LiveQuote> {
      * buffered and flushed on a fixed cadence — fast enough to read as live,
      * cheap enough not to fight the animations.
      */
+    const tracked = new Set(settledKey.split('/').map((symbol) => symbol.toUpperCase()));
+    // Ticks buffered against the previous subscription are not ours any more.
+    pending.current = {};
+
     const flushTimer = window.setInterval(() => {
       if (!Object.keys(pending.current).length) return;
       const batch = pending.current;
       pending.current = {};
-      setQuotes((current) => ({ ...current, ...batch }));
+      setQuotes((current) => {
+        const next = { ...current, ...batch };
+        // Prune de-selected symbols so the map cannot grow without bound as the
+        // user moves through the asset catalogue.
+        for (const symbol of Object.keys(next)) {
+          if (!tracked.has(symbol)) delete next[symbol];
+        }
+        return next;
+      });
     }, 1000);
 
     const connect = () => {

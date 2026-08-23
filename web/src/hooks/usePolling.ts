@@ -19,6 +19,12 @@ export function usePolling<T>(
   fetcher: (signal: AbortSignal) => Promise<T>,
   intervalMs: number,
   deps: unknown[] = [],
+  /**
+   * Holds the first request until the browser is idle. Used for panels below
+   * the fold, whose payload would otherwise compete for bandwidth and parse
+   * time with the app's own boot.
+   */
+  options: { deferUntilIdle?: boolean } = {},
 ): PollingState<T> {
   const [data, setData] = useState<T>();
   const [error, setError] = useState<Error>();
@@ -31,9 +37,24 @@ export function usePolling<T>(
   fetcherRef.current = fetcher;
   const hasData = useRef(false);
 
+  const { deferUntilIdle = false } = options;
+  const [ready, setReady] = useState(!deferUntilIdle);
+
+  useEffect(() => {
+    if (ready) return;
+    const start = () => setReady(true);
+    if (typeof window.requestIdleCallback === 'function') {
+      const handle = window.requestIdleCallback(start, { timeout: 2500 });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const timer = window.setTimeout(start, 1200);
+    return () => window.clearTimeout(timer);
+  }, [ready]);
+
   const refresh = useCallback(() => setNonce((value) => value + 1), []);
 
   useEffect(() => {
+    if (!ready) return;
     const controller = new AbortController();
     let timer: number | undefined;
     let cancelled = false;
@@ -81,7 +102,7 @@ export function usePolling<T>(
       document.removeEventListener('visibilitychange', onVisible);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [intervalMs, nonce, ...deps]);
+  }, [intervalMs, nonce, ready, ...deps]);
 
   return { data, error, loading, refreshing, lastUpdated, refresh };
 }

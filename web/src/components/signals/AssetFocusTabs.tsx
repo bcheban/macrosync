@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { LayoutGrid } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { trackEvent } from '@/lib/analytics';
@@ -6,6 +6,9 @@ import { cn } from '@/lib/cn';
 
 /** `null` means "every tracked asset". */
 export type AssetFocus = string | null;
+
+/** Fixed row height — the strip reserves its space before the tabs exist. */
+const STRIP_HEIGHT = 'h-8';
 
 interface AssetFocusTabsProps {
   /** Base symbols in display order, e.g. `['BTC', 'ETH', …]`. */
@@ -27,7 +30,13 @@ interface AssetFocusTabsProps {
  */
 export function AssetFocusTabs({ bases, value, onChange, counts }: AssetFocusTabsProps) {
   const { t } = useTranslation();
-  if (bases.length < 2) return null;
+
+  /*
+   * Renders an empty row rather than nothing while the asset scope is still
+   * loading. Appearing later would insert a row above the grid and shift every
+   * card — and on mobile that happens right at the fold.
+   */
+  if (bases.length < 2) return <div aria-hidden className={STRIP_HEIGHT} />;
 
   const select = (focus: AssetFocus) => {
     if (focus === value) return;
@@ -39,7 +48,7 @@ export function AssetFocusTabs({ bases, value, onChange, counts }: AssetFocusTab
     <div
       role="tablist"
       aria-label={t('signals.focusAria')}
-      className="no-scrollbar -mx-1 flex snap-x items-center gap-1 overflow-x-auto px-1 py-0.5"
+      className={`no-scrollbar -mx-1 flex ${STRIP_HEIGHT} snap-x items-center gap-1 overflow-x-auto px-1`}
     >
       <button
         role="tab"
@@ -52,7 +61,7 @@ export function AssetFocusTabs({ bases, value, onChange, counts }: AssetFocusTab
         )}
       >
         {value === null && (
-          <motion.span
+          <m.span
             layoutId="asset-focus-pill"
             className="absolute inset-0 rounded-lg border border-cyber/30 bg-cyber/12"
             transition={{ type: 'spring', stiffness: 380, damping: 32 }}
@@ -78,7 +87,7 @@ export function AssetFocusTabs({ bases, value, onChange, counts }: AssetFocusTab
             )}
           >
             {active && (
-              <motion.span
+              <m.span
                 layoutId="asset-focus-pill"
                 className="absolute inset-0 rounded-lg border border-cyber/30 bg-cyber/12"
                 transition={{ type: 'spring', stiffness: 380, damping: 32 }}

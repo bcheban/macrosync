@@ -1,9 +1,8 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, m } from 'framer-motion';
 import { CandlestickChart, Inbox } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/Badge';
-import { CardSkeleton } from '@/components/ui/Skeleton';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { usePolling } from '@/hooks/usePolling';
 import { api } from '@/lib/api';
@@ -12,6 +11,7 @@ import { useAssetScope } from '@/state/AssetScope';
 import type { Strategy } from '@/types/domain';
 import { AssetFocusTabs, type AssetFocus } from './AssetFocusTabs';
 import { SignalCard } from './SignalCard';
+import { SignalCardSkeleton } from './SignalCardSkeleton';
 import { StrategyTabs } from './StrategyTabs';
 
 const REFRESH_MS: Record<Strategy, number> = {
@@ -43,16 +43,19 @@ export function SignalsPanel() {
 
   const bases = useMemo(() => {
     /*
-     * Ordered by the asset scope, not by the payload: the API sorts signals by
-     * confidence, so deriving the strip from it would reshuffle the tabs under
-     * the user's finger on every poll.
+     * Derived from the asset scope, which is known before the first response,
+     * so the strip has its final width and height on the very first paint. Two
+     * things follow from that: the tabs never reshuffle when the API re-sorts
+     * signals by confidence, and the row cannot appear late and shove the whole
+     * grid down — that late insertion was the largest layout shift on desktop.
      */
-    const present = new Set(signals.map((item) => item.base));
     const ordered = selected
       .map((symbol) => bySymbol.get(symbol)?.base)
-      .filter((base): base is string => Boolean(base) && present.has(base as string));
-    // Anything the API returned that is not in the scope (server defaults).
-    const extra = [...present].filter((base) => !ordered.includes(base));
+      .filter((base): base is string => Boolean(base));
+    // Anything the API returned outside the scope (it falls back to defaults).
+    const extra = [...new Set(signals.map((item) => item.base))].filter(
+      (base) => !ordered.includes(base),
+    );
     return [...ordered, ...extra];
   }, [signals, selected, bySymbol]);
 
@@ -127,15 +130,21 @@ export function SignalsPanel() {
         </div>
       )}
 
-      <motion.div layout className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-4">
-        {waiting ? Array.from({ length: 4 }).map((_, index) => <CardSkeleton key={index} />) : null}
+      <m.div layout className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-4">
+        {/* As many placeholders as signals are expected, so the grid does not
+            change height when the payload lands. */}
+        {waiting
+          ? Array.from({ length: Math.min(selected.length || 8, 16) }).map((_, index) => (
+              <SignalCardSkeleton key={index} />
+            ))
+          : null}
 
         <AnimatePresence mode="popLayout">
           {visible.map((signal, index) => (
             <SignalCard key={signal.id} signal={signal} index={index} />
           ))}
         </AnimatePresence>
-      </motion.div>
+      </m.div>
     </section>
   );
 }

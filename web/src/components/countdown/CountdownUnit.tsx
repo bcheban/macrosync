@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, m } from 'framer-motion';
 import { cn } from '@/lib/cn';
 import { pad2 } from '@/lib/format';
 
@@ -33,7 +33,7 @@ export function CountdownUnit({ value, label, tone = 'default' }: CountdownUnitP
           className="absolute inset-x-0 top-1/2 h-px bg-white/8"
         />
         <AnimatePresence mode="popLayout" initial={false}>
-          <motion.span
+          <m.span
             key={text}
             initial={{ y: '55%', opacity: 0, filter: 'blur(4px)' }}
             animate={{ y: 0, opacity: 1, filter: 'blur(0px)' }}
@@ -49,7 +49,7 @@ export function CountdownUnit({ value, label, tone = 'default' }: CountdownUnitP
             }}
           >
             {text}
-          </motion.span>
+          </m.span>
         </AnimatePresence>
       </div>
       <span className="max-w-full truncate text-[9px] tracking-[0.16em] text-white/35 uppercase sm:text-[10px] sm:tracking-[0.2em]">

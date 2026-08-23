@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { Gauge, Hourglass, Zap } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -60,7 +60,7 @@ export function StrategyTabs({ value, onChange }: StrategyTabsProps) {
             )}
           >
             {active && (
-              <motion.span
+              <m.span
                 layoutId="strategy-pill"
                 className="absolute inset-0 rounded-xl border border-accent/30 bg-linear-to-b from-accent/25 to-accent/10 shadow-[0_0_24px_-8px] shadow-accent/80"
                 transition={{ type: 'spring', stiffness: 380, damping: 32 }}

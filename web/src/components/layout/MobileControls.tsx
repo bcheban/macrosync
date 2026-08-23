@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, m } from 'framer-motion';
 import { SlidersHorizontal, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -111,7 +111,7 @@ export function MobileControls({ context, live, streaming = false, className }: 
         <AnimatePresence>
           {open && (
             <div className="fixed inset-0 z-50 md:hidden">
-              <motion.button
+              <m.button
                 type="button"
                 tabIndex={-1}
                 aria-label={t('common.close')}
@@ -123,7 +123,7 @@ export function MobileControls({ context, live, streaming = false, className }: 
                 className="absolute inset-0 h-full w-full cursor-default bg-black/80 backdrop-blur-md"
               />
 
-              <motion.div
+              <m.div
                 ref={panelRef}
                 role="dialog"
                 aria-modal="true"
@@ -164,7 +164,7 @@ export function MobileControls({ context, live, streaming = false, className }: 
                     <LanguageSwitcher className="w-fit" />
                   </section>
                 </div>
-              </motion.div>
+              </m.div>
             </div>
           )}
         </AnimatePresence>,

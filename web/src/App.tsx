@@ -1,8 +1,10 @@
+import { LazyMotion } from 'framer-motion';
 import { ShieldAlert } from 'lucide-react';
+import { Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CountdownRadar } from '@/components/countdown/CountdownRadar';
 import { EventQueue } from '@/components/countdown/EventQueue';
-import { InsightsFeed } from '@/components/insights/InsightsFeed';
+import { CardSkeleton } from '@/components/ui/Skeleton';
 import { BackgroundFX } from '@/components/layout/BackgroundFX';
 import { TopBar } from '@/components/layout/TopBar';
 import { TickerStrip } from '@/components/market/TickerStrip';
@@ -16,6 +18,24 @@ import { currentLocale } from '@/i18n';
 import { api } from '@/lib/api';
 import { BRAND } from '@/lib/brand';
 import { AssetScopeProvider, useAssetScope } from '@/state/AssetScope';
+
+/*
+ * The AI feed sits below the fold and is the heaviest panel in the app — it is
+ * the only consumer of the expand/collapse machinery and the insight card tree.
+ * Splitting it out keeps that code off the critical path for first paint.
+ */
+const InsightsFeed = lazy(() =>
+  import('@/components/insights/InsightsFeed').then((module) => ({ default: module.InsightsFeed })),
+);
+
+/*
+ * Framer's feature set is loaded after the first paint instead of being bundled
+ * into the entry chunk. Components use `m.*`, which carries no animation
+ * features on its own, so nothing here blocks the initial render; `domMax` is
+ * required because the tab pills and the signal grid use shared-layout
+ * animations.
+ */
+const loadMotionFeatures = () => import('framer-motion').then((mod) => mod.domMax);
 
 function Dashboard() {
   const { t, i18n } = useTranslation();
@@ -32,7 +52,10 @@ function Dashboard() {
   const market = useMarketTickers(tickers.data?.tickers ?? []);
   const events = usePolling((signal) => api.events(signal), 30_000);
   // Re-fetched on a language switch: model-written insights come back translated.
-  const insights = usePolling((signal) => api.insights(locale, signal), 60_000, [i18n.resolvedLanguage]);
+  const insights = usePolling((signal) => api.insights(locale, signal), 60_000, [i18n.resolvedLanguage], {
+    // Below the fold and the heaviest response of the three — it can wait.
+    deferUntilIdle: true,
+  });
 
   const refreshAll = () => {
     tickers.refresh();
@@ -62,17 +85,27 @@ function Dashboard() {
           <SignalsPanel />
 
           <aside className="min-w-0 space-y-5 sm:space-y-6 lg:sticky lg:top-24 lg:self-start">
-            <Watchlist tickers={market.tickers} loading={tickers.loading} />
+            <Watchlist tickers={market.tickers} loading={tickers.loading} expected={selected.length || 8} />
             <EventQueue events={events.data?.events ?? []} loading={events.loading} />
           </aside>
         </div>
 
-        <InsightsFeed
-          insights={insights.data?.insights ?? []}
-          context={insights.data?.context}
-          loading={insights.loading}
-          error={insights.error}
-        />
+        <Suspense
+          fallback={
+            <div className="grid min-w-0 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <CardSkeleton key={index} />
+              ))}
+            </div>
+          }
+        >
+          <InsightsFeed
+            insights={insights.data?.insights ?? []}
+            context={insights.data?.context}
+            loading={insights.loading}
+            error={insights.error}
+          />
+        </Suspense>
 
         <footer className="glass rounded-card flex flex-col gap-2.5 p-4 sm:flex-row sm:items-start sm:gap-4">
           <ShieldAlert className="size-4 shrink-0 text-white/30 sm:mt-0.5" />
@@ -88,8 +121,10 @@ function Dashboard() {
 
 export default function App() {
   return (
-    <AssetScopeProvider>
-      <Dashboard />
-    </AssetScopeProvider>
+    <LazyMotion features={loadMotionFeatures} strict>
+      <AssetScopeProvider>
+        <Dashboard />
+      </AssetScopeProvider>
+    </LazyMotion>
   );
 }

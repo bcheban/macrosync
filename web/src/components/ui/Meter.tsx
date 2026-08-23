@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { cn } from '@/lib/cn';
 import type { Tone } from './Badge';
 
@@ -32,7 +32,7 @@ export function Meter({ value, tone = 'accent', className, label, showValue }: M
         </div>
       )}
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/8">
-        <motion.div
+        <m.div
           className={cn('h-full rounded-full bg-linear-to-r', BAR[tone])}
           initial={{ width: 0 }}
           animate={{ width: `${pct}%` }}
