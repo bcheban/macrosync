@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
+import {
+  MAX_CHANNELS,
+  MEXC_WS_URL,
+  PING_FRAME,
+  PING_INTERVAL_MS,
+  decodeMiniTicker,
+  miniTickerChannel,
+} from '@/lib/mexc-stream';
 
-/** One symbol's live book, as reported by Binance's `miniTicker` stream. */
+/** One symbol's live book, as pushed by MEXC's miniTicker stream. */
 export interface LiveQuote {
   price: number;
   changePct24h: number;
@@ -11,36 +19,25 @@ export interface LiveQuote {
   at: number;
 }
 
-/** Raw `<symbol>@miniTicker` payload. */
-interface MiniTicker {
-  s: string; // symbol
-  c: string; // close (last price)
-  o: string; // open, 24h ago
-  h: string; // high
-  l: string; // low
-  q: string; // quote volume
-}
-
-const STREAM_HOST = 'wss://stream.binance.com:9443/stream';
 const MAX_BACKOFF_MS = 30_000;
 
 /**
- * Subscribes to Binance's public market stream straight from the browser.
+ * Subscribes to MEXC's public market stream straight from the browser.
  *
- * Why client-side: the REST feed behind our API is fetched from the server, so
- * it is one poll interval behind at best — and when the API runs somewhere
- * whose IP the exchange geo-blocks, it silently degrades to the simulator. The
- * browser has neither problem, so quotes here are the exact live rate and stay
- * correct even when the backend is serving fallback data.
+ * The exchange is the source of truth for price, and this is the shortest path
+ * to it: the REST snapshot behind our own API is a cache interval old by
+ * definition, while these ticks arrive as the book moves. It also means the
+ * number on screen is what MEXC itself shows, to the last decimal.
  *
- * The socket is best-effort: any failure just leaves the REST values in place,
- * and the UI marks a quote live only while ticks are actually arriving.
+ * The socket is best-effort. Any failure leaves the REST values in place and
+ * the header stops claiming a live stream, rather than freezing a stale number
+ * on screen and calling it live.
  */
 export function useLivePrices(symbols: string[]): Record<string, LiveQuote> {
   const [quotes, setQuotes] = useState<Record<string, LiveQuote>>({});
 
   // Sorted + joined so a re-render with the same set does not reconnect.
-  const streamKey = symbols.map((symbol) => symbol.toLowerCase()).sort().join('/');
+  const streamKey = symbols.map((symbol) => symbol.toUpperCase()).sort().join(',');
 
   /*
    * Ticking assets on and off in the picker changes the key on every click.
@@ -58,10 +55,15 @@ export function useLivePrices(symbols: string[]): Record<string, LiveQuote> {
   useEffect(() => {
     if (!settledKey) return;
 
+    const tracked = settledKey.split(',').slice(0, MAX_CHANNELS);
     let socket: WebSocket | undefined;
     let retry = 0;
     let reconnectTimer: number | undefined;
+    let pingTimer: number | undefined;
     let closed = false;
+
+    // Ticks buffered against the previous subscription are not ours any more.
+    pending.current = {};
 
     /*
      * Ticks arrive several times a second per symbol. Committing each one to
@@ -69,20 +71,16 @@ export function useLivePrices(symbols: string[]): Record<string, LiveQuote> {
      * buffered and flushed on a fixed cadence — fast enough to read as live,
      * cheap enough not to fight the animations.
      */
-    const tracked = new Set(settledKey.split('/').map((symbol) => symbol.toUpperCase()));
-    // Ticks buffered against the previous subscription are not ours any more.
-    pending.current = {};
-
     const flushTimer = window.setInterval(() => {
       if (!Object.keys(pending.current).length) return;
       const batch = pending.current;
       pending.current = {};
+      const keep = new Set(tracked);
       setQuotes((current) => {
         const next = { ...current, ...batch };
-        // Prune de-selected symbols so the map cannot grow without bound as the
-        // user moves through the asset catalogue.
+        // Prune de-selected symbols so the map cannot grow without bound.
         for (const symbol of Object.keys(next)) {
-          if (!tracked.has(symbol)) delete next[symbol];
+          if (!keep.has(symbol)) delete next[symbol];
         }
         return next;
       });
@@ -90,41 +88,39 @@ export function useLivePrices(symbols: string[]): Record<string, LiveQuote> {
 
     const connect = () => {
       if (closed) return;
-      const streams = settledKey
-        .split('/')
-        .map((symbol) => `${symbol}@miniTicker`)
-        .join('/');
 
-      socket = new WebSocket(`${STREAM_HOST}?streams=${streams}`);
+      socket = new WebSocket(MEXC_WS_URL);
+      socket.binaryType = 'arraybuffer';
 
       socket.onopen = () => {
         retry = 0;
+        socket?.send(
+          JSON.stringify({ method: 'SUBSCRIPTION', params: tracked.map(miniTickerChannel) }),
+        );
+        pingTimer = window.setInterval(() => {
+          if (socket?.readyState === WebSocket.OPEN) socket.send(PING_FRAME);
+        }, PING_INTERVAL_MS);
       };
 
       socket.onmessage = (event) => {
-        try {
-          const frame = JSON.parse(event.data as string) as { data?: MiniTicker };
-          const tick = frame.data;
-          if (!tick?.s) return;
+        // Subscription acks and PONGs arrive as text; market data is binary.
+        if (typeof event.data === 'string') return;
 
-          const price = Number(tick.c);
-          const open = Number(tick.o);
-          if (!Number.isFinite(price) || price <= 0) return;
+        const tick = decodeMiniTicker(event.data as ArrayBuffer);
+        if (!tick) return;
 
-          pending.current[tick.s] = {
-            price,
-            changePct24h: open > 0 ? ((price - open) / open) * 100 : 0,
-            high24h: Number(tick.h),
-            low24h: Number(tick.l),
-            quoteVolume24h: Number(tick.q),
-            at: Date.now(),
-          };
-        } catch {
-          /* A malformed frame is not worth tearing the stream down for. */
-        }
+        pending.current[tick.symbol] = {
+          price: tick.price,
+          changePct24h: tick.changePct24h,
+          high24h: tick.high24h,
+          low24h: tick.low24h,
+          quoteVolume24h: tick.quoteVolume24h,
+          at: Date.now(),
+        };
       };
 
       socket.onclose = () => {
+        if (pingTimer) window.clearInterval(pingTimer);
         if (closed) return;
         // Exponential backoff so a blocked network does not spin the socket.
         retry += 1;
@@ -140,6 +136,7 @@ export function useLivePrices(symbols: string[]): Record<string, LiveQuote> {
     return () => {
       closed = true;
       window.clearInterval(flushTimer);
+      if (pingTimer) window.clearInterval(pingTimer);
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       socket?.close();
     };
@@ -149,7 +146,7 @@ export function useLivePrices(symbols: string[]): Record<string, LiveQuote> {
 }
 
 /** A quote counts as live only while ticks are still arriving. */
-export const LIVE_QUOTE_TTL_MS = 15_000;
+export const LIVE_QUOTE_TTL_MS = 20_000;
 
 export const isFresh = (quote: LiveQuote | undefined, now = Date.now()): boolean =>
   Boolean(quote && now - quote.at < LIVE_QUOTE_TTL_MS);

@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { env } from '../config/env.js';
 import { ASSET_GROUPS, assetCatalog, isKnownSymbol } from '../data/assets.js';
 import { getUpcomingEvents, getHeadlineEvent } from '../data/calendar.js';
-import { getNews } from '../data/news.js';
+import { getNews, newsStatus } from '../services/news/news.service.js';
 import { getTickers, upstreamStatus } from '../services/market.service.js';
 import { getInsights, getMarketContext, invalidateInsights } from '../services/insight.service.js';
 import { getSignals, isStrategy, STRATEGY_PROFILES } from '../services/signal.engine.js';
@@ -48,8 +48,8 @@ const parseSymbols = (req: Request): string[] | undefined => {
 api.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
-    liveMarketData: env.useLiveMarketData,
-    upstream: upstreamStatus(),
+    market: upstreamStatus(),
+    news: newsStatus(),
     marketTimeoutMs: env.marketTimeoutMs,
     maxSymbolsPerRequest: env.maxSymbolsPerRequest,
     symbols: env.symbols,
@@ -106,10 +106,13 @@ api.get('/events', (req, res) => {
   res.json({ events: getUpcomingEvents(Number.isFinite(limit) ? limit : 8), headline: getHeadlineEvent() });
 });
 
-api.get('/news', (req, res) => {
-  const limit = Number(req.query.limit ?? 8);
-  res.json({ news: getNews(Number.isFinite(limit) ? limit : 8) });
-});
+api.get(
+  '/news',
+  route(async (req, res) => {
+    const limit = Number(req.query.limit ?? 8);
+    res.json({ news: await getNews(Number.isFinite(limit) ? limit : 8) });
+  }),
+);
 
 api.get(
   '/insights',

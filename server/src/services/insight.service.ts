@@ -1,6 +1,6 @@
 import { env } from '../config/env.js';
 import { getHeadlineEvent } from '../data/calendar.js';
-import { getNews } from '../data/news.js';
+import { getNews } from './news/news.service.js';
 import type { AiInsight, Locale, MarketContext, NewsItem, VolatilityRegime } from '../types/domain.js';
 import { cache } from '../utils/cache.js';
 import { getVolatilitySnapshot } from './signal.engine.js';
@@ -69,7 +69,7 @@ async function analyse(
 export async function getInsights(limit = 6, locale: Locale = 'en'): Promise<AiInsight[]> {
   return cache.wrap(`insights:${locale}:${limit}`, 60_000, async () => {
     const context = await getMarketContext();
-    const news = getNews(limit);
+    const news = await getNews(limit);
 
     return Promise.all(
       news.map(async (item) => {

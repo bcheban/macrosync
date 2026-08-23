@@ -30,8 +30,13 @@ interface TopBarProps {
  */
 export function TopBar({ context, tickers, streaming = false, refreshing, onRefresh }: TopBarProps) {
   const { t } = useTranslation();
-  // A live socket is authoritative; otherwise fall back to what REST reported.
-  const live = streaming || tickers.some((ticker) => ticker.source === 'binance');
+  /*
+   * "Live" means the exchange is actually answering — either the socket is
+   * ticking or the REST snapshot came back with rows. There is no simulated
+   * feed to fall back to, so an empty tape is reported as disconnected rather
+   * than dressed up as live.
+   */
+  const live = streaming || tickers.length > 0;
   const [head, tail] = BRAND.nameParts;
 
   const handleRefresh = () => {

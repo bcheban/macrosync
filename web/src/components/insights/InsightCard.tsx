@@ -33,7 +33,7 @@ const POSTURE_TONE: Record<AiInsight['posture'], Tone> = {
 const SEVERITY_BAR = { high: 'bg-bear', medium: 'bg-warn', low: 'bg-cyber' } as const;
 
 export function InsightCard({ insight, index }: { insight: AiInsight; index: number }) {
-  const { t, text, newsHeadline } = useTx();
+  const { t, text } = useTx();
   const [expanded, setExpanded] = useState(false);
   const sentiment = SENTIMENT[insight.sentiment];
   const SentimentIcon = sentiment.icon;
@@ -75,7 +75,7 @@ export function InsightCard({ insight, index }: { insight: AiInsight; index: num
         className="group/link mt-3 flex items-start gap-2"
       >
         <h3 className="line-clamp-3 min-w-0 text-[15px] leading-snug font-semibold text-balance text-white transition-colors duration-200 group-hover/link:text-accent-soft">
-          {newsHeadline(insight.newsId, insight.headline)}
+          {insight.headline}
         </h3>
         <ExternalLink className="mt-1 size-3.5 shrink-0 text-white/20 transition-colors duration-200 group-hover/link:text-accent-soft" />
       </a>

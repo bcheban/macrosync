@@ -231,7 +231,7 @@ function buildSignal(symbol: string, profile: StrategyProfile, set: Awaited<Retu
     },
     rationale,
     ...(eventWarning ? { eventWarning } : {}),
-    source: set.source,
+    source: 'mexc',
     updatedAt: new Date().toISOString(),
   };
 }

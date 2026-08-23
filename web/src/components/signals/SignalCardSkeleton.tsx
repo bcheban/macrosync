@@ -43,13 +43,13 @@ export function SignalCardSkeleton() {
       {/* indicator strip — wraps to two rows in a real card at this width */}
       <div className="mt-3 space-y-1.5">
         <div className="flex gap-3.5">
-          {['w-12', 'w-14', 'w-12'].map((width) => (
-            <Skeleton key={width} className={`h-3 ${width}`} />
+          {['w-12', 'w-14', 'w-12'].map((width, index) => (
+            <Skeleton key={index} className={`h-3 ${width}`} />
           ))}
         </div>
         <div className="flex gap-3.5">
-          {['w-14', 'w-12'].map((width) => (
-            <Skeleton key={width} className={`h-3 ${width}`} />
+          {['w-14', 'w-12'].map((width, index) => (
+            <Skeleton key={index} className={`h-3 ${width}`} />
           ))}
         </div>
       </div>

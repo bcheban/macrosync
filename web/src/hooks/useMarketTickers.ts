@@ -13,11 +13,11 @@ export interface MarketTickers {
 /**
  * Merges the REST snapshot with the live exchange stream.
  *
- * The API supplies structure the socket does not carry — the sparkline series,
- * the base/quote split, the data source — while the socket supplies the number
- * that has to be exact. Overlaying them means a price is never older than a
- * second, even when the backend is polling on a ten-second cache or has fallen
- * back to simulated candles.
+ * The API supplies structure the socket does not carry — the sparkline series
+ * and the base/quote split — while the socket supplies the number that has to
+ * be exact. Overlaying them means the displayed price is never older than a
+ * second, and matches MEXC to the last decimal even though the REST snapshot
+ * behind it is on a ten-second cache.
  */
 export function useMarketTickers(tickers: Ticker[]): MarketTickers {
   const symbols = useMemo(() => tickers.map((ticker) => ticker.symbol), [tickers]);
@@ -32,18 +32,30 @@ export function useMarketTickers(tickers: Ticker[]): MarketTickers {
       if (!isFresh(quote, now) || !quote) return ticker;
 
       liveCount += 1;
+
+      /*
+       * Only the price is taken from the socket. MEXC's miniTicker carries its
+       * own `rate` field, but it is computed over a different window than the
+       * REST ticker's `priceChangePercent` — they disagreed by 0.27 points on
+       * BTC — and showing a percentage the exchange's own ticker does not is
+       * worse than showing one a few seconds old.
+       *
+       * So the 24h open is recovered from the REST pair (price and change are
+       * consistent with each other by construction) and the change is
+       * recomputed against the live price. The number moves with the tape and
+       * still reconciles with MEXC.
+       */
+      const restOpen =
+        ticker.changePct24h > -100 ? ticker.price / (1 + ticker.changePct24h / 100) : 0;
+      const changePct24h =
+        restOpen > 0 ? ((quote.price - restOpen) / restOpen) * 100 : ticker.changePct24h;
+
       return {
         ...ticker,
         price: quote.price,
-        changePct24h: quote.changePct24h,
-        high24h: quote.high24h || ticker.high24h,
-        low24h: quote.low24h || ticker.low24h,
-        quoteVolume24h: quote.quoteVolume24h || ticker.quoteVolume24h,
+        changePct24h,
         // The sparkline still comes from REST candles; only the tip is live.
-        spark: ticker.spark.length
-          ? [...ticker.spark.slice(0, -1), quote.price]
-          : ticker.spark,
-        source: 'binance' as const,
+        spark: ticker.spark.length ? [...ticker.spark.slice(0, -1), quote.price] : ticker.spark,
         updatedAt: new Date(quote.at).toISOString(),
       };
     });

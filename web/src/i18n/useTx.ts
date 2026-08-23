@@ -57,11 +57,6 @@ export function useTx() {
     [t],
   );
 
-  const newsHeadline = useCallback(
-    (id: string, fallback: string) => t(`news.${id}.headline`, { defaultValue: fallback }),
-    [t],
-  );
-
   /** Project names are proper nouns; a locale may still override well-known ones. */
   const assetName = useCallback(
     (asset: Pick<AssetMeta, 'base' | 'name'>) => t(`assets.names.${asset.base}`, { defaultValue: asset.name }),
@@ -69,7 +64,7 @@ export function useTx() {
   );
 
   return useMemo(
-    () => ({ t: typedT, tx: t, i18n, text, eventTitle, eventDetail, newsHeadline, assetName }),
-    [typedT, t, i18n, text, eventTitle, eventDetail, newsHeadline, assetName],
+    () => ({ t: typedT, tx: t, i18n, text, eventTitle, eventDetail, assetName }),
+    [typedT, t, i18n, text, eventTitle, eventDetail, assetName],
   );
 }

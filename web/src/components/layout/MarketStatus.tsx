@@ -65,8 +65,8 @@ export function MarketStatus({ context, live, streaming = false, variant = 'bar'
           {streaming
             ? t('topbar.streaming')
             : live
-              ? t('topbar.binanceLive')
-              : t('topbar.simulatedFeed')}
+              ? t('topbar.exchangeData')
+              : t('topbar.disconnected')}
         </span>
       </Badge>
     </div>

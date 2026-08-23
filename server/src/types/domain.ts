@@ -7,7 +7,8 @@ export type Strategy = 'scalping' | 'day' | 'swing';
 export type Direction = 'long' | 'short' | 'neutral';
 export type Sentiment = 'bullish' | 'bearish' | 'neutral';
 export type VolatilityRegime = 'low' | 'elevated' | 'high' | 'extreme';
-export type DataSource = 'binance' | 'simulated';
+/** Every price in the app comes from one exchange; there is no fallback feed. */
+export type DataSource = 'mexc';
 export type Locale = 'en' | 'uk';
 
 /**

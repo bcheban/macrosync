@@ -31,10 +31,11 @@ MacroSync keeps the chart in sync with the macro calendar.
    conditional posture: `Bearish tone + high volatility → tighten stops to 0.8× ATR, cut size 50%,
    no new leveraged longs until the print clears.`
 
-Three cross-cutting features shape the product: a **28-asset universe** with a switcher that
-re-scopes every panel at once, **live prices straight from the exchange socket**, and full
-**English / Ukrainian localization** — down to the sentences the signal engine and the AI risk
-layer generate.
+Everything on the screen is live: prices and candles from **MEXC**, headlines from real newsrooms,
+indicators computed from those candles. Three cross-cutting features shape the product: a
+**28-asset universe** with a switcher that re-scopes every panel at once, **prices straight from
+the exchange socket**, and full **English / Ukrainian localization** — down to the sentences the
+signal engine and the AI risk layer generate.
 
 ---
 
@@ -108,10 +109,10 @@ already shaped — the route never parses prose or guards against a malformed fi
 
 <br />
 
-<img src="https://img.shields.io/badge/Binance-market_data-F0B90B?logo=binance&logoColor=white" align="left" height="24" /> &nbsp;
-Price truth, used twice. The server pulls candles over REST to compute indicators; the browser
-subscribes to the `miniTicker` WebSocket directly, so displayed prices are the exact live rate
-rather than a cached poll.
+<img src="https://img.shields.io/badge/MEXC-market_data-1972F5?logoColor=white" align="left" height="24" /> &nbsp;
+The single source of price truth, used twice. The server pulls candles and 24h stats over REST to
+compute indicators; the browser subscribes to MEXC's `miniTicker` stream directly, so the number on
+screen is the exchange's own, to the last decimal. No key, and no invented data if it is down.
 
 <br />
 
@@ -259,6 +260,14 @@ If a high-impact calendar event falls inside the strategy's holding horizon, the
 
 ### Countdown radar — `server/src/data/calendar.ts`
 
+> **The one remaining fixture.** Prices, candles and news are live; the macro calendar is not.
+> The events are real (FOMC, CPI, NFP, ECB, BoJ, options expiry) and their cadences are real, but
+> the dates are computed by rolling a known anchor forward rather than read from an economic
+> calendar feed — every provider of those (Trading Economics, Finnhub, FMP) requires a paid key.
+> Swapping this module for a real feed touches nothing else; the API and UI only depend on the
+> `MacroEvent` shape.
+
+
 Calendar entries are templates with an anchor plus a cadence (FOMC every 42 days, CPI ~30, options
 expiry weekly…). `nextOccurrence()` rolls each anchor forward until it lands in the future, so the
 countdown is always live no matter when the project is run. Swap this module for a real calendar
@@ -279,21 +288,55 @@ every scenario to be *conditional*: a market condition paired with a defensive r
 heuristic engine follows the same contract, so the product behaves identically with or without a
 key — and any provider failure degrades silently instead of emptying the feed.
 
-### Live prices — `web/src/hooks/useLivePrices.ts`
+### Market data — MEXC
 
-Prices come from two places on purpose. The server pulls candles over REST to compute
-indicators, 24h stats and the sparkline; the browser subscribes to Binance's public
-`miniTicker` WebSocket directly and overlays the last price on top
-(`useMarketTickers`).
+Prices, candles and 24h statistics all come from MEXC's public API. Two paths, on purpose:
 
-That split exists because a server poll is a cache interval behind at best, and if the API is
-hosted where the exchange geo-blocks the IP it falls back to simulated candles — which is how a
-dashboard ends up confidently showing a price that is 25% wrong. The socket runs from the
-visitor's own connection, so the number on screen is the live rate regardless of what the
-backend can reach. Ticks are buffered and flushed once a second rather than committed
-per-message, the subscription is debounced so ticking assets in the picker cannot burn through
-the exchange's connection limit, and a quote counts as live only while ticks keep arriving —
-after which the header badge honestly drops back to `Binance live` or `Simulated feed`.
+- **Server, REST** — `/api/v3/klines` feeds the indicator engine and `/api/v3/ticker/24hr` the
+  watchlist. Requests go through a concurrency gate (sixteen tracked symbols would otherwise mean
+  sixteen simultaneous calls), a TTL cache that de-duplicates concurrent callers, and a circuit
+  breaker that treats an explicit 429/418 as a longer ban than an ordinary failure.
+- **Browser, WebSocket** — `useLivePrices` subscribes to `spot@public.miniTicker.v3.api.pb`
+  directly. A REST snapshot behind a ten-second cache cannot match an exchange tick for tick; this
+  can, and it also means the price is right regardless of what the server can reach.
+
+Two things worth knowing if you touch this code:
+
+- **MEXC's interval codes are not Binance's.** The hourly bar is `60m`; `1h` is rejected with
+  `-1121 Invalid interval`.
+- **`priceChangePercent` is a fraction.** MEXC returns `0.0014` where other exchanges return
+  `0.14`. Rendering it raw shows every asset as flat.
+- **The websocket is protobuf only.** Every `spot@public.*.v3.api@…` JSON channel is now rejected;
+  only the `.pb` variants push data. Rather than ship a schema compiler for one message,
+  `lib/mexc-stream.ts` walks the wire format and reads the four fields it needs by number — the
+  layout is documented in that file, confirmed against the live socket.
+- The socket's own `rate` field is computed over a different window than REST's
+  `priceChangePercent`, so only the price is taken from it; the 24h change is recomputed against
+  the REST open, which keeps it reconciled with what MEXC's own ticker shows.
+
+**There is no simulated fallback.** If the exchange is unreachable the API returns nothing and the
+header says so, because a dashboard that invents a plausible price is worse than one that admits it
+has none. `GET /api/health` reports the last upstream error and how long the cooldown has left.
+
+### News — real newsrooms
+
+Headlines come from a live feed and the AI risk layer processes nothing else. Providers are
+resolved in order of what is configured: CryptoPanic → CryptoCompare → NewsData.io → RSS.
+
+RSS is the default because it is the only one left that works without an account — CryptoPanic
+answers 403 to anonymous requests, CryptoCompare/CoinDesk 401, and CoinGecko's news endpoint is
+PRO-only. Four newsrooms are read in parallel (Cointelegraph, Decrypt, The Block, CoinDesk), merged,
+de-duplicated by headline fingerprint, and sorted by publication time. One dead feed costs its own
+items and nothing else.
+
+Live headlines arrive with no sentiment or impact attached, and the risk engine needs both, so
+`services/news/sentiment.ts` derives them from a market-vocabulary lexicon — transparent and
+deterministic, rather than spending a model call per headline just to label it. Asset detection
+matches tickers **case-sensitively**: several are ordinary English words, and matching loosely
+tagged "Bitcoin near current levels" as a NEAR story.
+
+Headlines are cached for five minutes, and a failed refresh serves the previous payload rather than
+emptying the feed.
 
 ### Asset universe — `server/src/data/assets.ts`
 

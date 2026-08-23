@@ -37,9 +37,9 @@ export const en = {
   topbar: {
     volatility: 'Volatility',
     breadth: 'Breadth {{value}}%',
-    streaming: 'Live stream',
-    binanceLive: 'Binance live',
-    simulatedFeed: 'Simulated feed',
+    streaming: 'MEXC live stream',
+    exchangeData: 'MEXC data',
+    disconnected: 'Exchange unreachable',
     atr: 'ATR {{value}}%',
     status: 'Market status',
   },
@@ -221,33 +221,6 @@ export const en = {
     },
   },
 
-  /** Keyed by `NewsItem.id` from `server/src/data/news.ts`. */
-  news: {
-    'news-fed-hawkish': {
-      headline: 'Fed officials signal patience on cuts as services inflation stays sticky',
-    },
-    'news-etf-inflows': {
-      headline: 'Spot BTC ETFs log fourth straight day of net inflows, $611M added',
-    },
-    'news-senate-hearing': {
-      headline: 'Senate committee schedules surprise hearing on digital-asset market structure',
-    },
-    'news-exchange-outflows': {
-      headline: 'Exchange balances hit a six-year low as long-term holders keep accumulating',
-    },
-    'news-liquidations': {
-      headline: '$340M in leveraged positions liquidated during 20-minute volatility spike',
-    },
-    'news-l2-upgrade': {
-      headline: 'Major L2 ships fee-reduction upgrade; Ethereum blob usage jumps 22%',
-    },
-    'news-memecoin-rotation': {
-      headline: 'Memecoin volumes rotate back into SHIB as majors consolidate',
-    },
-    'news-tariffs': {
-      headline: 'New tariff package leaks ahead of G7 statement, risk assets wobble',
-    },
-  },
 
   insights: {
     title: 'AI Actionable Insights',

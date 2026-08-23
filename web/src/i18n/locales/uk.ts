@@ -35,9 +35,9 @@ export const uk: Translation = {
   topbar: {
     volatility: 'Волатильність',
     breadth: 'Ширина ринку {{value}}%',
-    streaming: 'Потік наживо',
-    binanceLive: 'Binance наживо',
-    simulatedFeed: 'Симульовані дані',
+    streaming: 'MEXC наживо',
+    exchangeData: 'Дані MEXC',
+    disconnected: 'Біржа недоступна',
     atr: 'ATR {{value}}%',
     status: 'Стан ринку',
   },
@@ -224,32 +224,6 @@ export const uk: Translation = {
     },
   },
 
-  news: {
-    'news-fed-hawkish': {
-      headline: 'Представники ФРС сигналізують про паузу зі зниженням ставки — інфляція в послугах не спадає',
-    },
-    'news-etf-inflows': {
-      headline: 'Спотові BTC-ETF четвертий день поспіль із чистим припливом, додано $611 млн',
-    },
-    'news-senate-hearing': {
-      headline: 'Комітет Сенату призначив позачергові слухання щодо структури ринку цифрових активів',
-    },
-    'news-exchange-outflows': {
-      headline: 'Баланси бірж на шестирічному мінімумі — довгострокові тримачі продовжують накопичувати',
-    },
-    'news-liquidations': {
-      headline: 'Ліквідовано позицій із плечем на $340 млн під час 20-хвилинного сплеску волатильності',
-    },
-    'news-l2-upgrade': {
-      headline: 'Великий L2 випустив оновлення зі зниженням комісій; використання blob у Ethereum зросло на 22%',
-    },
-    'news-memecoin-rotation': {
-      headline: 'Обсяги мемкоїнів повертаються до SHIB, поки основні активи консолідуються',
-    },
-    'news-tariffs': {
-      headline: 'Новий пакет тарифів витік перед заявою G7 — ризикові активи хитає',
-    },
-  },
 
   insights: {
     title: 'AI-інсайти до дії',
