@@ -4,11 +4,11 @@ import {
   MEXC_WS_URL,
   PING_FRAME,
   PING_INTERVAL_MS,
-  decodeMiniTicker,
-  miniTickerChannel,
+  decodeTicker,
+  subscribeFrame,
 } from '@/lib/mexc-stream';
 
-/** One symbol's live book, as pushed by MEXC's miniTicker stream. */
+/** One symbol's live book, as pushed by MEXC's contract ticker stream. */
 export interface LiveQuote {
   price: number;
   changePct24h: number;
@@ -22,7 +22,7 @@ export interface LiveQuote {
 const MAX_BACKOFF_MS = 30_000;
 
 /**
- * Subscribes to MEXC's public market stream straight from the browser.
+ * Subscribes to MEXC's public perpetual stream straight from the browser.
  *
  * The exchange is the source of truth for price, and this is the shortest path
  * to it: the REST snapshot behind our own API is a cache interval old by
@@ -90,23 +90,22 @@ export function useLivePrices(symbols: string[]): Record<string, LiveQuote> {
       if (closed) return;
 
       socket = new WebSocket(MEXC_WS_URL);
-      socket.binaryType = 'arraybuffer';
 
       socket.onopen = () => {
         retry = 0;
-        socket?.send(
-          JSON.stringify({ method: 'SUBSCRIPTION', params: tracked.map(miniTickerChannel) }),
-        );
+        // The contract socket subscribes one symbol per frame; there is no batch.
+        for (const symbol of tracked) socket?.send(subscribeFrame(symbol));
+
         pingTimer = window.setInterval(() => {
           if (socket?.readyState === WebSocket.OPEN) socket.send(PING_FRAME);
         }, PING_INTERVAL_MS);
       };
 
       socket.onmessage = (event) => {
-        // Subscription acks and PONGs arrive as text; market data is binary.
-        if (typeof event.data === 'string') return;
+        if (typeof event.data !== 'string') return;
 
-        const tick = decodeMiniTicker(event.data as ArrayBuffer);
+        // Acks and pongs share the socket; the channel is what separates them.
+        const tick = decodeTicker(event.data);
         if (!tick) return;
 
         pending.current[tick.symbol] = {

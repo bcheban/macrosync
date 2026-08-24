@@ -24,23 +24,47 @@ let feedCalls = 0;
 const realFetch = globalThis.fetch;
 
 before(() => {
-  globalThis.fetch = (async () => {
+  globalThis.fetch = (async (url: string | URL) => {
+    // Contract specs: every symbol tradable, so `state` never narrows a case.
+    if (String(url).includes('/contract/detail')) {
+      return {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: async () => ({
+          success: true,
+          data: Object.keys(feed).map((symbol) => ({
+            symbol: symbol.replace(/USDT$/, '_USDT'),
+            maxLeverage: 50,
+            maintenanceMarginRate: 0.005,
+            contractSize: 1,
+            state: 0,
+          })),
+        }),
+        text: async () => '',
+      };
+    }
+
     feedCalls += 1;
     return {
       ok: true,
       status: 200,
       statusText: 'OK',
-      json: async () =>
-        Object.entries(feed).map(([symbol, quoteVolume]) => ({
-          symbol,
+      json: async () => ({
+        success: true,
+        data: Object.entries(feed).map(([symbol, amount24]) => ({
+          // The feed quotes perpetuals; the radar stores the internal form.
+          symbol: symbol.replace(/USDT$/, '_USDT'),
           // A price well away from a dollar, so nothing reads as a peg by default.
-          lastPrice: '42',
-          priceChangePercent: '0',
-          highPrice: '45',
-          lowPrice: '39',
-          quoteVolume: String(quoteVolume),
-          ...(pegged.has(symbol) ? { lastPrice: '1.0002', highPrice: '1.0009', lowPrice: '0.9995' } : {}),
+          lastPrice: 42,
+          riseFallRate: 0,
+          high24Price: 45,
+          lower24Price: 39,
+          amount24,
+          volume24: amount24,
+          ...(pegged.has(symbol) ? { lastPrice: 1.0002, high24Price: 1.0009, lower24Price: 0.9995 } : {}),
         })),
+      }),
       text: async () => '',
     };
   }) as unknown as typeof fetch;

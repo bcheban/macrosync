@@ -14,13 +14,13 @@ export interface KlineSet {
 }
 
 /**
- * MEXC's interval codes are not Binance's: the hourly bar is `60m`, and `1h`
- * is rejected outright with `-1121 Invalid interval`.
+ * Contract intervals are named, not abbreviated: `Min60`, never `1h` or `60m`,
+ * both of which come back `code 600 Parameter error`.
  */
 const MEXC_INTERVAL: Record<Interval, string> = {
-  '5m': '5m',
-  '1h': '60m',
-  '4h': '4h',
+  '5m': 'Min5',
+  '1h': 'Min60',
+  '4h': 'Hour4',
 };
 
 const INTERVAL_MS: Record<Interval, number> = {
@@ -28,6 +28,20 @@ const INTERVAL_MS: Record<Interval, number> = {
   '1h': 60 * 60_000,
   '4h': 4 * 60 * 60_000,
 };
+
+/**
+ * Perpetuals are quoted `BTC_USDT`; everything else here — the catalogue, the
+ * dashboard's stored selection, every Redis key — uses `BTCUSDT`.
+ *
+ * The underscore is confined to the two functions that talk to the exchange
+ * rather than propagated through the codebase. Renaming the internal form would
+ * have invalidated every saved watchlist and every open trade in the ledger for
+ * a difference that exists only in one API's URL.
+ */
+export const toContractSymbol = (symbol: string): string =>
+  symbol.includes('_') ? symbol : symbol.replace(/(USDT|USDC)$/, '_$1');
+
+export const fromContractSymbol = (symbol: string): string => symbol.replace('_', '');
 
 const QUOTES = ['USDT', 'USDC', 'BTC', 'ETH'];
 
@@ -101,9 +115,18 @@ async function mexc<T>(path: string): Promise<T> {
       }
       if (!response.ok) throw new Error(`${response.status} ${response.statusText} — ${path}`);
 
-      const payload = (await response.json()) as T;
+      /*
+       * The contract API answers 200 with `{success: false}` for a bad symbol or
+       * a malformed interval, so the HTTP status is not the answer — the
+       * envelope is. Spot used to signal both through the status code.
+       */
+      const envelope = (await response.json()) as { success?: boolean; code?: number; data?: T; message?: string };
+      if (envelope.success === false) {
+        throw new Error(`contract API refused: ${envelope.message ?? envelope.code} — ${path}`);
+      }
+
       markUp();
-      return payload;
+      return (envelope.data ?? envelope) as T;
     } catch (error) {
       if (!(error instanceof RateLimitedError)) markDown(error as Error);
       throw error;
@@ -117,8 +140,20 @@ async function mexc<T>(path: string): Promise<T> {
 /*  Candles                                                                    */
 /* -------------------------------------------------------------------------- */
 
-/** `[openTime, open, high, low, close, volume, closeTime, quoteVolume]`. */
-type RawKline = [number, string, string, string, string, string, number, string];
+/**
+ * Contract klines arrive **columnar** — parallel arrays rather than a row per
+ * bar — and stamped in *seconds*. Both differ from spot, and both are silent
+ * failures if assumed: transposing the wrong way yields plausible-looking
+ * garbage, and second-stamps read as 1970 when compared against `Date.now()`.
+ */
+interface RawKlines {
+  time: number[];
+  open: number[];
+  high: number[];
+  low: number[];
+  close: number[];
+  vol: number[];
+}
 
 /**
  * Candles for one symbol/interval, cached for a fraction of the bar length.
@@ -131,17 +166,23 @@ export async function getKlines(symbol: string, interval: Interval, limit = 180)
   const ttl = Math.min(INTERVAL_MS[interval] / 10, 30_000);
 
   return cache.wrap(key, ttl, async () => {
-    const raw = await mexc<RawKline[]>(
-      `/api/v3/klines?symbol=${symbol}&interval=${MEXC_INTERVAL[interval]}&limit=${limit}`,
+    /*
+     * There is no `limit`: the window is the request. Asking from
+     * `now - limit intervals` returns exactly that many bars, verified against
+     * the live endpoint at 5m, 60m and 4h.
+     */
+    const start = Math.floor((Date.now() - limit * INTERVAL_MS[interval]) / 1000);
+    const raw = await mexc<RawKlines>(
+      `/api/v1/contract/kline/${toContractSymbol(symbol)}?interval=${MEXC_INTERVAL[interval]}&start=${start}`,
     );
 
-    const candles: Candle[] = raw.map((row) => ({
-      openTime: row[0],
-      open: Number(row[1]),
-      high: Number(row[2]),
-      low: Number(row[3]),
-      close: Number(row[4]),
-      volume: Number(row[5]),
+    const candles: Candle[] = (raw.time ?? []).map((seconds, index) => ({
+      openTime: seconds * 1000,
+      open: raw.open[index] ?? 0,
+      high: raw.high[index] ?? 0,
+      low: raw.low[index] ?? 0,
+      close: raw.close[index] ?? 0,
+      volume: raw.vol[index] ?? 0,
     }));
 
     if (!candles.length) throw new Error(`no candles for ${symbol} ${interval}`);
@@ -153,35 +194,60 @@ export async function getKlines(symbol: string, interval: Interval, limit = 180)
 /*  Tickers                                                                    */
 /* -------------------------------------------------------------------------- */
 
-interface Raw24h {
+/**
+ * One perpetual as the contract ticker feed reports it.
+ *
+ * Numbers arrive as numbers here, where spot sent strings. `amount24` is the
+ * 24h turnover in USDT and is the liquidity measure; `volume24` counts
+ * *contracts*, which is not comparable across symbols because contract size
+ * differs — BTC is 0.0001 per contract, ETH 0.01. Ranking on the wrong one
+ * would order the board by tick size.
+ */
+interface RawContractTicker {
   symbol: string;
-  lastPrice: string;
-  /**
-   * A FRACTION, not a percentage: MEXC reports 0.0014 where Binance reports
-   * 0.14. Rendering it raw shows every asset as flat.
-   */
-  priceChangePercent: string;
-  highPrice: string;
-  lowPrice: string;
-  quoteVolume: string;
+  lastPrice: number;
+  /** A FRACTION, as on spot: 0.0014 means +0.14%. */
+  riseFallRate: number;
+  high24Price: number;
+  lower24Price: number;
+  amount24: number;
+  volume24: number;
+  fundingRate?: number;
+  holdVol?: number;
 }
 
-const toTicker = (raw: Raw24h, spark: number[]): Ticker => {
-  const { base, quote } = splitSymbol(raw.symbol);
+const toTicker = (raw: RawContractTicker, spark: number[]): Ticker => {
+  const symbol = fromContractSymbol(raw.symbol);
+  const { base, quote } = splitSymbol(symbol);
+
   return {
-    symbol: raw.symbol,
+    symbol,
     base,
     quote,
-    price: roundPrice(Number(raw.lastPrice)),
-    changePct24h: round(Number(raw.priceChangePercent) * 100, 2),
-    high24h: roundPrice(Number(raw.highPrice)),
-    low24h: roundPrice(Number(raw.lowPrice)),
-    quoteVolume24h: Math.round(Number(raw.quoteVolume)),
+    price: roundPrice(raw.lastPrice),
+    changePct24h: round(raw.riseFallRate * 100, 2),
+    high24h: roundPrice(raw.high24Price),
+    low24h: roundPrice(raw.lower24Price),
+    quoteVolume24h: Math.round(raw.amount24),
     spark,
     source: 'mexc',
     updatedAt: new Date().toISOString(),
   };
 };
+
+/**
+ * Every perpetual's 24h stats, in one request.
+ *
+ * The whole board is 1,150 contracts in a single response, so there is no
+ * per-symbol variant worth using: spot charged weight 40 for the unfiltered
+ * call and 1 per symbol, which made one-at-a-time cheaper. Here it is one call
+ * either way, and this one is also what the radar ranks on.
+ */
+async function contractTickers(): Promise<RawContractTicker[]> {
+  const raw = await mexc<RawContractTicker[]>('/api/v1/contract/ticker');
+  if (!Array.isArray(raw)) throw new Error('unexpected contract ticker shape');
+  return raw;
+}
 
 /**
  * 24h stats for every requested symbol, with sparkline data attached.
@@ -197,13 +263,16 @@ export async function getTickers(symbols: string[]): Promise<Ticker[]> {
   const key = `tickers:${symbols.join(',')}`;
 
   return cache.wrap(key, 10_000, async () => {
+    const all = await contractTickers();
+    const bySymbol = new Map(all.map((entry) => [fromContractSymbol(entry.symbol), entry]));
+
     const settled = await Promise.allSettled(
       symbols.map(async (symbol) => {
-        const [raw, klines] = await Promise.all([
-          mexc<Raw24h>(`/api/v3/ticker/24hr?symbol=${symbol}`),
-          // Sparkline only; a failure here must not cost us the price.
-          getKlines(symbol, '1h', 48).catch(() => undefined),
-        ]);
+        const raw = bySymbol.get(symbol);
+        if (!raw) throw new Error(`${symbol} is not a listed perpetual`);
+
+        // Sparkline only; a failure here must not cost us the price.
+        const klines = await getKlines(symbol, '1h', 48).catch(() => undefined);
         return toTicker(raw, (klines?.candles ?? []).map((candle) => roundPrice(candle.close)));
       }),
     );
@@ -235,26 +304,76 @@ export interface MarketSummary {
 }
 
 /**
- * Every pair MEXC quotes, in a single request.
+ * Every perpetual MEXC lists, in a single request.
  *
- * The un-parameterised `/ticker/24hr` returns all ~2,100 pairs in about 800 KB.
- * That is one upstream call and a fifth of a second, which is dramatically
- * cheaper than asking for symbols one at a time — and it is the only way to
- * discover what is listed rather than assuming a hard-coded list.
+ * One call returns all ~1,150 contracts in a fifth of a second, and it is the
+ * only way to discover what is listed rather than assuming a hard-coded list.
  *
  * Deliberately uncached here. The only caller ranks the result and caches *that*
  * for hours; a second short-lived cache underneath it would add a layer that
  * never helps and can hand back a listing the caller believes it just refreshed.
  */
 export async function getAllTickers24h(): Promise<MarketSummary[]> {
-  const raw = await mexc<Raw24h[]>('/api/v3/ticker/24hr');
-  if (!Array.isArray(raw)) throw new Error('unexpected ticker feed shape');
+  const raw = await contractTickers();
 
   return raw.map((entry) => ({
-    symbol: entry.symbol,
-    quoteVolume: Number(entry.quoteVolume) || 0,
-    lastPrice: Number(entry.lastPrice) || 0,
-    highPrice: Number(entry.highPrice) || 0,
-    lowPrice: Number(entry.lowPrice) || 0,
+    symbol: fromContractSymbol(entry.symbol),
+    // Turnover in USDT. `volume24` counts contracts and is not comparable.
+    quoteVolume: entry.amount24 || 0,
+    lastPrice: entry.lastPrice || 0,
+    highPrice: entry.high24Price || 0,
+    lowPrice: entry.lower24Price || 0,
   }));
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Contract specifications                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What a contract permits, which spot had no equivalent of.
+ *
+ * `maintenanceMarginRate` is the reason this is fetched rather than assumed:
+ * across the board it ranges from 0.04% to 5%, and it sits directly inside the
+ * liquidation-distance calculation. Treating it as a constant would misprice
+ * safe leverage by an order of magnitude on the thinner contracts.
+ */
+export interface ContractSpec {
+  symbol: string;
+  maxLeverage: number;
+  maintenanceMarginRate: number;
+  contractSize: number;
+  /** MEXC documents 0 as tradable; anything else is halted or delisted. */
+  state: number;
+}
+
+interface RawContractDetail {
+  symbol: string;
+  maxLeverage?: number;
+  maintenanceMarginRate?: number;
+  contractSize?: number;
+  state?: number;
+  quoteCoin?: string;
+}
+
+/** Specs for every contract, keyed by the internal symbol form. */
+export async function getContractSpecs(): Promise<Map<string, ContractSpec>> {
+  return cache.wrap('contracts:detail', 6 * 60 * 60_000, async () => {
+    const raw = await mexc<RawContractDetail[]>('/api/v1/contract/detail');
+    if (!Array.isArray(raw)) throw new Error('unexpected contract detail shape');
+
+    return new Map(
+      raw.map((entry) => [
+        fromContractSymbol(entry.symbol),
+        {
+          symbol: fromContractSymbol(entry.symbol),
+          maxLeverage: entry.maxLeverage ?? 20,
+          // A missing rate is read pessimistically, never optimistically.
+          maintenanceMarginRate: entry.maintenanceMarginRate ?? 0.02,
+          contractSize: entry.contractSize ?? 1,
+          state: entry.state ?? 0,
+        } satisfies ContractSpec,
+      ]),
+    );
+  });
 }

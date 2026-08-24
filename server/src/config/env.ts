@@ -47,7 +47,12 @@ export const env = {
   /* --- market data (MEXC) ------------------------------------------------ */
 
   /** MEXC public REST. No key required for market data. */
-  mexcBase: process.env.MEXC_API_BASE ?? 'https://api.mexc.com',
+  /*
+   * Perpetual contracts, not spot. The two are different hosts with different
+   * response shapes — see `market.service.ts` — so this is not a base URL that
+   * can be pointed back at `api.mexc.com` without the code changing too.
+   */
+  mexcBase: process.env.MEXC_API_BASE ?? 'https://contract.mexc.com',
   /** Per-request budget. MEXC normally answers in ~300ms. */
   marketTimeoutMs: positiveInt(process.env.MARKET_TIMEOUT_MS, 4000),
   /** Concurrent upstream requests. Public endpoints are rate limited per IP. */
@@ -116,6 +121,14 @@ export const env = {
    * is unset rather than accepting anything that arrives.
    */
   telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET ?? '',
+
+  /*
+   * Guards `/api/admin/reset`, which destroys the trading record. The route
+   * 404s while unset, and even with the secret it refuses to act without an
+   * explicit confirmation string — a destructive endpoint that fires on a bare
+   * authenticated POST is a foot-gun waiting for a mistyped curl.
+   */
+  adminSecret: process.env.ADMIN_SECRET ?? '',
 
   /* --- persistence -------------------------------------------------------- */
 

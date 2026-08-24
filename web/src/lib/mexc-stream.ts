@@ -1,123 +1,97 @@
 /**
- * Just enough protobuf to read MEXC's public market stream.
+ * MEXC's public perpetual-contract stream.
  *
- * MEXC retired its JSON websocket channels — every `spot@public.*.v3.api@…`
- * subscription is now rejected, and only the `.pb` variants push data, as
- * binary protobuf frames. Rather than ship a schema compiler and a runtime for
- * one message, this walks the wire format directly: the encoding is
- * self-describing enough that the handful of fields we need can be read by
- * field number.
+ * This file used to be a hand-rolled protobuf reader. Spot retired its JSON
+ * websocket channels — only the `.pb` variants still push — so reading the live
+ * price meant walking the wire format by field number. The contract socket has
+ * no such restriction: `wss://contract.mexc.com/edge` speaks plain JSON, and
+ * migrating the backend to perpetuals removed the reason that decoder existed.
  *
- * Frame layout, confirmed against the live socket:
- *
- *   PushDataV3ApiWrapper
- *     1  channel   string   "spot@public.miniTicker.v3.api.pb@BTCUSDT@UTC+0"
- *     3  symbol    string   "BTCUSDT"
- *     6  sendTime  varint
- *   309  body      PublicMiniTickerV3Api
- *          1 symbol   2 price    3 rate     4 zonedRate
- *          5 high     6 low      7 volume   8 quantity
- *
- * `rate` is a fraction (0.0027 = +0.27%), matching the REST field.
+ * Keeping it would have been worse than dead code. The dashboard would have gone
+ * on streaming *spot* prices over signals computed from *futures* candles, and
+ * the two are close enough that the disagreement would look like rounding rather
+ * than like two different instruments.
  */
 
-const BODY_FIELD = 309;
-
-interface WireField {
-  field: number;
-  wire: number;
-  value: Uint8Array | number;
-}
-
-/** Yields every top-level field of a protobuf message. */
-function* readFields(buf: Uint8Array): Generator<WireField> {
-  let i = 0;
-
-  const varint = (): number => {
-    let result = 0;
-    let shift = 0;
-    while (i < buf.length) {
-      const byte = buf[i++] as number;
-      // Beyond 2^53 precision is lost, but no field here is that large.
-      result += (byte & 0x7f) * 2 ** shift;
-      shift += 7;
-      if (!(byte & 0x80)) break;
-    }
-    return result;
-  };
-
-  while (i < buf.length) {
-    const key = varint();
-    const field = key >>> 3;
-    const wire = key & 7;
-
-    if (wire === 2) {
-      const length = varint();
-      yield { field, wire, value: buf.subarray(i, i + length) };
-      i += length;
-    } else if (wire === 0) {
-      yield { field, wire, value: varint() };
-    } else if (wire === 5) {
-      i += 4;
-    } else if (wire === 1) {
-      i += 8;
-    } else {
-      return; // unknown wire type — the rest cannot be trusted
-    }
-  }
-}
-
-const decoder = new TextDecoder();
-const text = (value: Uint8Array | number): string =>
-  value instanceof Uint8Array ? decoder.decode(value) : String(value);
-
+/** One symbol's book, as `push.ticker` reports it. */
 export interface MexcTick {
+  /** Internal form — `BTCUSDT`, not the socket's `BTC_USDT`. */
   symbol: string;
   price: number;
-  /** 24h change in percent, already scaled from the wire's fraction. */
   changePct24h: number;
   high24h: number;
   low24h: number;
   quoteVolume24h: number;
 }
 
-/** Decodes one binary frame, or null if it is not a miniTicker push. */
-export function decodeMiniTicker(frame: ArrayBuffer): MexcTick | null {
-  let symbol = '';
-  let body: Uint8Array | undefined;
+export const MEXC_WS_URL = 'wss://contract.mexc.com/edge';
 
-  for (const { field, value } of readFields(new Uint8Array(frame))) {
-    if (field === 3 && value instanceof Uint8Array) symbol = text(value);
-    else if (field === BODY_FIELD && value instanceof Uint8Array) body = value;
-  }
-  if (!body) return null;
+/** Perpetuals are quoted `BTC_USDT`; everything else here uses `BTCUSDT`. */
+const toContract = (symbol: string): string =>
+  symbol.includes('_') ? symbol : symbol.replace(/(USDT|USDC)$/, '_$1');
 
-  const parts: Record<number, string> = {};
-  for (const { field, value } of readFields(body)) {
-    if (value instanceof Uint8Array) parts[field] = text(value);
-  }
+const fromContract = (symbol: string): string => symbol.replace('_', '');
 
-  const price = Number(parts[2]);
-  if (!Number.isFinite(price) || price <= 0) return null;
+/** One subscription frame per symbol — the contract socket has no batch form. */
+export const subscribeFrame = (symbol: string): string =>
+  JSON.stringify({ method: 'sub.ticker', param: { symbol: toContract(symbol) } });
 
-  return {
-    symbol: parts[1] || symbol,
-    price,
-    changePct24h: Number(parts[3] ?? 0) * 100,
-    high24h: Number(parts[5] ?? 0),
-    low24h: Number(parts[6] ?? 0),
-    quoteVolume24h: Number(parts[7] ?? 0),
+/** The socket closes an idle connection at 60s; this keeps it open. */
+export const PING_FRAME = JSON.stringify({ method: 'ping' });
+export const PING_INTERVAL_MS = 20_000;
+
+/**
+ * How many symbols to stream at once.
+ *
+ * The asset picker caps a selection at 16, so this is headroom rather than a
+ * limit anyone reaches.
+ */
+export const MAX_CHANNELS = 30;
+
+interface PushTicker {
+  channel?: string;
+  data?: {
+    symbol?: string;
+    lastPrice?: number;
+    /** A FRACTION: 0.0027 is +0.27%, matching the REST field. */
+    riseFallRate?: number;
+    high24Price?: number;
+    lower24Price?: number;
+    /** Turnover in USDT. `volume24` counts contracts and is not comparable. */
+    amount24?: number;
   };
 }
 
-export const MEXC_WS_URL = 'wss://wbs-api.mexc.com/ws';
+/**
+ * Reads one frame, or returns null for anything that is not market data.
+ *
+ * Subscription acks (`rs.sub.ticker`) and `pong` arrive on the same socket, so
+ * the channel check is what separates them — not the shape, which for an ack is
+ * a bare string where a tick is an object.
+ */
+export function decodeTicker(frame: string): MexcTick | null {
+  let message: PushTicker;
+  try {
+    message = JSON.parse(frame) as PushTicker;
+  } catch {
+    return null;
+  }
 
-/** The protobuf miniTicker channel for one symbol, in UTC. */
-export const miniTickerChannel = (symbol: string): string =>
-  `spot@public.miniTicker.v3.api.pb@${symbol.toUpperCase()}@UTC+0`;
+  if (message.channel !== 'push.ticker') return null;
 
-/** MEXC closes idle sockets after 60s unless pinged. */
-export const PING_FRAME = JSON.stringify({ method: 'PING' });
-export const PING_INTERVAL_MS = 25_000;
-/** Subscriptions per connection, per MEXC's documented limit of 30. */
-export const MAX_CHANNELS = 30;
+  const data = message.data;
+  const symbol = data?.symbol;
+  const price = data?.lastPrice;
+
+  // A frame without these two says nothing worth rendering.
+  if (!symbol || typeof price !== 'number') return null;
+
+  return {
+    symbol: fromContract(symbol),
+    price,
+    changePct24h: (data?.riseFallRate ?? 0) * 100,
+    high24h: data?.high24Price ?? 0,
+    low24h: data?.lower24Price ?? 0,
+    quoteVolume24h: data?.amount24 ?? 0,
+  };
+}

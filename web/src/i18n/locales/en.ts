@@ -121,6 +121,7 @@ export const en = {
     target: 'Target',
     riskReward: 'R:R',
     risk: 'Risk',
+    leverage: 'Max lev',
     rsi: 'RSI',
     atr: 'ATR',
     volume: 'Vol',
@@ -222,6 +223,8 @@ export const en = {
 
   /** Plain-language explanations for the terms a first-time visitor will stall on. */
   glossary: {
+    leverage:
+      'The highest leverage at which the liquidation price still sits comfortably beyond the stop — computed from this contract’s own maintenance margin, which varies from 0.04% to 5% across the board. It says liquidation will not be what closes the trade. It says nothing about whether the position is sensibly sized.',
     liveTrades:
       'The trades behind the Telegram alerts. Each one opened when a call was confirmed and closes when price reaches its target or its stop — the win rate counts those two outcomes only. Tap a row to chart that asset.',
     signalsLabel: 'What are strategy signals?',

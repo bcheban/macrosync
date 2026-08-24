@@ -1,5 +1,5 @@
 import { env } from '../../config/env.js';
-import { getAllTickers24h, splitSymbol, type MarketSummary } from '../market.service.js';
+import { getAllTickers24h, getContractSpecs, splitSymbol, type MarketSummary } from '../market.service.js';
 import { assetCatalog, isKnownSymbol } from '../../data/assets.js';
 import type { AssetMeta } from '../../types/domain.js';
 import { getJson, setJson, storeKey } from '../store/store.js';
@@ -12,14 +12,21 @@ import { getJson, setJson, storeKey } from '../store/store.js';
  * bot could only ever find a call on eight coins. With a per-pair quiet period
  * of ninety minutes, eight coins is a channel that goes silent within the hour.
  *
- * So the radar asks the exchange what exists instead. MEXC quotes roughly 1,700
- * tradable USDT pairs; that is far too many to price in one invocation, so the
- * ranking is built once, cached, and consumed a batch at a time — each run
+ * So the radar asks the exchange what exists instead. MEXC lists around a
+ * thousand USDT perpetuals; that is far too many to price in one invocation, so
+ * the ranking is built once, cached, and consumed a batch at a time — each run
  * picking up where the last one stopped. A cursor in the store is what makes
  * consecutive five-minute runs add up to a sweep of the whole board.
  */
 
-/** Leveraged and index products: derivatives of a pair, not a market. */
+/**
+ * Leveraged and index products: derivatives of a pair, not a market.
+ *
+ * A spot-era filter, kept because it costs nothing and the contract board is
+ * not guaranteed to stay free of them. Note it does **not** catch the `1000X`
+ * denomination prefixes perpetuals use — `1000PEPE_USDT` is a real market with
+ * a real chart, just quoted per thousand tokens.
+ */
 const LEVERAGED = ['3L', '3S', '5L', '5S', '4L', '4S', 'UP', 'DOWN'];
 
 /**
@@ -82,12 +89,30 @@ export function isTradablePair(symbol: string): boolean {
  * with markets too illiquid to act on.
  */
 export async function buildUniverse(): Promise<CachedUniverse> {
-  const all = await getAllTickers24h();
+  const [all, specs] = await Promise.all([
+    getAllTickers24h(),
+    // A spec failure must not empty the radar; it only costs the state check.
+    getContractSpecs().catch(() => new Map()),
+  ]);
+
+  /*
+   * A contract can be listed in the ticker feed while halted or on its way to
+   * delisting. `state` 0 is the tradable one; anything else would produce
+   * signals on a market nobody can act in. An unknown symbol is allowed through
+   * rather than dropped, so a spec outage narrows nothing.
+   */
+  const tradableState = (symbol: string): boolean => {
+    const spec = specs.get(symbol);
+    return spec === undefined || spec.state === 0;
+  };
 
   const ranked = all
     .filter(
       (entry) =>
-        isTradablePair(entry.symbol) && !looksPegged(entry) && entry.quoteVolume >= env.radarMinVolumeUsd,
+        isTradablePair(entry.symbol) &&
+        !looksPegged(entry) &&
+        tradableState(entry.symbol) &&
+        entry.quoteVolume >= env.radarMinVolumeUsd,
     )
     .sort((a, b) => b.quoteVolume - a.quoteVolume)
     .slice(0, env.radarUniverseSize)

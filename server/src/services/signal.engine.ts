@@ -1,6 +1,6 @@
 import { env } from '../config/env.js';
 import { getHeadlineEvent } from './calendar.service.js';
-import { getKlines, splitSymbol, type Interval } from './market.service.js';
+import { getContractSpecs, getKlines, splitSymbol, type ContractSpec, type Interval } from './market.service.js';
 import type { Direction, I18nText, MacroEvent, Signal, Strategy, Verdict } from '../types/domain.js';
 import { atr, clamp, ema, macd, round, roundPrice, rsi, sma } from '../utils/indicators.js';
 
@@ -32,6 +32,67 @@ interface StrategyProfile {
  * price at all.
  */
 const MAX_TARGET_FRACTION = 0.5;
+
+/**
+ * How much further than the stop the liquidation price must sit.
+ *
+ * At exactly 1.0 the two coincide, which in practice means liquidation wins: the
+ * stop is a limit the exchange fills at *your* price while liquidation is
+ * triggered off the mark price, which moves independently and can gap. Funding
+ * accrues against the position as well. Half again the distance is the margin
+ * that makes the stop the thing that closes the trade.
+ */
+const LIQUIDATION_BUFFER = 1.5;
+
+/**
+ * A ceiling on the arithmetic, set where it clips only the absurd.
+ *
+ * A very tight stop lets the formula return three figures, which is a number
+ * nobody should see next to the word "safe". But the cap must not dominate the
+ * ordinary case either: at 20 it swallowed the whole calculation — a 2% stop
+ * returned 20 on a deep contract and 20 on a thin one, and a figure that is the
+ * same for every signal tells the reader nothing. Fifty leaves the stop distance
+ * and the maintenance rate visible, which is the entire point of computing it.
+ */
+const HOUSE_MAX_LEVERAGE = 50;
+
+/**
+ * The highest leverage at which the stop is still reached before liquidation.
+ *
+ * An isolated position is liquidated once the loss eats the margin down to the
+ * maintenance requirement, which happens at roughly `1/L - mmr` of entry. So
+ * requiring liquidation to sit `buffer` times further out than the stop gives
+ *
+ *     1/L - mmr >= buffer * stopFraction     =>     L <= 1 / (buffer * s + mmr)
+ *
+ * The maintenance rate is read from the contract rather than assumed: across
+ * MEXC's board it spans 0.04% to 5%, and on a thin contract it dominates the
+ * denominator entirely. A 2% stop gives 33x at BTC's 0.1% but only 14x where
+ * the rate is 2% — treating it as a constant would be an order-of-magnitude
+ * error in the direction that costs somebody their position.
+ *
+ * Capped at both the contract's own limit and a house ceiling. "Safe" here
+ * means exactly one thing — liquidation is not what closes this trade — and
+ * nothing at all about whether the position is sensibly sized. The alert says
+ * so next to the number.
+ */
+export function maxSafeLeverage(
+  entry: number,
+  stopLoss: number,
+  spec: Pick<ContractSpec, 'maxLeverage' | 'maintenanceMarginRate'> | undefined,
+): number {
+  if (!(entry > 0) || !(stopLoss > 0)) return 0;
+
+  const stopFraction = Math.abs(entry - stopLoss) / entry;
+  if (!(stopFraction > 0)) return 0;
+
+  const mmr = spec?.maintenanceMarginRate ?? 0.02;
+  const raw = 1 / (LIQUIDATION_BUFFER * stopFraction + mmr);
+
+  const ceiling = Math.min(spec?.maxLeverage ?? HOUSE_MAX_LEVERAGE, HOUSE_MAX_LEVERAGE);
+  // Rounded down: rounding a leverage limit up is the one direction that lies.
+  return Math.max(1, Math.min(Math.floor(raw), ceiling));
+}
 
 export const STRATEGY_PROFILES: Record<Strategy, StrategyProfile> = {
   scalping: {
@@ -214,6 +275,7 @@ function buildSignal(
   profile: StrategyProfile,
   set: Awaited<ReturnType<typeof getKlines>>,
   headline: MacroEvent | undefined,
+  spec: ContractSpec | undefined,
 ): Signal {
   const closes = set.candles.map((candle) => candle.close);
   const volumes = set.candles.map((candle) => candle.volume);
@@ -302,6 +364,7 @@ function buildSignal(
     stopLoss: roundPrice(stopLoss),
     takeProfit: roundPrice(takeProfit),
     riskReward: direction === 'neutral' ? 0 : round(profile.rewardRatio, 2),
+    maxSafeLeverage: direction === 'neutral' ? 0 : maxSafeLeverage(entry, stopLoss, spec),
     suggestedRiskPct,
     indicators: {
       rsi: round(read.strength, 1),
@@ -331,13 +394,17 @@ export async function getSignals(
    * grid. A rejected pair is dropped and the rest of the tape still renders —
    * partial data beats an error screen for a dashboard that is polled.
    */
-  // Fetched once for the whole batch rather than per signal.
-  const headline = await getHeadlineEvent();
+  // Both fetched once for the whole batch rather than per signal.
+  const [headline, specs] = await Promise.all([
+    getHeadlineEvent(),
+    // A spec failure costs the leverage figure, never the signal.
+    getContractSpecs().catch(() => new Map<string, ContractSpec>()),
+  ]);
 
   const settled = await Promise.allSettled(
     pairs.map(async ({ profile, symbol }) => {
       const set = await getKlines(symbol, profile.interval, 180);
-      return buildSignal(symbol, profile, set, headline);
+      return buildSignal(symbol, profile, set, headline, specs.get(symbol));
     }),
   );
 

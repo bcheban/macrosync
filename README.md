@@ -100,11 +100,11 @@ the bundle.
 
 <br />
 
-<img src="https://img.shields.io/badge/Protobuf-over_WebSocket-4B8BBE?logoColor=white" align="left" height="24" /> &nbsp;
-How the live price arrives. MEXC retired its JSON websocket channels — only the `.pb` variants push
-data now, as binary protobuf frames — so `web/src/lib/mexc-stream.ts` reads the wire format
-directly, by field number, rather than shipping a schema compiler and a runtime for one message.
-The frame layout in that file's header was confirmed against the live socket, not copied from docs.
+<img src="https://img.shields.io/badge/WebSocket-contract_stream-4B8BBE?logoColor=white" align="left" height="24" /> &nbsp;
+How the live price arrives: `wss://contract.mexc.com/edge`, one `sub.ticker` frame per symbol,
+buffered and flushed on a fixed cadence so a tape moving several times a second does not re-render
+the page continuously. This used to be a hand-rolled protobuf reader — spot retired its JSON
+channels and only pushes `.pb` frames — and moving to perpetuals deleted the reason it existed.
 
 <br />
 
@@ -133,10 +133,11 @@ already shaped — the route never parses prose or guards against a malformed fi
 
 <br />
 
-<img src="https://img.shields.io/badge/MEXC-market_data-1972F5?logoColor=white" align="left" height="24" /> &nbsp;
-The single source of price truth, used twice. The server pulls candles and 24h stats over REST to
-compute indicators; the browser subscribes to MEXC's `miniTicker` stream directly, so the number on
-screen is the exchange's own, to the last decimal. No key, and no invented data if it is down.
+<img src="https://img.shields.io/badge/MEXC-perpetual_futures-1972F5?logoColor=white" align="left" height="24" /> &nbsp;
+The single source of price truth, used twice. The server pulls contract candles and 24h stats over
+REST to compute indicators; the browser subscribes to the contract ticker stream directly, so the
+number on screen is the exchange's own, to the last decimal. No key, and no invented data if it is
+down. **Perpetuals, not spot** — see *Futures migration* below for what that changed.
 
 <br />
 
@@ -275,7 +276,7 @@ Everything lives in `server/.env` (see `server/.env.example`). Every value has a
 | `CORS_ORIGIN`           | `http://localhost:5173` | Comma-separated list, or `*`                                |
 | `SYMBOLS`               | 8 majors + SHIB         | Default watchlist, drawn from the asset catalogue           |
 | `MAX_SYMBOLS_PER_REQUEST` | `16`                  | Cap per request — one kline fetch per symbol                |
-| `MEXC_API_BASE`         | `https://api.mexc.com`  | Public market data, no key                                  |
+| `MEXC_API_BASE`         | `https://contract.mexc.com` | Perpetual contract data, no key                         |
 | `MARKET_CONCURRENCY`    | `6`                     | Parallel upstream calls — public endpoints are rate limited  |
 | `UPSTREAM_COOLDOWN_MS`  | `20000`                 | Skip upstream for this long after a failure                 |
 | `RATE_LIMIT_COOLDOWN_MS`| `60000`                 | Longer pause when MEXC answers 429/418                      |
@@ -295,6 +296,7 @@ Everything lives in `server/.env` (see `server/.env.example`). Every value has a
 | `ALERTS_SEND_RETRIES`   | `3`                     | Attempts before a message is abandoned for the run           |
 | `TELEGRAM_WEBHOOK_SECRET` | —                     | Guards `/api/telegram/webhook`; the route 404s while unset    |
 | `PUBLIC_BASE_URL`       | —                       | Where Telegram delivers, for the registration script          |
+| `ADMIN_SECRET`          | —                       | Guards `/api/admin/reset`; the route 404s while unset          |
 | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | —        | Upstash Redis; injected by the Vercel integration           |
 | `ALERTS_TEST_SECRET`    | —                       | Guards `/api/alerts/test`                                   |
 | `LLM_PROVIDER`          | `auto`                  | `auto` · `anthropic` · `openai` · `heuristic`                |
@@ -337,8 +339,9 @@ is why the API function is pinned to `fra1` in `vercel.json`.
 | POST   | `/api/cron/signals`            | The scheduled scan. `Bearer $CRON_SECRET`; 404s while unset |
 | POST   | `/api/telegram/webhook`        | Telegram updates. Guarded by `secret_token`; 404s while unset |
 | POST   | `/api/alerts/test`             | Sends one real signal to prove the path. `?secret=`        |
+| POST   | `/api/admin/reset`             | Clears the trading record. `Bearer $ADMIN_SECRET` + `?confirm=RESET` |
 
-The last three **404 rather than 401 while their secret is unset** — an unconfigured deploy denies
+The last four **404 rather than 401 while their secret is unset** — an unconfigured deploy denies
 that they exist at all, so nothing is triggerable by anyone who reads the source.
 
 `/api/market/tickers` and `/api/signals` both accept `?symbols=BTCUSDT,ETHUSDT`, validated against
@@ -404,31 +407,117 @@ every scenario to be *conditional*: a market condition paired with a defensive r
 heuristic engine follows the same contract, so the product behaves identically with or without a
 key — and any provider failure degrades silently instead of emptying the feed.
 
+### Futures migration — `server/src/services/market.service.ts`
+
+The whole backend trades **MEXC perpetuals**, not spot. Four things differ, and each is a silent
+failure if assumed rather than checked:
+
+| | Spot | Contract |
+| --- | --- | --- |
+| Host | `api.mexc.com` | `contract.mexc.com` |
+| Symbol | `BTCUSDT` | `BTC_USDT` |
+| Interval | `60m` | `Min60` |
+| Klines | a row per bar, ms | **parallel arrays, seconds** |
+| Errors | HTTP status | `200` with `{"success": false}` |
+
+The columnar klines are the dangerous one: transposing them the wrong way produces plausible
+numbers rather than an error, and second-stamps read as 1970 when compared against `Date.now()`.
+Both are covered by tests.
+
+The underscore is confined to the two functions that build a URL. Everything else — the catalogue,
+every saved watchlist, every Redis key, every open trade — keeps `BTCUSDT`, because renaming the
+internal form would have invalidated all of it for a difference that exists in one API's path.
+
+The browser stream moved too, and did not have to. It could have gone on streaming spot prices over
+futures signals, and the two are close enough that the disagreement would have looked like rounding
+rather than like two different instruments. The contract socket speaks plain JSON, so the migration
+also **deleted the hand-rolled protobuf decoder** that spot's binary-only channels had required — and
+the workaround underneath it: spot's socket published a 24h change computed over a different window
+than its own REST ticker (they disagreed by 0.27 points on BTC), so the figure had to be recomputed
+against a recovered open. The contract feeds agree to 0.01 points, measured live, so the socket's
+own number is used directly.
+
+#### Max safe leverage
+
+Every signal carries the highest leverage at which liquidation still sits clear of the stop. An
+isolated position liquidates at roughly `1/L - mmr` from entry, so requiring liquidation to sit
+`buffer` times further out than the stop gives
+
+```
+1/L - mmr >= buffer * stopFraction   =>   L <= 1 / (buffer * stopFraction + mmr)
+```
+
+with a buffer of **1.5**. At exactly 1.0 the stop and the liquidation coincide, which in practice
+means liquidation wins: the stop is a limit filled at *your* price while liquidation triggers off the
+mark price, which moves independently and can gap, and funding accrues against the position besides.
+
+`mmr` is read from `/contract/detail` per symbol rather than assumed, because across MEXC's board it
+spans **0.04% to 5%** and on a thin contract it dominates the denominator entirely. A 2% stop gives
+32x at BTC's 0.1% and 20x where the rate is 2%; treating it as a constant would be an
+order-of-magnitude error in the direction that costs somebody their position. The result is floored,
+never rounded up, and capped at both the contract's own limit and a house ceiling of 50.
+
+The house ceiling started at 20 and a test caught it: at that level the cap swallowed the whole
+calculation — a 2% stop returned 20 on a deep contract and 20 on a thin one — and a figure identical
+for every signal tells the reader nothing.
+
+> It answers exactly one question: will liquidation close this trade before the stop does. It says
+> nothing about whether the position is sensibly sized.
+
+### Clean slate — `POST /api/admin/reset`
+
+Written for this cut-over. Every open trade had been opened against spot prices with spot levels, and
+every win and loss on the record was earned on a different instrument — carrying that history into a
+futures release would make the published win rate a claim about a market the bot no longer trades.
+
+Three things must line up before anything is deleted: `ADMIN_SECRET` configured, the secret matching,
+and `?confirm=RESET` spelled out. The last is not security — anyone holding the secret can send it —
+it is there so a half-remembered curl from shell history cannot wipe the ledger.
+
+```bash
+curl -X POST "https://your-app.vercel.app/api/admin/reset?confirm=RESET"   -H "Authorization: Bearer $ADMIN_SECRET"
+```
+
+`scope=ledger` (the default) clears trades, statistics, history and alert state. `scope=all`
+additionally drops every subscriber, their preferences and their mutes. The narrow scope is the
+default because wiping the ledger is recoverable — the next scan repopulates it in minutes — while
+wiping the roster is not: everyone would have to be asked to press start again, and nobody would know
+they had been dropped. `all` leaves exactly one recipient, the owner from `TELEGRAM_CHAT_ID`,
+re-seeded as on a fresh deploy.
+
+The radar's cached universe survives both. It is a ranking of the exchange, not a record of anything
+this bot did.
+
 ### Market data — MEXC
 
-Prices, candles and 24h statistics all come from MEXC's public API. Two paths, on purpose:
+Prices, candles and 24h statistics all come from MEXC's public **contract** API. Two paths, on
+purpose:
 
-- **Server, REST** — `/api/v3/klines` feeds the indicator engine and `/api/v3/ticker/24hr` the
-  watchlist. Requests go through a concurrency gate (sixteen tracked symbols would otherwise mean
-  sixteen simultaneous calls), a TTL cache that de-duplicates concurrent callers, and a circuit
-  breaker that treats an explicit 429/418 as a longer ban than an ordinary failure.
-- **Browser, WebSocket** — `useLivePrices` subscribes to `spot@public.miniTicker.v3.api.pb`
-  directly. A REST snapshot behind a ten-second cache cannot match an exchange tick for tick; this
+- **Server, REST** — `/api/v1/contract/kline/{symbol}` feeds the indicator engine and
+  `/api/v1/contract/ticker` the watchlist and the radar. Requests go through a concurrency gate
+  (sixteen tracked symbols would otherwise mean sixteen simultaneous calls), a TTL cache that
+  de-duplicates concurrent callers, and a circuit breaker that treats an explicit 429/418 as a
+  longer ban than an ordinary failure.
+- **Browser, WebSocket** — `useLivePrices` opens `wss://contract.mexc.com/edge` and subscribes per
+  symbol. A REST snapshot behind a ten-second cache cannot match an exchange tick for tick; this
   can, and it also means the price is right regardless of what the server can reach.
 
-Two things worth knowing if you touch this code:
+Things worth knowing if you touch this code:
 
-- **MEXC's interval codes are not Binance's.** The hourly bar is `60m`; `1h` is rejected with
-  `-1121 Invalid interval`.
-- **`priceChangePercent` is a fraction.** MEXC returns `0.0014` where other exchanges return
-  `0.14`. Rendering it raw shows every asset as flat.
-- **The websocket is protobuf only.** Every `spot@public.*.v3.api@…` JSON channel is now rejected;
-  only the `.pb` variants push data. Rather than ship a schema compiler for one message,
-  `lib/mexc-stream.ts` walks the wire format and reads the four fields it needs by number — the
-  layout is documented in that file, confirmed against the live socket.
-- The socket's own `rate` field is computed over a different window than REST's
-  `priceChangePercent`, so only the price is taken from it; the 24h change is recomputed against
-  the REST open, which keeps it reconciled with what MEXC's own ticker shows.
+- **Contract intervals are named, not abbreviated.** `Min60`, never `1h` or `60m` — both come back
+  `code 600 Parameter error`.
+- **Klines are columnar and stamped in seconds.** Parallel arrays rather than a row per bar.
+  Transposing them the wrong way yields plausible-looking garbage rather than an error, and
+  second-stamps read as 1970 against `Date.now()`.
+- **The envelope carries the error, not the status.** A bad symbol answers `200` with
+  `{"success": false}`.
+- **`riseFallRate` is a fraction.** `0.0014` means `+0.14%`. Rendering it raw shows every asset as
+  flat.
+- **Rank on `amount24`, not `volume24`.** The latter counts *contracts*, and contract size differs
+  per symbol — BTC is 0.0001, ETH 0.01 — so ranking on it orders the board by tick size.
+- The socket and REST publish the same `riseFallRate`, measured 0.01 points apart live, so the
+  socket's figure is used directly. On spot they disagreed by 0.27 points and the change had to be
+  recomputed against a recovered open.
 
 **There is no simulated fallback.** If the exchange is unreachable the API returns nothing and the
 header says so, because a dashboard that invents a plausible price is worse than one that admits it
@@ -538,6 +627,27 @@ is nothing scheduled and nothing to clean up. A muted subscriber is skipped, nev
 A call still opens a trade when every subscriber is muted. Muting a phone is a delivery preference,
 not a change to the call, and letting it stop the ledger would leave the win rate with holes wherever
 the only subscriber wanted an evening off.
+
+#### Per-person strategy settings — `/settings`
+
+The roster answered *who* gets a message; preferences answer *which*. A scalper and a swing trader
+were both receiving all three strategies, so most of what arrived was noise to one of them, and the
+only remedy on offer was muting everything for two hours.
+
+`/settings` returns one button per strategy with its state written on it — the tick **is** the status
+display, so the button cannot disagree with the state it toggles. A tap flips one strategy, answers
+with a toast, and redraws the keyboard in place; sending a fresh panel per tap would leave a column
+of near-identical messages with the older ones showing stale state while looking live.
+
+Preferences default to all three on. A subscriber who has never opened `/settings` has no stored
+record, and reading that as "wants nothing" would silence them permanently.
+
+Turning everything off is allowed. It is a coherent thing to want — quiet until further notice
+without unsubscribing — and refusing it would be the bot overriding somebody's explicit choice about
+their own notifications.
+
+Close notices ignore the filter. Being told how a call *ended* is not the same as subscribing to new
+ones of that kind, and the recipient was already told about that trade.
 
 #### Webhook — `POST /api/telegram/webhook`
 

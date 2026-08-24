@@ -1,0 +1,75 @@
+import { deleteKeys, listKeys, storeKey } from '../store/store.js';
+
+/**
+ * Wipes the trading record, for a clean slate.
+ *
+ * Written for the spot-to-perpetuals cut-over: every open trade was opened
+ * against spot prices with spot levels, and every win and loss on the record was
+ * earned on a different instrument. Carrying that history into a futures release
+ * would make the published win rate a claim about a market the bot no longer
+ * trades.
+ *
+ * Two scopes, and the narrow one is the default on purpose. Wiping the ledger is
+ * recoverable — the next scan repopulates it within minutes. Wiping the roster
+ * is not: every subscriber would have to be asked to press start again, and
+ * nobody would know they had been dropped.
+ *
+ * `all` returns the deployment to the state of a fresh deploy, which includes
+ * re-seeding the owner from `TELEGRAM_CHAT_ID`. So it leaves exactly one
+ * recipient rather than none — the alternative is a bot that scans, publishes
+ * and tells nobody.
+ */
+export type ResetScope = 'ledger' | 'all';
+
+/** The trading record: trades, statistics, and the alert-dedup state. */
+const LEDGER_PATTERNS = [
+  'trades:active',
+  'trades:stats',
+  'trades:history',
+  'alerts:last',
+  'telegram:delivery',
+  'radar:cursor',
+  'cron:last',
+];
+
+/** Everything about the people receiving messages. */
+const ROSTER_PATTERNS = [
+  'telegram:subscribers',
+  'telegram:owner-seeded',
+  'telegram:profile:*',
+  'telegram:prefs:*',
+  'telegram:mute:*',
+];
+
+export interface ResetResult {
+  scope: ResetScope;
+  deleted: number;
+  keys: string[];
+  /** Named so an operator can see what was spared, not only what was removed. */
+  kept: string[];
+}
+
+export async function resetStore(scope: ResetScope): Promise<ResetResult> {
+  const patterns = scope === 'all' ? [...LEDGER_PATTERNS, ...ROSTER_PATTERNS] : LEDGER_PATTERNS;
+
+  const found = await Promise.all(
+    patterns.map(async (pattern) =>
+      pattern.includes('*') ? listKeys(storeKey(pattern)) : [storeKey(pattern)],
+    ),
+  );
+
+  const keys = [...new Set(found.flat())];
+  const deleted = await deleteKeys(keys);
+
+  /*
+   * The radar's universe survives both scopes. It is a cached ranking of the
+   * exchange, not a record of anything this bot did — deleting it would only
+   * force a rebuild on the next run.
+   */
+  return {
+    scope,
+    deleted,
+    keys: keys.map((key) => key.replace(/^[^:]+:/, '')),
+    kept: scope === 'all' ? ['radar:universe'] : ['radar:universe', ...ROSTER_PATTERNS],
+  };
+}

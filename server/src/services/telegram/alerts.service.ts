@@ -84,8 +84,14 @@ interface BroadcastResult {
  * continues past any single failure, and a recipient Telegram reports as gone is
  * dropped from the roster rather than retried on every run forever.
  */
-async function broadcast(html: string, keyboard?: InlineKeyboard): Promise<BroadcastResult> {
-  const { send } = await activeRecipients();
+async function broadcast(
+  html: string,
+  keyboard?: InlineKeyboard,
+  strategy?: Strategy,
+): Promise<BroadcastResult> {
+  const { send, filtered } = await activeRecipients(strategy);
+  if (filtered.length) console.info(`[alerts] ${filtered.length} recipient(s) have ${strategy} turned off`);
+
   if (!send.length) return { delivered: 0, failed: 0, pruned: 0, silent: true, permanent: false };
 
   let delivered = 0;
@@ -159,6 +165,7 @@ export function formatAlert(
     `🛑 <b>Stop</b>    <code>${money(signal.stopLoss)}</code>`,
     `🏁 <b>Target</b>  <code>${money(signal.takeProfit)}</code>`,
     `⚖️ R:R <b>${signal.riskReward}</b> · risk <b>${signal.suggestedRiskPct}%</b> of book`,
+    `🧮 Max safe leverage: <b>${signal.maxSafeLeverage}x</b> <i>(liquidation stays past the stop)</i>`,
     `⏳ Expected duration: <b>${meta.duration}</b>`,
     '',
     `💡 ${escapeHtml(summary)}`,
@@ -175,7 +182,10 @@ export function formatAlert(
     lines.push('', `📊 Win rate so far: <b>${winRate(stats)}%</b> (${stats.wins}W / ${stats.losses}L${unresolved})`);
   }
 
-  lines.push('', '<i>Model output over public market data. Not financial advice.</i>');
+  lines.push(
+    '',
+    '<i>MEXC perpetuals. Model output over public market data — not financial advice.</i>',
+  );
   return lines.join('\n');
 }
 
@@ -260,7 +270,11 @@ export async function notifySignals(signals: Signal[], event: MacroEvent | undef
     const key = keyFor(signal);
     const previous = state[key];
 
-    const result = await broadcast(formatAlert(signal, signal.summary.text, event, stats), SIGNAL_KEYBOARD);
+    const result = await broadcast(
+      formatAlert(signal, signal.summary.text, event, stats),
+      SIGNAL_KEYBOARD,
+      signal.strategy,
+    );
     deliveries += result.delivered;
     pruned += result.pruned;
     dirty = true;
@@ -325,6 +339,7 @@ export async function notifyClosed(closed: ClosedTrade[], stats: TradeStats): Pr
      */
     if (trade.outcome !== 'win' && trade.outcome !== 'loss') continue;
 
+    // No strategy filter: how a call *ended* is owed to whoever was told of it.
     const result = await broadcast(formatClose(trade, stats));
     if (result.delivered > 0) sent += 1;
     else if (!result.silent) console.error(`[alerts] close notice for ${trade.base} reached nobody`);

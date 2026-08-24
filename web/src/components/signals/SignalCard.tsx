@@ -176,6 +176,13 @@ export function SignalCard({ signal, index }: { signal: Signal; index: number })
         <span className="tnum font-mono">
           {t('signals.risk')} <span className="text-white/60">{signal.suggestedRiskPct}%</span>
         </span>
+        {/* Perpetuals only: the leverage at which liquidation still clears the stop. */}
+        {signal.maxSafeLeverage > 0 && (
+          <span className="tnum font-mono">
+            {t('signals.leverage')}{' '}
+            <span className="text-white/60">{signal.maxSafeLeverage}x</span>
+          </span>
+        )}
         <span className="tnum font-mono">
           {t('signals.rsi')} <span className="text-white/60">{signal.indicators.rsi}</span>
         </span>

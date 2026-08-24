@@ -34,26 +34,19 @@ export function useMarketTickers(tickers: Ticker[]): MarketTickers {
       liveCount += 1;
 
       /*
-       * Only the price is taken from the socket. MEXC's miniTicker carries its
-       * own `rate` field, but it is computed over a different window than the
-       * REST ticker's `priceChangePercent` — they disagreed by 0.27 points on
-       * BTC — and showing a percentage the exchange's own ticker does not is
-       * worse than showing one a few seconds old.
+       * Price and change both come from the socket now.
        *
-       * So the 24h open is recovered from the REST pair (price and change are
-       * consistent with each other by construction) and the change is
-       * recomputed against the live price. The number moves with the tape and
-       * still reconciles with MEXC.
+       * On spot this was not possible: `miniTicker`'s `rate` was computed over a
+       * different window than the REST ticker's `priceChangePercent` — they
+       * disagreed by 0.27 points on BTC — so the change had to be recomputed
+       * against a 24h open recovered from the REST pair. The contract feeds
+       * publish the same `riseFallRate` on both sides; measured live, they
+       * differ by 0.01 points, which is the price moving between the two calls.
        */
-      const restOpen =
-        ticker.changePct24h > -100 ? ticker.price / (1 + ticker.changePct24h / 100) : 0;
-      const changePct24h =
-        restOpen > 0 ? ((quote.price - restOpen) / restOpen) * 100 : ticker.changePct24h;
-
       return {
         ...ticker,
         price: quote.price,
-        changePct24h,
+        changePct24h: quote.changePct24h,
         // The sparkline still comes from REST candles; only the tip is live.
         spark: ticker.spark.length ? [...ticker.spark.slice(0, -1), quote.price] : ticker.spark,
         updatedAt: new Date(quote.at).toISOString(),

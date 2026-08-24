@@ -23,19 +23,25 @@ const realFetch = globalThis.fetch;
 before(() => {
   process.env.TELEGRAM_BOT_TOKEN = '';
   globalThis.fetch = (async (url: string | URL) => {
-    const symbol = /symbol=([A-Z]+)/.exec(String(url))?.[1] ?? 'BTCUSDT';
+    // Contract klines: `/contract/kline/BTC_USDT`, columnar, seconds, enveloped.
+    const symbol = /kline\/([A-Z0-9_]+)/.exec(String(url))?.[1]?.replace('_', '') ?? 'BTCUSDT';
     const [highs, lows] = script[symbol] ?? [[100], [100]];
-    const rows = highs.map((high, index) => [
-      candleBase + index * 60_000,
-      '100',
-      String(high),
-      String(lows[index]),
-      '100',
-      '1',
-      0,
-      '1',
-    ]);
-    return { ok: true, status: 200, statusText: 'OK', json: async () => rows, text: async () => '' };
+
+    const data = {
+      time: highs.map((_, index) => Math.floor((candleBase + index * 60_000) / 1000)),
+      open: highs.map(() => 100),
+      high: highs.slice(),
+      low: lows.slice(),
+      close: highs.map(() => 100),
+      vol: highs.map(() => 1),
+    };
+    return {
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({ success: true, code: 0, data }),
+      text: async () => '',
+    };
   }) as unknown as typeof fetch;
 });
 

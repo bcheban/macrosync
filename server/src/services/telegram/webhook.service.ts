@@ -1,7 +1,14 @@
 import { env } from '../../config/env.js';
 import { loadActive, loadStats, winRate } from '../trades/trades.service.js';
 import { mute, mutedUntil, subscribe, subscribersStatus, unmute, unsubscribe } from './subscribers.service.js';
-import { answerCallbackQuery, escapeHtml, sendTelegramMessage, type InlineKeyboard } from './telegram.client.js';
+import {
+  answerCallbackQuery,
+  editMessageReplyMarkup,
+  escapeHtml,
+  sendTelegramMessage,
+  type InlineKeyboard,
+} from './telegram.client.js';
+import { getPrefs, STRATEGIES, togglePref, wantsNothing, type StrategyPrefs } from './preferences.service.js';
 
 /**
  * Everything the bot does when somebody talks to it.
@@ -27,7 +34,8 @@ export interface TelegramUpdate {
     id?: string;
     data?: string;
     from?: { first_name?: string; username?: string };
-    message?: { chat?: { id?: number | string } };
+    /** `message_id` is what lets a toggle redraw its own keyboard in place. */
+    message?: { message_id?: number; chat?: { id?: number | string } };
   };
 }
 
@@ -38,7 +46,40 @@ const MENU: InlineKeyboard = [
     { text: '📊 Stats', callback_data: 'stats' },
     { text: '🛑 Mute 2h', callback_data: 'mute:2' },
   ],
+  [{ text: '⚙️ Settings', callback_data: 'settings' }],
 ];
+
+const STRATEGY_LABEL: Record<(typeof STRATEGIES)[number], string> = {
+  scalping: '⚡ Scalping',
+  day: '📅 Day trading',
+  swing: '🌊 Swing',
+};
+
+/**
+ * The settings panel: one row per strategy, its own state written on it.
+ *
+ * The tick is the entire status display — there is no separate line saying what
+ * is on, so the button cannot disagree with the state it toggles.
+ */
+const settingsKeyboard = (prefs: StrategyPrefs): InlineKeyboard =>
+  STRATEGIES.map((strategy) => [
+    {
+      text: `${prefs[strategy] ? '✅' : '❌'} ${STRATEGY_LABEL[strategy]}`,
+      callback_data: `pref:${strategy}`,
+    },
+  ]);
+
+const SETTINGS_TEXT = [
+  '⚙️ <b>Which calls do you want?</b>',
+  '',
+  'Tap to turn a strategy on or off. Only what is ticked will reach you.',
+  '',
+  '⚡ <b>Scalping</b> — 5m bars, 15 minutes to 2 hours',
+  '📅 <b>Day trading</b> — 1h bars, 2 to 12 hours',
+  '🌊 <b>Swing</b> — 4h bars, 1 to 4 days',
+  '',
+  '<i>Turning everything off is allowed — you stay subscribed and simply hear nothing until you turn something back on.</i>',
+].join('\n');
 
 /** The published record, phrased the same way everywhere it appears. */
 async function statsLine(): Promise<string> {
@@ -69,6 +110,7 @@ const WELCOME = [
   '',
   '<b>Commands</b>',
   '/stats — the current record',
+  '/settings — choose which strategies reach you',
   '/mute — two hours of quiet',
   '/unmute — turn alerts back on',
   '/stop — unsubscribe',
@@ -80,6 +122,7 @@ const HELP = [
   '<b>Commands</b>',
   '/start — subscribe to alerts',
   '/stats — win rate and open trades',
+  '/settings — choose which strategies reach you',
   '/mute — two hours of quiet',
   '/unmute — turn alerts back on',
   '/stop — unsubscribe',
@@ -104,6 +147,12 @@ async function handleCommand(chatId: string, text: string, profile: { name?: str
 
     case '/stats': {
       await sendTelegramMessage(await statsLine(), { chatId, keyboard: MENU });
+      return;
+    }
+
+    case '/settings': {
+      const prefs = await getPrefs(chatId);
+      await sendTelegramMessage(SETTINGS_TEXT, { chatId, keyboard: settingsKeyboard(prefs) });
       return;
     }
 
@@ -147,9 +196,42 @@ async function handleCallback(query: NonNullable<TelegramUpdate['callback_query'
   }
 
   const chat = String(chatId);
+  const messageId = query.message?.message_id;
   const [action, argument] = (query.data ?? '').split(':');
 
   switch (action) {
+    case 'settings': {
+      await answerCallbackQuery(id);
+      await sendTelegramMessage(SETTINGS_TEXT, { chatId: chat, keyboard: settingsKeyboard(await getPrefs(chat)) });
+      return;
+    }
+
+    case 'pref': {
+      const strategy = STRATEGIES.find((entry) => entry === argument);
+      if (!strategy) {
+        await answerCallbackQuery(id);
+        return;
+      }
+
+      const prefs = await togglePref(chat, strategy);
+      const state = prefs[strategy] ? 'on' : 'off';
+
+      /*
+       * The toast carries the result, so the answer is useful even if the
+       * keyboard edit is refused — which it is, silently, once a message is
+       * older than 48 hours and no longer editable.
+       */
+      await answerCallbackQuery(
+        id,
+        wantsNothing(prefs)
+          ? 'All strategies off — you will not receive new calls'
+          : `${STRATEGY_LABEL[strategy]} ${state}`,
+      );
+
+      if (messageId !== undefined) await editMessageReplyMarkup(chat, messageId, settingsKeyboard(prefs));
+      return;
+    }
+
     case 'stats': {
       // Acknowledged first: the button spins until Telegram gets an answer, and
       // reading the ledger is slower than the spinner looks patient.

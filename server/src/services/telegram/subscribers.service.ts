@@ -1,4 +1,6 @@
 import { env } from '../../config/env.js';
+import type { Strategy } from '../../types/domain.js';
+import { getPrefs, STRATEGIES } from './preferences.service.js';
 import {
   addToSet,
   deleteKey,
@@ -130,18 +132,56 @@ export async function mutedUntil(chatId: string): Promise<string | null> {
   return Date.parse(record.until) > Date.now() ? record.until : null;
 }
 
-/** Splits the roster into who should be messaged now and who asked for quiet. */
-export async function activeRecipients(): Promise<{ send: string[]; muted: string[] }> {
+/**
+ * Splits the roster into who should be messaged now and who should not.
+ *
+ * Two independent reasons to skip somebody, kept apart because they mean
+ * different things. A **mute** is temporary and covers everything; a
+ * **preference** is standing and covers one strategy. Collapsing them would
+ * make `/health` unable to say whether a quiet channel is quiet because people
+ * asked for an evening off or because nobody wants what the scan is finding.
+ *
+ * `strategy` is optional: a close notice concerns a trade the recipient was
+ * already told about, so it goes to everyone unmuted regardless of what they
+ * have since turned off. Being told how a call *ended* is not the same as
+ * subscribing to new ones of that kind.
+ */
+export async function activeRecipients(
+  strategy?: Strategy,
+): Promise<{ send: string[]; muted: string[]; filtered: string[] }> {
   const roster = await listSubscribers();
-  const states = await Promise.all(roster.map(async (chatId) => [chatId, await mutedUntil(chatId)] as const));
+
+  const states = await Promise.all(
+    roster.map(async (chatId) => {
+      const [until, prefs] = await Promise.all([mutedUntil(chatId), getPrefs(chatId)]);
+      return { chatId, muted: Boolean(until), wants: strategy ? prefs[strategy] : true };
+    }),
+  );
 
   return {
-    send: states.filter(([, until]) => !until).map(([chatId]) => chatId),
-    muted: states.filter(([, until]) => until).map(([chatId]) => chatId),
+    send: states.filter((s) => !s.muted && s.wants).map((s) => s.chatId),
+    muted: states.filter((s) => s.muted).map((s) => s.chatId),
+    filtered: states.filter((s) => !s.muted && !s.wants).map((s) => s.chatId),
   };
 }
 
 export async function subscribersStatus() {
-  const { send, muted } = await activeRecipients();
-  return { total: send.length + muted.length, receiving: send.length, muted: muted.length };
+  const roster = await listSubscribers();
+  const states = await Promise.all(
+    roster.map(async (chatId) => ({ muted: Boolean(await mutedUntil(chatId)), prefs: await getPrefs(chatId) })),
+  );
+
+  const byStrategy: Record<Strategy, number> = { scalping: 0, day: 0, swing: 0 };
+  for (const state of states) {
+    if (state.muted) continue;
+    for (const key of STRATEGIES) if (state.prefs[key]) byStrategy[key] += 1;
+  }
+
+  return {
+    total: roster.length,
+    receiving: states.filter((s) => !s.muted).length,
+    muted: states.filter((s) => s.muted).length,
+    /** How many unmuted subscribers each strategy actually reaches. */
+    byStrategy,
+  };
 }

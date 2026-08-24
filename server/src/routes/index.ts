@@ -9,6 +9,7 @@ import { getSignals, isStrategy, STRATEGY_PROFILES } from '../services/signal.en
 import { alertsStatus, notifyClosed, notifySignals, sendTestAlert } from '../services/telegram/alerts.service.js';
 import { botStatus, handleUpdate, type TelegramUpdate } from '../services/telegram/webhook.service.js';
 import { getActiveSignals } from '../services/trades/active.service.js';
+import { resetStore, type ResetScope } from '../services/admin/reset.service.js';
 import {
   isSelectableSymbol,
   nextBatch,
@@ -343,5 +344,46 @@ api.get(
   '/signals/active',
   route(async (_req, res) => {
     res.json(await getActiveSignals());
+  }),
+);
+
+/**
+ * Clears the trading record.
+ *
+ * Three separate things have to line up before anything is deleted: the secret
+ * must be configured, it must match, and the caller must spell out `confirm=RESET`.
+ * The last one is not security — anyone holding the secret can send it — it is
+ * there so that a half-remembered curl from shell history cannot wipe the ledger.
+ *
+ * `scope=ledger` (the default) clears trades, statistics and alert state.
+ * `scope=all` additionally drops every subscriber, their preferences and their
+ * mutes — unrecoverable, since nobody would know to press start again.
+ */
+api.post(
+  '/admin/reset',
+  route(async (req, res) => {
+    const header = req.headers.authorization ?? '';
+    const bearer = header.startsWith('Bearer ') ? header.slice(7) : '';
+    const provided = bearer || (typeof req.query.secret === 'string' ? req.query.secret : '');
+
+    if (!env.adminSecret || provided !== env.adminSecret) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    if (req.query.confirm !== 'RESET') {
+      res.status(400).json({
+        error: 'Add ?confirm=RESET to proceed',
+        wouldDelete: 'open trades, win/loss/expired/voided counters, history, alert state',
+        scopes: { ledger: 'the trading record (default)', all: 'also every subscriber and their settings' },
+      });
+      return;
+    }
+
+    const scope: ResetScope = req.query.scope === 'all' ? 'all' : 'ledger';
+    const result = await resetStore(scope);
+
+    console.warn(`[admin] store reset (${scope}): ${result.deleted} key(s) deleted`);
+    res.json({ ok: true, ...result });
   }),
 );

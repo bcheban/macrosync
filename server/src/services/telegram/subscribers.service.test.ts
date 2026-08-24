@@ -15,7 +15,10 @@ process.env.ALERTS_MAX_PER_RUN = '4';
 const { resetMemoryStore } = await import('../store/store.js');
 const subs = await import('./subscribers.service.js');
 const alerts = await import('./alerts.service.js');
+const trades = await import('../trades/trades.service.js');
 const webhook = await import('./webhook.service.js');
+const prefs = await import('./preferences.service.js');
+const admin = await import('../admin/reset.service.js');
 
 /** `chatId -> how Telegram answers for them`. */
 let responses: Record<string, { status: number; body: unknown }> = {};
@@ -52,12 +55,12 @@ after(() => {
   globalThis.fetch = realFetch;
 });
 
-const signal = (base: string, verdict: 'buy' | 'sell' = 'buy') =>
+const signal = (base: string, verdict: 'buy' | 'sell' = 'buy', strategy = 'day') =>
   ({
     id: base,
     symbol: `${base}USDT`,
     base,
-    strategy: 'day',
+    strategy,
     timeframe: '1h',
     direction: 'long',
     verdict,
@@ -198,6 +201,106 @@ describe('subscriber roster', () => {
     assert.equal(posted.length, 1);
     assert.equal(posted[0]?.[0], '500');
     assert.match(posted[0]?.[1] ?? '', /trades on the record|Win rate|still open/);
+  });
+
+  it('defaults a new subscriber to every strategy', async () => {
+    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
+
+    /*
+     * A chat that has never opened /settings has no stored record, and reading
+     * that as "wants nothing" would silence them permanently. The default has
+     * to be the permissive one.
+     */
+    assert.deepEqual(await prefs.getPrefs('500'), { scalping: true, day: true, swing: true });
+  });
+
+  it('skips a strategy the recipient turned off, and only that one', async () => {
+    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
+    await prefs.togglePref('500', 'scalping');
+    posted = [];
+
+    await alerts.notifySignals([signal('INJ', 'buy', 'scalping')], undefined);
+    assert.ok(!recipients().includes('500'), 'scalping was turned off');
+
+    posted = [];
+    await alerts.notifySignals([signal('SOL', 'buy', 'swing')], undefined);
+    assert.ok(recipients().includes('500'), 'swing was left on');
+  });
+
+  it('toggles a strategy from the settings keyboard', async () => {
+    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/settings' } });
+    const panel = posted.at(-1)?.[1] ?? '';
+    assert.match(panel, /Which calls do you want/);
+
+    await webhook.handleUpdate({
+      callback_query: { id: 'cb', data: 'pref:swing', message: { message_id: 7, chat: { id: 500 } } },
+    });
+
+    assert.equal((await prefs.getPrefs('500')).swing, false);
+    assert.equal((await prefs.getPrefs('500')).day, true, 'one tap must move one strategy');
+  });
+
+  it('lets somebody turn everything off without unsubscribing', async () => {
+    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
+    for (const strategy of ['scalping', 'day', 'swing'] as const) await prefs.togglePref('500', strategy);
+
+    posted = [];
+    await alerts.notifySignals([signal('INJ', 'buy', 'day')], undefined);
+
+    assert.ok(!recipients().includes('500'));
+    // Quiet until further notice is a coherent thing to want; gone is not.
+    assert.ok((await subs.listSubscribers()).includes('500'));
+  });
+
+  it('still tells them how a call ended, whatever they have since turned off', async () => {
+    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
+    for (const strategy of ['scalping', 'day', 'swing'] as const) await prefs.togglePref('500', strategy);
+    posted = [];
+
+    const closed = [
+      {
+        id: 'x', symbol: 'INJUSDT', base: 'INJ', strategy: 'day', side: 'buy',
+        entry: 100, stopLoss: 95, takeProfit: 110, timeframe: '1h',
+        openedAt: new Date().toISOString(), closedAt: new Date().toISOString(),
+        outcome: 'win', resultPct: 10,
+      },
+    ] as never;
+
+    await alerts.notifyClosed(closed, { wins: 1, losses: 0, expired: 0, superseded: 0, voided: 0, byStrategy: {}, updatedAt: '' });
+
+    // Being told how a call *ended* is not subscribing to new ones of that kind.
+    assert.ok(recipients().includes('500'));
+  });
+
+  it('clears the ledger without touching the roster', async () => {
+    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
+    await alerts.notifySignals([signal('INJ')], undefined);
+    assert.ok((await trades.loadActive()).length > 0);
+
+    const result = await admin.resetStore('ledger');
+
+    assert.ok(result.deleted > 0);
+    assert.equal((await trades.loadActive()).length, 0);
+    assert.equal((await trades.loadStats()).wins, 0);
+    // Wiping the ledger is recoverable in minutes; wiping the roster is not.
+    assert.ok((await subs.listSubscribers()).includes('500'));
+  });
+
+  it('clears the roster too when asked explicitly', async () => {
+    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
+    await prefs.togglePref('500', 'swing');
+
+    await admin.resetStore('all');
+
+    /*
+     * Everyone is gone except the owner, who is re-seeded — a full reset returns
+     * the deployment to the state of a fresh deploy, and a fresh deploy seeds
+     * its operator so the next alert does not go nowhere.
+     */
+    assert.deepEqual(await subs.listSubscribers(), ['owner-1']);
+    assert.ok(!(await subs.listSubscribers()).includes('500'));
+    // Preferences go with the subscriber, so a re-start begins clean.
+    assert.deepEqual(await prefs.getPrefs('500'), { scalping: true, day: true, swing: true });
   });
 
   it('publishes the call even when every subscriber is muted', async () => {

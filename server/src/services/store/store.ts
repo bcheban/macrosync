@@ -198,3 +198,38 @@ export async function releaseLock(key: string): Promise<void> {
 
 /** Namespaced so one Redis instance can host several deployments. */
 export const storeKey = (name: string): string => `${env.redisPrefix}:${name}`;
+
+/**
+ * Every key under a pattern.
+ *
+ * `KEYS` rather than `SCAN` deliberately: this deployment holds a few dozen
+ * keys, and the operation it serves is a deliberate, rare, admin-triggered
+ * wipe. `SCAN` would be right for a large keyspace; here it would be ceremony
+ * around a single small round trip.
+ */
+export async function listKeys(pattern: string): Promise<string[]> {
+  if (storeBackend() === 'memory') {
+    const prefix = pattern.replace(/\*$/, '');
+    return [...new Set([...memory.keys(), ...sets.keys()])].filter((key) => key.startsWith(prefix));
+  }
+
+  const result = await command<string[]>(['KEYS', pattern]);
+  return Array.isArray(result) ? result.map(String) : [];
+}
+
+/** Deletes the given keys, returning how many existed. */
+export async function deleteKeys(keys: string[]): Promise<number> {
+  if (!keys.length) return 0;
+
+  if (storeBackend() === 'memory') {
+    let removed = 0;
+    for (const key of keys) {
+      if (memory.delete(key) || sets.delete(key)) removed += 1;
+      expiries.delete(key);
+    }
+    return removed;
+  }
+
+  const result = await command<number>(['DEL', ...keys]);
+  return typeof result === 'number' ? result : keys.length;
+}

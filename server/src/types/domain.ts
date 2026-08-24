@@ -94,6 +94,11 @@ export interface Signal {
   riskReward: number;
   /** Suggested risk per trade in % of account, scaled down by volatility. */
   suggestedRiskPct: number;
+  /**
+   * The highest leverage at which liquidation still sits comfortably beyond the
+   * stop, given this contract's maintenance margin. `0` when there is no trade.
+   */
+  maxSafeLeverage: number;
   indicators: SignalIndicators;
   rationale: I18nText[];
   /** Set when a high-impact macro event lands inside the trade's horizon. */

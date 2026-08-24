@@ -26,28 +26,32 @@ before(() => {
   globalThis.fetch = (async (url: string | URL) => {
     const target = String(url);
 
-    if (target.includes('/klines')) {
+    if (target.includes('/contract/kline/')) {
       const base = Date.now() - series.length * 3_600_000;
-      const rows = series.map((close, index) => {
-        // A bar's range scales with the move, which is what drives ATR.
-        const previous = series[index - 1] ?? close;
-        const spread = Math.abs(close - previous) || close * 0.001;
-        return [
-          base + index * 3_600_000,
-          String(previous),
-          String(Math.max(close, previous) + spread),
-          String(Math.min(close, previous) - spread),
-          String(close),
-          '1000',
-          0,
-          '1000',
-        ];
-      });
-      return { ok: true, status: 200, statusText: 'OK', json: async () => rows, text: async () => '' };
+      // A bar's range scales with the move, which is what drives ATR.
+      const prev = (index: number) => series[index - 1] ?? series[index] ?? 0;
+      const spread = (index: number) =>
+        Math.abs((series[index] ?? 0) - prev(index)) || (series[index] ?? 0) * 0.001;
+
+      const data = {
+        time: series.map((_, index) => Math.floor((base + index * 3_600_000) / 1000)),
+        open: series.map((_, index) => prev(index)),
+        high: series.map((close, index) => Math.max(close, prev(index)) + spread(index)),
+        low: series.map((close, index) => Math.min(close, prev(index)) - spread(index)),
+        close: series.slice(),
+        vol: series.map(() => 1000),
+      };
+      return {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: async () => ({ success: true, data }),
+        text: async () => '',
+      };
     }
 
-    // The calendar, and anything else the engine reaches for.
-    return { ok: true, status: 200, statusText: 'OK', json: async () => [], text: async () => '' };
+    // Contract specs, the calendar, and anything else the engine reaches for.
+    return { ok: true, status: 200, statusText: 'OK', json: async () => ({ success: true, data: [] }), text: async () => '' };
   }) as unknown as typeof fetch;
 });
 
