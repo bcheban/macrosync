@@ -56,7 +56,17 @@ function looksPegged(entry: MarketSummary): boolean {
   return (highPrice - lowPrice) / lastPrice < 0.01;
 }
 
-const UNIVERSE_KEY = storeKey('radar:universe');
+/**
+ * The cached ranking is keyed by the market it came from.
+ *
+ * A plain `radar:universe` survived the spot-to-perpetuals migration and was
+ * handed to the futures scanner as though it were current — for six hours the
+ * radar would have swept a list of spot pairs, some of which have no contract at
+ * all. TTL alone cannot catch that: the record was not stale, it was about a
+ * different exchange. Putting the market in the key makes a source change
+ * rebuild automatically, here and for whatever comes next.
+ */
+const UNIVERSE_KEY = storeKey('radar:universe:futures');
 const CURSOR_KEY = storeKey('radar:cursor');
 
 interface CachedUniverse {

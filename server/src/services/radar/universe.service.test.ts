@@ -156,6 +156,25 @@ describe('radar universe', () => {
     assert.equal(feedCalls, before);
   });
 
+  it('rebuilds rather than reusing a ranking from another market', async () => {
+    /*
+     * The spot-to-perpetuals migration handed the futures scanner a cached list
+     * of spot pairs, half of which have no contract. TTL cannot catch that: the
+     * record was not stale, it was about a different exchange.
+     */
+    const { setJson, storeKey } = await import('../store/store.js');
+    await setJson(storeKey('radar:universe'), {
+      symbols: ['GONEUSDT', 'ALSOGONEUSDT'],
+      builtAt: Date.now(),
+      considered: 2,
+    });
+
+    const { symbols } = await radar.getUniverse();
+
+    assert.ok(!symbols.includes('GONEUSDT'), 'a ranking from the old market must not be reused');
+    assert.ok(symbols.includes('BTCUSDT'));
+  });
+
   it('reports how many runs a full sweep takes', async () => {
     const batch = await radar.nextBatch();
     assert.equal(batch.universeSize, 5);

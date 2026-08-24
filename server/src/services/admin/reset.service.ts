@@ -30,6 +30,9 @@ const LEDGER_PATTERNS = [
   'telegram:delivery',
   'radar:cursor',
   'cron:last',
+  // Cheap to rebuild — one request — and an operator resetting the record
+  // almost certainly wants the board re-ranked rather than replayed.
+  'radar:universe*',
 ];
 
 /** Everything about the people receiving messages. */
@@ -61,15 +64,10 @@ export async function resetStore(scope: ResetScope): Promise<ResetResult> {
   const keys = [...new Set(found.flat())];
   const deleted = await deleteKeys(keys);
 
-  /*
-   * The radar's universe survives both scopes. It is a cached ranking of the
-   * exchange, not a record of anything this bot did — deleting it would only
-   * force a rebuild on the next run.
-   */
   return {
     scope,
     deleted,
     keys: keys.map((key) => key.replace(/^[^:]+:/, '')),
-    kept: scope === 'all' ? ['radar:universe'] : ['radar:universe', ...ROSTER_PATTERNS],
+    kept: scope === 'all' ? [] : [...ROSTER_PATTERNS],
   };
 }
