@@ -203,6 +203,14 @@ Everything lives in `server/.env` (see `server/.env.example`). Every value has a
 | `TELEGRAM_COOLDOWN_MS`  | `5400000`               | Quiet period per asset; reversals ignore it                 |
 | `CRON_SECRET`           | —                       | Guards `/api/cron/signals`; the route 404s while unset       |
 | `CRON_STRATEGIES`       | all three               | Which strategies the scheduled run evaluates                |
+| `RADAR_ENABLED`         | `true`                  | Scan the exchange rather than the dashboard's asset list     |
+| `RADAR_UNIVERSE_SIZE`   | `150`                   | Cap on the volume-ranked universe                            |
+| `RADAR_MIN_VOLUME_USD`  | `1000000`               | Liquidity floor; usually binds before the cap                |
+| `RADAR_BATCH_SIZE`      | `18`                    | Pairs evaluated per run; the cursor sweeps the rest          |
+| `RADAR_UNIVERSE_TTL_MS` | `21600000`              | How long a ranking is reused before rebuilding               |
+| `ALERTS_MAX_PER_RUN`    | `6`                     | Cap on messages per run; lowest conviction is dropped first  |
+| `ALERTS_SEND_GAP_MS`    | `1200`                  | Pacing, to stay under Telegram's per-chat rate limit         |
+| `ALERTS_SEND_RETRIES`   | `3`                     | Attempts before a message is abandoned for the run           |
 | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | —        | Upstash Redis; injected by the Vercel integration           |
 | `ALERTS_TEST_SECRET`    | —                       | Guards `/api/alerts/test`                                   |
 | `LLM_PROVIDER`          | `auto`                  | `auto` · `anthropic` · `openai` · `heuristic`                |
@@ -363,19 +371,70 @@ the dashboard open — on serverless, nothing runs between requests. A scheduled
 
 It is **idempotent**: running it twice in a row sends nothing the second time, because the alert
 guards and the trade ledger both live in the store. Strategies are evaluated sequentially on
-purpose — three of them times sixteen symbols in parallel is exactly the burst MEXC rate limits.
+purpose — all three across a whole batch in parallel is exactly the burst MEXC rate limits.
 
 ```bash
 curl -X POST "https://your-app.vercel.app/api/cron/signals"   -H "Authorization: Bearer $CRON_SECRET"
 ```
 
 ```jsonc
-{ "ok": true, "evaluated": { "scalping": 8, "day": 8, "swing": 8 },
-  "alerted": 0, "closed": [], "open": 0, "winRate": null, "tookMs": 1837 }
+{ "ok": true,
+  "scanned": ["BTC", "ETH", "SOL", "XRP", "PUMP", "TRUMP", "BNB", "PYTH", "..."],
+  "radar": { "offset": 0, "universeSize": 61, "runsPerSweep": 4 },
+  "evaluated": { "scalping": 18, "day": 18, "swing": 18 },
+  "alerts": { "sent": 2, "failed": 0, "dropped": 0 },
+  "closed": [], "open": 3, "winRate": 0, "tookMs": 3412 }
 ```
 
 The route 404s while `CRON_SECRET` is unset, so an unconfigured deploy cannot be triggered by
 anyone who reads the source.
+
+#### Global radar — `server/src/services/radar/`
+
+The scan deliberately does **not** follow the dashboard's asset list. That list is one person's
+choice of what to watch; the scheduled run has no person attached to it, and tying the two together
+capped the bot at eight coins. With a ninety-minute quiet period per pair, eight coins is a channel
+that falls silent within the hour — which is exactly what happened.
+
+So the radar asks the exchange what exists. One request returns all ~2,100 pairs MEXC quotes; they
+are filtered to spot USDT markets, ranked by 24h turnover, and swept a batch at a time with a cursor
+in Redis carrying over between runs. Consecutive five-minute runs add up to a full sweep.
+
+Three filters decide what is a market rather than noise:
+
+| Filter | Removes | Why |
+| --- | --- | --- |
+| Shape | Leveraged tokens (`BTC3L`), non-USDT pairs | A derivative of a pair is not a market |
+| Peg | Anything sitting at $1.00 that moved under 1% all day | Catches dollar tokens no name list knows |
+| Liquidity | Turnover below `RADAR_MIN_VOLUME_USD` | Below roughly $1M/day the spread can exceed the edge |
+
+The floor is the one that binds. MEXC lists about 1,700 tradable USDT pairs but only ~60 turn over
+$1M a day, so `RADAR_UNIVERSE_SIZE=150` is a ceiling that is rarely reached. Lowering the floor
+widens the net into thinner markets — a deliberate trade, not an oversight.
+
+At 18 pairs per run a full sweep takes four runs, so a five-minute schedule covers the whole board
+every twenty minutes and each run finishes in three to four seconds.
+
+#### Delivery — `server/src/services/telegram/`
+
+A notifier that fails quietly is worse than one that fails loudly, and this one used to do the
+former in two ways, both now fixed and both covered by tests:
+
+- **State was committed before the send.** A rejected message still started the pair's ninety-minute
+  quiet period, so nothing arrived and nothing retried. State is now written only after Telegram
+  confirms delivery; a failure leaves the pair eligible on the next run.
+- **Only the HTTP status was checked.** The Bot API can answer `200` with `{"ok": false}`, which was
+  counted as delivered — a message nobody received, with a trade opened against it. The body is now
+  authoritative.
+
+Rate limits are honoured rather than absorbed: a `429` is retried after the delay Telegram itself
+asks for, sends are paced roughly one per second, and a `4xx` is treated as permanent because
+retrying malformed HTML or a wrong chat id cannot succeed. Delivery counters live in Redis, so
+`/api/health` reports what actually happened rather than resetting to zero on every cold start.
+
+Because a wide radar can confirm many calls at once, a run sends its highest-conviction calls up to
+`ALERTS_MAX_PER_RUN` and **reports the rest as `dropped`** — a cap that hid what it discarded would
+read as a quiet market.
 
 #### Win rate — `server/src/services/trades/`
 

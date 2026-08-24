@@ -36,7 +36,7 @@ before(() => {
       '1',
     ]);
     return { ok: true, status: 200, statusText: 'OK', json: async () => rows, text: async () => '' };
-  }) as typeof fetch;
+  }) as unknown as typeof fetch;
 });
 
 after(() => {

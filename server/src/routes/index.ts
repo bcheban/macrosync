@@ -7,6 +7,7 @@ import { getTickers, upstreamStatus } from '../services/market.service.js';
 import { getInsights, getMarketContext, invalidateInsights } from '../services/insight.service.js';
 import { getSignals, isStrategy, STRATEGY_PROFILES } from '../services/signal.engine.js';
 import { alertsStatus, notifyClosed, notifySignals, sendTestAlert } from '../services/telegram/alerts.service.js';
+import { nextBatch, radarStatus } from '../services/radar/universe.service.js';
 import { telegramStatus } from '../services/telegram/telegram.client.js';
 import { acquireLock, getJson, releaseLock, setJson, storeKey, storeStatus } from '../services/store/store.js';
 import { evaluateTrades, tradesStatus, winRate } from '../services/trades/trades.service.js';
@@ -60,13 +61,14 @@ api.get(
     market: upstreamStatus(),
     news: newsStatus(),
     calendar: calendarStatus(),
-    telegram: { ...telegramStatus(), ...alertsStatus() },
+    telegram: { ...(await telegramStatus()), ...alertsStatus() },
     store: storeStatus(),
     marketTimeoutMs: env.marketTimeoutMs,
     maxSymbolsPerRequest: env.maxSymbolsPerRequest,
     symbols: env.symbols,
     universe: assetCatalog().length,
     locales: LOCALES,
+      radar: await radarStatus(),
       trades: await tradesStatus(),
       cron: await getJson<{ runs: number; lastRunAt?: string }>(CRON_KEY, { runs: 0 }),
       time: new Date().toISOString(),
@@ -200,14 +202,30 @@ api.all(
     const strategies = env.cronStrategies.filter(isStrategy);
     const headline = await getHeadlineEvent();
 
-    // Sequential on purpose: three strategies times sixteen symbols in parallel
-    // is exactly the burst the exchange rate limits.
-    let alerted = 0;
+    /*
+     * The scan is a global radar, not a mirror of somebody's dashboard. It takes
+     * the next slice of the volume-ranked exchange listing and advances a cursor,
+     * so consecutive runs sweep the whole board instead of re-checking the same
+     * handful of coins until the per-pair cooldown silences all of them.
+     */
+    const batch = env.radarEnabled
+      ? await nextBatch()
+      : { symbols: [...env.symbols], offset: 0, universeSize: env.symbols.length, runsPerSweep: 1 };
+
+    const scanned = batch.symbols.length ? batch.symbols : [...env.symbols];
+
+    // Sequential across strategies on purpose: every strategy in parallel over a
+    // whole batch is exactly the burst the exchange rate limits.
+    const alerts = { sent: 0, failed: 0, dropped: 0 };
     const evaluated: Record<string, number> = {};
     for (const strategy of strategies) {
-      const signals = await getSignals(strategy, [...env.symbols]);
+      const signals = await getSignals(strategy, scanned);
       evaluated[strategy] = signals.length;
-      alerted += await notifySignals(signals, headline);
+
+      const run = await notifySignals(signals, headline);
+      alerts.sent += run.sent;
+      alerts.failed += run.failed;
+      alerts.dropped += run.dropped;
     }
 
     const { closed, stats, open } = await evaluateTrades();
@@ -220,8 +238,10 @@ api.all(
 
     res.json({
       ok: true,
+      scanned: scanned.map((symbol) => symbol.replace(/USDT$/, '')),
+      radar: { offset: batch.offset, universeSize: batch.universeSize, runsPerSweep: batch.runsPerSweep },
       evaluated,
-      alerted,
+      alerts,
       closed: closed.map((trade) => ({ base: trade.base, strategy: trade.strategy, outcome: trade.outcome })),
       announced,
       open,

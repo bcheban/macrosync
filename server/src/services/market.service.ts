@@ -219,3 +219,42 @@ export async function getTickers(symbols: string[]): Promise<Ticker[]> {
       .map((result) => result.value);
   });
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Whole-exchange snapshot                                                    */
+/* -------------------------------------------------------------------------- */
+
+/** One pair as the exchange-wide ticker feed reports it. */
+export interface MarketSummary {
+  symbol: string;
+  /** 24h turnover in quote currency — the liquidity proxy the radar ranks on. */
+  quoteVolume: number;
+  lastPrice: number;
+  highPrice: number;
+  lowPrice: number;
+}
+
+/**
+ * Every pair MEXC quotes, in a single request.
+ *
+ * The un-parameterised `/ticker/24hr` returns all ~2,100 pairs in about 800 KB.
+ * That is one upstream call and a fifth of a second, which is dramatically
+ * cheaper than asking for symbols one at a time — and it is the only way to
+ * discover what is listed rather than assuming a hard-coded list.
+ *
+ * Deliberately uncached here. The only caller ranks the result and caches *that*
+ * for hours; a second short-lived cache underneath it would add a layer that
+ * never helps and can hand back a listing the caller believes it just refreshed.
+ */
+export async function getAllTickers24h(): Promise<MarketSummary[]> {
+  const raw = await mexc<Raw24h[]>('/api/v3/ticker/24hr');
+  if (!Array.isArray(raw)) throw new Error('unexpected ticker feed shape');
+
+  return raw.map((entry) => ({
+    symbol: entry.symbol,
+    quoteVolume: Number(entry.quoteVolume) || 0,
+    lastPrice: Number(entry.lastPrice) || 0,
+    highPrice: Number(entry.highPrice) || 0,
+    lowPrice: Number(entry.lowPrice) || 0,
+  }));
+}

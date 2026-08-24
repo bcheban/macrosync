@@ -128,6 +128,40 @@ export const env = {
   /** Strategies the scheduled run evaluates. */
   cronStrategies: parseList(process.env.CRON_STRATEGIES, ['scalping', 'day', 'swing']),
 
+  /* --- global radar ------------------------------------------------------- */
+
+  /*
+   * The scheduled run scans the exchange, not the dashboard's asset list.
+   *
+   * MEXC lists ~1,700 tradable USDT pairs; ranking them by 24h turnover and
+   * keeping the top slice is what separates a market from a graveyard. The tail
+   * is genuinely thin — at rank 150 a pair turns over about $250k a day, where
+   * the spread alone can exceed the edge — so `radarMinVolumeUsd` applies a
+   * floor as well, and whichever limit bites first wins.
+   */
+  radarEnabled: (process.env.RADAR_ENABLED ?? 'true') !== 'false',
+  radarUniverseSize: positiveInt(process.env.RADAR_UNIVERSE_SIZE, 150),
+  radarMinVolumeUsd: positiveInt(process.env.RADAR_MIN_VOLUME_USD, 1_000_000),
+  /** Pairs evaluated per run; the cursor advances so runs cover the rest. */
+  radarBatchSize: positiveInt(process.env.RADAR_BATCH_SIZE, 18),
+  /** How long a ranking is reused. Rebuilding mid-rotation would shuffle it. */
+  radarUniverseTtlMs: positiveInt(process.env.RADAR_UNIVERSE_TTL_MS, 6 * 60 * 60_000),
+  /** Pairs always scanned, whatever their turnover. */
+  radarAlwaysInclude: parseList(process.env.RADAR_ALWAYS_INCLUDE, [...DEFAULT_SYMBOLS]),
+
+  /* --- alert dispatch ----------------------------------------------------- */
+
+  /*
+   * A 150-pair radar can confirm many calls at once. Telegram accepts about one
+   * message per second to a chat and a channel that fires twenty at once is
+   * noise, so a run sends its highest-confidence calls and drops the rest.
+   */
+  alertsMaxPerRun: positiveInt(process.env.ALERTS_MAX_PER_RUN, 6),
+  /** Gap between sends, to stay under Telegram's per-chat rate limit. */
+  alertsSendGapMs: positiveInt(process.env.ALERTS_SEND_GAP_MS, 1200),
+  /** Attempts per message before the call is abandoned for this run. */
+  alertsSendRetries: positiveInt(process.env.ALERTS_SEND_RETRIES, 3),
+
   /* --- AI risk layer ----------------------------------------------------- */
 
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',

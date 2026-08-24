@@ -25,6 +25,18 @@ import { escapeHtml, sendTelegramMessage, telegramConfigured } from './telegram.
 interface AlertState {
   verdict: Signal['verdict'];
   sentAt: number;
+  /** Consecutive delivery failures for this pair, so a bad message gives up. */
+  failures?: number;
+}
+
+/** Runs a message is retried across before the call is abandoned. */
+const MAX_DELIVERY_FAILURES = 3;
+
+export interface AlertRun {
+  sent: number;
+  failed: number;
+  /** Confirmed calls the per-run cap suppressed. Never silently dropped. */
+  dropped: number;
 }
 
 const ALERTS_KEY = storeKey('alerts:last');
@@ -103,16 +115,18 @@ export function formatClose(trade: ClosedTrade, stats: TradeStats): string {
  * Awaited rather than fire-and-forget, so a serverless function is not torn
  * down mid-send. The dashboard path calls it without waiting.
  */
-export async function notifySignals(signals: Signal[], event: MacroEvent | undefined): Promise<number> {
-  if (!telegramConfigured()) return 0;
+export async function notifySignals(signals: Signal[], event: MacroEvent | undefined): Promise<AlertRun> {
+  const empty: AlertRun = { sent: 0, failed: 0, dropped: 0 };
+  if (!telegramConfigured()) return empty;
 
   const [state, stats] = await Promise.all([
     getJson<Record<string, AlertState>>(ALERTS_KEY, {}),
     loadStats(),
   ]);
   const now = Date.now();
-  let sent = 0;
   let dirty = false;
+
+  const candidates: Signal[] = [];
 
   for (const signal of signals) {
     const key = keyFor(signal);
@@ -121,7 +135,7 @@ export async function notifySignals(signals: Signal[], event: MacroEvent | undef
     if (signal.verdict === 'wait') {
       // Remember the flip to `wait` so the next call counts as a transition.
       if (previous && previous.verdict !== 'wait') {
-        state[key] = { verdict: 'wait', sentAt: previous.sentAt };
+        state[key] = { ...previous, verdict: 'wait' };
         dirty = true;
       }
       continue;
@@ -134,19 +148,66 @@ export async function notifySignals(signals: Signal[], event: MacroEvent | undef
     const cooling = previous ? now - previous.sentAt < env.telegramCooldownMs : false;
     if (cooling && !reversal) continue;
 
-    state[key] = { verdict: signal.verdict, sentAt: now };
+    candidates.push(signal);
+  }
+
+  /*
+   * Scanning 150 pairs can confirm a dozen calls in one run, and a channel that
+   * fires a dozen messages at once is one nobody reads. Conviction decides which
+   * survive the cap, and the rest are reported as dropped rather than vanishing.
+   */
+  candidates.sort((a, b) => b.confidence - a.confidence);
+  const chosen = candidates.slice(0, env.alertsMaxPerRun);
+  const dropped = candidates.length - chosen.length;
+  if (dropped > 0) console.warn(`[alerts] ${dropped} confirmed call(s) suppressed by the per-run cap`);
+
+  let sent = 0;
+  let failed = 0;
+
+  for (const signal of chosen) {
+    const key = keyFor(signal);
+    const previous = state[key];
+
+    const result = await sendTelegramMessage(formatAlert(signal, signal.summary.text, event, stats));
     dirty = true;
 
-    const delivered = await sendTelegramMessage(formatAlert(signal, signal.summary.text, event, stats));
-    if (delivered) {
+    if (result.delivered) {
+      /*
+       * State is committed *after* delivery, not before. Marking the pair as
+       * alerted up front meant a failed send still started its ninety-minute
+       * quiet period: the message never arrived, nothing retried it, and the
+       * pair went silent for an hour and a half as though it had been announced.
+       */
+      state[key] = { verdict: signal.verdict, sentAt: now, failures: 0 };
       sent += 1;
       // Only track what was actually announced, so the record matches the channel.
       await openTrade(signal);
+      continue;
+    }
+
+    failed += 1;
+    const failures = (previous?.failures ?? 0) + 1;
+
+    if (result.retryable === false || failures >= MAX_DELIVERY_FAILURES) {
+      /*
+       * Nothing more to try. The verdict is recorded anyway so a permanently
+       * unsendable call — malformed, or a chat the bot has been removed from —
+       * cannot pin the pair in a retry loop on every run from now on.
+       */
+      console.error(`[alerts] giving up on ${key} after ${failures} failure(s): ${result.error}`);
+      state[key] = { verdict: signal.verdict, sentAt: now, failures: 0 };
+    } else {
+      // Left un-alerted on purpose: the next run sees the same transition again.
+      state[key] = {
+        verdict: previous?.verdict ?? 'wait',
+        sentAt: previous?.sentAt ?? 0,
+        failures,
+      };
     }
   }
 
   if (dirty) await setJson(ALERTS_KEY, state);
-  return sent;
+  return { sent, failed, dropped };
 }
 
 /** Announces trades that reached their target or stop. */
@@ -161,7 +222,9 @@ export async function notifyClosed(closed: ClosedTrade[], stats: TradeStats): Pr
      * it up as a result would be worse.
      */
     if (trade.outcome !== 'win' && trade.outcome !== 'loss') continue;
-    if (await sendTelegramMessage(formatClose(trade, stats))) sent += 1;
+    const result = await sendTelegramMessage(formatClose(trade, stats));
+    if (result.delivered) sent += 1;
+    else console.error(`[alerts] close notice for ${trade.base} failed: ${result.error}`);
   }
   return sent;
 }
