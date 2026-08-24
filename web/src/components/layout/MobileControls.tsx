@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
 import { MarketStatus } from '@/components/layout/MarketStatus';
+import { TelegramCta } from '@/components/layout/TelegramCta';
 import { AssetPicker } from '@/components/market/AssetPicker';
 import { trackEvent } from '@/lib/analytics';
 import { cn } from '@/lib/cn';
@@ -150,6 +151,10 @@ export function MobileControls({ context, live, streaming = false, className }: 
 
                 {/* The sheet itself scrolls; the picker's list scrolls within it. */}
                 <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-4">
+                  {/* First thing in the sheet: the one action that turns a
+                      dashboard visit into an ongoing subscription. */}
+                  <TelegramCta variant="banner" />
+
                   <section className="space-y-2">
                     <h3 className="text-[10px] tracking-[0.16em] text-white/35 uppercase">{t('topbar.status')}</h3>
                     <MarketStatus context={context} live={live} streaming={streaming} variant="stacked" />

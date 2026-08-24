@@ -372,6 +372,13 @@ export const en = {
     inDays: '{{days}}d {{hours}}h',
   },
 
+  telegram: {
+    cta: 'Signal alerts in Telegram',
+    ctaShort: 'Telegram',
+    title: '🔔 Get instant signal alerts',
+    subtitle: 'Every confirmed BUY or SELL, pushed to Telegram the moment it fires.',
+  },
+
   footer: {
     lead: '{{brand}} is a research tool, not a broker.',
     body: 'Nothing here is financial advice. Signals are model output over public market data, the calendar and news feed are mock fixtures for this MVP, and the AI layer produces risk-management scenarios only — never entries or exits. Always size positions against what you can afford to lose.',

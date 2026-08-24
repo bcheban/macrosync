@@ -1,5 +1,6 @@
 import { env } from '../config/env.js';
 import { getHeadlineEvent } from './calendar.service.js';
+import { notifySignals } from './telegram/alerts.service.js';
 import { getKlines, splitSymbol, type Interval } from './market.service.js';
 import type { Direction, I18nText, MacroEvent, Signal, Strategy, Verdict } from '../types/domain.js';
 import { atr, clamp, ema, macd, round, roundPrice, rsi, sma } from '../utils/indicators.js';
@@ -312,10 +313,20 @@ export async function getSignals(
     }
   }
 
-  return settled
+  const signals = settled
     .filter((result): result is PromiseFulfilledResult<Signal> => result.status === 'fulfilled')
     .map((result) => result.value)
     .sort((a, b) => b.confidence - a.confidence);
+
+  /*
+   * Fire-and-forget: the notifier decides for itself what is worth sending and
+   * never throws, so a Telegram outage cannot affect the response. Alerts are
+   * emitted as signals are computed — on a serverless deploy that means while
+   * the dashboard is being used, not on a schedule.
+   */
+  notifySignals(signals, headline);
+
+  return signals;
 }
 
 /** Average ATR% across the tape — the volatility regime the AI layer reasons about. */

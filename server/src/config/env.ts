@@ -87,6 +87,22 @@ export const env = {
   calendarTtlMs: positiveInt(process.env.CALENDAR_TTL_MS, 1_800_000),
   calendarTimeoutMs: positiveInt(process.env.CALENDAR_TIMEOUT_MS, 6000),
 
+  /* --- Telegram alerts ---------------------------------------------------- */
+
+  /**
+   * Both are required for alerts to send at all — with either missing the
+   * notifier is inert and never touches the network.
+   */
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? '',
+  telegramChatId: process.env.TELEGRAM_CHAT_ID ?? '',
+  /**
+   * How long one asset+strategy stays quiet after an alert. A signal sitting on
+   * its threshold flips between `buy` and `wait` from bar to bar, and without
+   * this the channel would receive the same call every time the dashboard polls.
+   */
+  telegramCooldownMs: positiveInt(process.env.TELEGRAM_COOLDOWN_MS, 5_400_000),
+  telegramTimeoutMs: positiveInt(process.env.TELEGRAM_TIMEOUT_MS, 5000),
+
   /* --- AI risk layer ----------------------------------------------------- */
 
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',

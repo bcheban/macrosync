@@ -22,8 +22,9 @@ MacroSync keeps the chart in sync with the macro calendar.
 
 ## What it does
 
-1. **Strategy Signals** — technical setups computed live from Binance candles, separated by
-   Scalping (5m), Day Trading (1h) and Swing (4h), narrowable to any single asset.
+1. **Strategy Signals** — technical setups computed live from MEXC candles, separated by
+   Scalping (5m), Day Trading (1h) and Swing (4h), narrowable to any single asset. Each card
+   states one verdict — BUY, SELL or WAIT — and one sentence explaining it.
 2. **News Countdown Radar** — a hero timer ticking down to the next macro or political catalyst,
    with the expected impact and an explicit warning when a setup's horizon overlaps the release.
 3. **AI Actionable Insights** — headlines translated by an LLM into *risk-management scenarios*
@@ -139,6 +140,13 @@ One project hosts both halves: static output for the dashboard, the Express app 
 Product analytics, injected on idle after first paint so it never competes with the app bundle,
 and skipped entirely when unconfigured or when the browser sends Do Not Track.
 
+<br />
+
+<img src="https://img.shields.io/badge/Telegram-alerts-229ED9?logo=telegram&logoColor=white" align="left" height="24" /> &nbsp;
+Push delivery for confirmed calls. The Bot API over plain `fetch` — no SDK — behind a transition
+check and a per-asset cooldown, so a score flapping across its threshold cannot spam the channel
+while a genuine reversal still goes out immediately.
+
 ---
 
 ## Quick start
@@ -157,8 +165,9 @@ npm run dev
 Open **http://localhost:5173**. Vite proxies `/api` → `http://localhost:4000`, so there is no
 CORS setup to do in development.
 
-No API keys are required. Without them the dashboard runs on live Binance data plus the
-built-in deterministic risk engine.
+No API keys are required. Without them the dashboard runs on live MEXC market data, real newsroom
+RSS and the built-in deterministic risk engine. Keys only add the LLM risk analyst, a hosted news
+provider and Telegram alerts.
 
 ### Other scripts
 
@@ -184,10 +193,14 @@ Everything lives in `server/.env` (see `server/.env.example`). Every value has a
 | `CORS_ORIGIN`           | `http://localhost:5173` | Comma-separated list, or `*`                                |
 | `SYMBOLS`               | 8 majors + SHIB         | Default watchlist, drawn from the asset catalogue           |
 | `MAX_SYMBOLS_PER_REQUEST` | `16`                  | Cap per request — one kline fetch per symbol                |
-| `USE_LIVE_MARKET_DATA`  | `true`                  | `false` forces the offline simulator                        |
-| `BINANCE_API_BASE`      | `data-api.binance.vision` | Market-data mirror — not geo-blocked for datacenter IPs   |
-| `BINANCE_API_FALLBACK`  | `api.binance.com`       | Tried when the primary host fails                           |
-| `UPSTREAM_COOLDOWN_MS`  | `30000`                 | Skip upstream for this long after every host fails          |
+| `MEXC_API_BASE`         | `https://api.mexc.com`  | Public market data, no key                                  |
+| `MARKET_CONCURRENCY`    | `6`                     | Parallel upstream calls — public endpoints are rate limited  |
+| `UPSTREAM_COOLDOWN_MS`  | `20000`                 | Skip upstream for this long after a failure                 |
+| `RATE_LIMIT_COOLDOWN_MS`| `60000`                 | Longer pause when MEXC answers 429/418                      |
+| `NEWS_PROVIDER`         | `auto`                  | `cryptopanic` · `cryptocompare` · `newsdata` · `rss`         |
+| `TELEGRAM_BOT_TOKEN`    | —                       | Enables signal alerts — see *Telegram alerts*                |
+| `TELEGRAM_CHAT_ID`      | —                       | Where alerts are posted                                     |
+| `TELEGRAM_COOLDOWN_MS`  | `5400000`               | Quiet period per asset; reversals ignore it                 |
 | `LLM_PROVIDER`          | `auto`                  | `auto` · `anthropic` · `openai` · `heuristic`                |
 | `ANTHROPIC_API_KEY`     | —                       | Enables the Claude risk analyst                             |
 | `ANTHROPIC_MODEL`       | `claude-opus-5`         |                                                             |
@@ -199,18 +212,14 @@ The dashboard has its own configuration in `web/.env` (see `web/.env.example`):
 | ------------------------ | ---------------------- | --------------------------------------------------------------- |
 | `VITE_SITE_URL`          | `https://macrosync.io` | Absolute origin — canonical URLs, OG tags, sitemap, `hreflang`   |
 | `VITE_GA_MEASUREMENT_ID` | —                      | GA4 id, e.g. `G-XXXXXXXXXX`. Empty disables analytics completely |
+| `VITE_TELEGRAM_BOT_URL`  | —                      | Link for the alert CTA; the button hides while unset             |
 | `VITE_API_BASE`          | `/api`                 | Set when the API is on another origin                            |
 
-**Why two hosts?** `api.binance.com` geo-blocks datacenter IPs, so an API deployed to a cloud
-provider silently degrades to simulated prices — BTC at the hardcoded anchor instead of the real
-rate. `data-api.binance.vision` is Binance's own market-data mirror: same payloads, no key, and
-reachable from cloud IPs. The first host that answers wins; if none do, a cooldown stops every
-subsequent symbol in the request from paying the full timeout.
-
-**Offline / rate-limited?** The market service falls back to a seeded simulator automatically
-when Binance is unreachable (some regions block the API). The UI labels the feed as
-`Simulated feed` in the top bar, and everything else behaves identically. Force it with
-`USE_LIVE_MARKET_DATA=false`.
+**If the exchange is unreachable** the API returns nothing rather than inventing prices — there is
+no simulated fallback. The header says `Exchange unreachable` and `GET /api/health` reports the last
+upstream error and how long the cooldown has left. Note that MEXC, like most exchanges, restricts
+some jurisdictions: a deploy in a blocked region will see this even though the code is fine, which
+is why the API function is pinned to `fra1` in `vercel.json`.
 
 ---
 
@@ -340,11 +349,56 @@ tagged "Bitcoin near current levels" as a NEAR story.
 Headlines are cached for five minutes, and a failed refresh serves the previous payload rather than
 emptying the feed.
 
+### Telegram alerts — `server/src/services/telegram/`
+
+Confirmed calls are pushed to a Telegram chat as they fire. The notifier is inert unless both
+`TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are set, and it never throws — a Telegram outage
+cannot affect the request that produced the signal.
+
+**Two guards decide what is worth a message**, and both matter:
+
+- **Transition.** Only a verdict that *changed into* BUY or SELL alerts. A call that has been
+  standing for an hour is not news.
+- **Cooldown** (90 minutes per asset+strategy by default). A score sitting on its threshold flips
+  between BUY and WAIT bar to bar, and the scalping tab polls every fifteen seconds — without this
+  the channel would receive the same call dozens of times an hour.
+
+A genuine **reversal ignores the cooldown**: BUY → SELL is the tape turning over, not threshold
+flapping, and anyone holding the previous call needs it immediately.
+
+> **Known limitation.** The alert state lives in memory. On a serverless deploy each instance keeps
+> its own, so a cold start can repeat an alert a previous instance already sent, and alerts are
+> emitted while the dashboard is being used rather than on a schedule. Moving the state to Redis (or
+> running the API as a long-lived process) fixes both.
+
+#### Setting up the bot
+
+1. **Create the bot.** Message [@BotFather](https://t.me/BotFather), send `/newbot`, and follow the
+   prompts. It replies with a token like `8100000000:AAF…` — that is `TELEGRAM_BOT_TOKEN`.
+2. **Pick where alerts go.**
+   - *A channel:* create it, add the bot as an **administrator** with permission to post, and use
+     `@your_channel_name` as `TELEGRAM_CHAT_ID`. Public channels work by username; private ones need
+     the numeric id from step 3.
+   - *A group:* add the bot to the group, then get the numeric id from step 3.
+   - *Yourself:* send the bot any message first — a bot cannot open a conversation — then step 3.
+3. **Find the numeric chat id.** After sending one message to the bot (or posting in the group),
+   open:
+   ```
+   https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates
+   ```
+   and read `result[0].message.chat.id`. Group and channel ids are negative, e.g. `-1001234567890`.
+4. **Set both variables** in `server/.env` locally, or in the Vercel project for deployment. Set
+   `VITE_TELEGRAM_BOT_URL` too (e.g. `https://t.me/your_bot`) so the site's call-to-action appears —
+   it renders nothing while unset, rather than showing a dead button.
+5. **Check it.** `GET /api/health` reports `telegram.configured`, how many messages have been sent,
+   and the last error if one failed.
+
 ### Asset universe — `server/src/data/assets.ts`
 
-One catalogue defines everything the platform can price: 28 Binance spot pairs grouped into
-`majors · layer1 · layer2 · defi · meme · ai`. The same entries carry the anchor prices the offline
-simulator walks from, so an offline demo stays believable from BTC at ~96,000 to PEPE at ~0.00001.
+One catalogue defines everything the platform can price: 28 MEXC spot pairs grouped into
+`majors · layer1 · layer2 · defi · meme · ai`. Every symbol is verified against MEXC's own
+`/api/v3/ticker/24hr`, so a listing that is retired or renamed is caught in the catalogue rather
+than at request time.
 
 `GET /api/assets` exposes the catalogue; `AssetScopeProvider` (`web/src/state/AssetScope.tsx`) holds
 the user's slice of it and every panel reads from that one place, so the header switcher re-scopes
@@ -466,11 +520,14 @@ macrosync/
 │   └── src/
 │       ├── app.ts                     # the Express app (no listener — reused by api/)
 │       ├── config/env.ts              # typed configuration
-│       ├── data/assets.ts             # the tradable universe + simulator anchors
+│       ├── data/assets.ts             # the tradable universe (28 MEXC pairs)
 │       ├── data/{calendar,news}.ts    # mock feeds — replace with real providers
 │       ├── routes/index.ts            # the whole REST surface
 │       ├── services/
-│       │   ├── market.service.ts      # Binance + TTL cache + offline simulator
+│       │   ├── market.service.ts      # MEXC REST + TTL cache + circuit breaker
+│       │   ├── calendar.service.ts    # economic calendar, impact-filtered
+│       │   ├── news/                  # provider-agnostic headlines + sentiment
+│       │   ├── telegram/              # alert formatting, debounce, Bot API
 │       │   ├── signal.engine.ts       # strategy profiles → signals
 │       │   ├── insight.service.ts     # provider selection + fallback
 │       │   └── llm/                   # prompt, anthropic, openai, heuristic
@@ -564,7 +621,9 @@ the same project, so server and client variables live side by side:
 | ----------------------------------------------- | ------ | ----------------------------------------------------------- |
 | `VITE_SITE_URL`                                 | client | Real origin. Wrong value ⇒ wrong canonical/OG/sitemap URLs  |
 | `VITE_GA_MEASUREMENT_ID`                        | client | Omit to ship without analytics                               |
-| `SYMBOLS`, `MAX_SYMBOLS_PER_REQUEST`, `MARKET_TIMEOUT_MS`, `USE_LIVE_MARKET_DATA` | server | Optional — every one has a default |
+| `VITE_TELEGRAM_BOT_URL`                         | client | Link for the alert CTA; hides the button while unset          |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`        | server | Enable signal alerts — see *Telegram alerts*                  |
+| `SYMBOLS`, `MAX_SYMBOLS_PER_REQUEST`, `MARKET_TIMEOUT_MS`, `MARKET_CONCURRENCY` | server | Optional — every one has a default |
 | `LLM_PROVIDER`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `OPENAI_API_KEY`, `OPENAI_MODEL` | server | Optional — without keys the deterministic risk engine is used |
 
 Anything prefixed `VITE_` is **inlined into the public JavaScript bundle** at build time.
@@ -597,7 +656,7 @@ during a refresh so the dashboard never flashes empty.
 ## Roadmap / where to extend
 
 - Replace the mock feeds with real providers (CryptoPanic, NewsAPI, Trading Economics).
-- Stream prices over Binance WebSockets instead of REST polling.
+- Persist alert state (Redis) so the Telegram cooldown survives a cold start.
 - Persist insights so the feed has history, and score past scenarios against what actually happened.
 - Add auth + per-user watchlists and alerting on countdown thresholds.
 - Grow the locale set — the `Translation` type makes a new language a mechanical, type-checked job.

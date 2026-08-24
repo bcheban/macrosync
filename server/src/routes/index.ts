@@ -6,6 +6,8 @@ import { getNews, newsStatus } from '../services/news/news.service.js';
 import { getTickers, upstreamStatus } from '../services/market.service.js';
 import { getInsights, getMarketContext, invalidateInsights } from '../services/insight.service.js';
 import { getSignals, isStrategy, STRATEGY_PROFILES } from '../services/signal.engine.js';
+import { alertsStatus } from '../services/telegram/alerts.service.js';
+import { telegramStatus } from '../services/telegram/telegram.client.js';
 import type { Locale } from '../types/domain.js';
 
 export const api = Router();
@@ -51,6 +53,7 @@ api.get('/health', (_req, res) => {
     market: upstreamStatus(),
     news: newsStatus(),
     calendar: calendarStatus(),
+    telegram: { ...telegramStatus(), ...alertsStatus() },
     marketTimeoutMs: env.marketTimeoutMs,
     maxSymbolsPerRequest: env.maxSymbolsPerRequest,
     symbols: env.symbols,

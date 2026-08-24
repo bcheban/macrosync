@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
 import { MarketStatus } from '@/components/layout/MarketStatus';
 import { MobileControls } from '@/components/layout/MobileControls';
+import { TelegramCta } from '@/components/layout/TelegramCta';
 import { AssetSelector } from '@/components/market/AssetSelector';
 import { trackEvent } from '@/lib/analytics';
 import { BRAND } from '@/lib/brand';
@@ -76,6 +77,7 @@ export function TopBar({ context, tickers, streaming = false, refreshing, onRefr
           <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
             <MarketStatus context={context} live={live} streaming={streaming} />
 
+            <TelegramCta className="hidden sm:flex" />
             <AssetSelector className="hidden md:block" />
             <LanguageSwitcher className="hidden md:flex" />
 

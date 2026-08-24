@@ -7,6 +7,9 @@ interface ImportMetaEnv {
   readonly VITE_SITE_URL?: string;
   /** GA4 measurement id, e.g. `G-XXXXXXXXXX`. Analytics stays off when unset. */
   readonly VITE_GA_MEASUREMENT_ID?: string;
+  /** Public link to the alert bot, e.g. `https://t.me/macrosync_bot`. The CTA
+   *  renders only when this is set. */
+  readonly VITE_TELEGRAM_BOT_URL?: string;
 }
 
 interface ImportMeta {
