@@ -530,17 +530,27 @@ When a single bar touched both levels the **stop wins**: intrabar order is unkno
 and counting it as a win would flatter the record. One open trade per asset+strategy, so a reversal
 cannot leave two contradictory trades running against each other.
 
-Four outcomes are recorded, but only two move the rate:
+Five outcomes are recorded, but only two move the rate:
 
 | Outcome | Counts | Meaning |
 | --- | --- | --- |
 | `win` / `loss` | yes | The target or the stop came first |
 | `expired` | no | Never reached either level inside its horizon (~3x the advertised duration) |
 | `superseded` | no | Replaced by a reversal on the same pair |
+| `voided` | no | Its levels were not prices, so it could never have resolved |
 
 Counting an expired call as a loss would be as dishonest as counting it as a win, so both are kept
 out of the denominator and reported separately — otherwise the rate would quietly measure only the
 decisive calls, which is the most flattering possible sample.
+
+`voided` exists because of a real defect rather than a hypothetical one. The engine used to size a
+stop from ATR and a target from the stop with no ceiling, so on an asset whose ATR approached its own
+price a short's target landed **below zero** — live, on SOLY: entry 3.623, stop 5.421, target −0.334.
+Such a call can never reach its target and can still reach its stop, so it could only ever lose. Left
+alone it would have been recorded as a loss in every case. The engine now refuses those setups and
+the ledger voids any already on the books; three were cleared from production the run after the fix
+shipped. It could not have appeared while the scan covered eight majors — widening the universe found
+it.
 
 > The rate measures whether the target or the stop came first. It is not a P&L: it assumes a fill at
 > the stated entry, no fees and no slippage. Treat it as a scoreboard for the engine, not a return.
