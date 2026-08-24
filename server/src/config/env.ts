@@ -109,6 +109,25 @@ export const env = {
    */
   alertsTestSecret: process.env.ALERTS_TEST_SECRET ?? '',
 
+  /* --- persistence -------------------------------------------------------- */
+
+  /*
+   * Upstash Redis over REST. Vercel's marketplace integration injects the
+   * `KV_REST_API_*` names while Upstash's own dashboard uses `UPSTASH_*`, so
+   * both are accepted and whichever is present wins.
+   */
+  redisUrl: process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL ?? '',
+  redisToken: process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN ?? '',
+  redisPrefix: process.env.REDIS_PREFIX ?? 'macrosync',
+  redisTimeoutMs: positiveInt(process.env.REDIS_TIMEOUT_MS, 4000),
+
+  /* --- autonomous cron ---------------------------------------------------- */
+
+  /** Shared secret for `/api/cron/signals`. The route 404s while unset. */
+  cronSecret: process.env.CRON_SECRET ?? '',
+  /** Strategies the scheduled run evaluates. */
+  cronStrategies: parseList(process.env.CRON_STRATEGIES, ['scalping', 'day', 'swing']),
+
   /* --- AI risk layer ----------------------------------------------------- */
 
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',

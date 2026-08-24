@@ -6,8 +6,10 @@ import { getNews, newsStatus } from '../services/news/news.service.js';
 import { getTickers, upstreamStatus } from '../services/market.service.js';
 import { getInsights, getMarketContext, invalidateInsights } from '../services/insight.service.js';
 import { getSignals, isStrategy, STRATEGY_PROFILES } from '../services/signal.engine.js';
-import { alertsStatus, sendTestAlert } from '../services/telegram/alerts.service.js';
+import { alertsStatus, notifyClosed, notifySignals, sendTestAlert } from '../services/telegram/alerts.service.js';
 import { telegramStatus } from '../services/telegram/telegram.client.js';
+import { storeStatus } from '../services/store/store.js';
+import { evaluateTrades, tradesStatus } from '../services/trades/trades.service.js';
 import type { Locale } from '../types/domain.js';
 
 export const api = Router();
@@ -47,21 +49,26 @@ const parseSymbols = (req: Request): string[] | undefined => {
   return symbols.length ? symbols : undefined;
 };
 
-api.get('/health', (_req, res) => {
-  res.json({
+api.get(
+  '/health',
+  route(async (_req, res) => {
+    res.json({
     status: 'ok',
     market: upstreamStatus(),
     news: newsStatus(),
     calendar: calendarStatus(),
     telegram: { ...telegramStatus(), ...alertsStatus() },
+    store: storeStatus(),
     marketTimeoutMs: env.marketTimeoutMs,
     maxSymbolsPerRequest: env.maxSymbolsPerRequest,
     symbols: env.symbols,
     universe: assetCatalog().length,
     locales: LOCALES,
-    time: new Date().toISOString(),
-  });
-});
+      trades: await tradesStatus(),
+      time: new Date().toISOString(),
+    });
+  }),
+);
 
 /** The tradable universe the dashboard's asset switcher is built from. */
 api.get('/assets', (_req, res) => {
@@ -148,6 +155,59 @@ api.post(
   route(async (req, res) => {
     invalidateInsights();
     res.json({ insights: await getInsights(6, parseLocale(req)), context: await getMarketContext() });
+  }),
+);
+
+/**
+ * The autonomous run.
+ *
+ * Everything the bot needs to work without a visitor: recompute every tracked
+ * strategy, alert on calls that just confirmed, then check whether any open
+ * trade reached its target or its stop and announce the ones that did.
+ *
+ * Meant to be called by an external scheduler every few minutes. It is
+ * deliberately idempotent — running it twice in a row sends nothing the second
+ * time, because the alert guards and the trade ledger both live in the store.
+ */
+api.all(
+  '/cron/signals',
+  route(async (req, res) => {
+    const header = req.headers.authorization ?? '';
+    const bearer = header.startsWith('Bearer ') ? header.slice(7) : '';
+    const provided = bearer || (typeof req.query.secret === 'string' ? req.query.secret : '');
+
+    if (!env.cronSecret || provided !== env.cronSecret) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    const startedAt = Date.now();
+    const strategies = env.cronStrategies.filter(isStrategy);
+    const headline = await getHeadlineEvent();
+
+    // Sequential on purpose: three strategies times sixteen symbols in parallel
+    // is exactly the burst the exchange rate limits.
+    let alerted = 0;
+    const evaluated: Record<string, number> = {};
+    for (const strategy of strategies) {
+      const signals = await getSignals(strategy, [...env.symbols]);
+      evaluated[strategy] = signals.length;
+      alerted += await notifySignals(signals, headline);
+    }
+
+    const { closed, stats, open } = await evaluateTrades();
+    const announced = await notifyClosed(closed, stats);
+
+    res.json({
+      ok: true,
+      evaluated,
+      alerted,
+      closed: closed.map((trade) => ({ base: trade.base, strategy: trade.strategy, outcome: trade.outcome })),
+      announced,
+      open,
+      winRate: stats.wins + stats.losses ? Math.round((stats.wins / (stats.wins + stats.losses)) * 100) : null,
+      tookMs: Date.now() - startedAt,
+    });
   }),
 );
 

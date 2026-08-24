@@ -1,6 +1,5 @@
 import { env } from '../config/env.js';
 import { getHeadlineEvent } from './calendar.service.js';
-import { notifySignals } from './telegram/alerts.service.js';
 import { getKlines, splitSymbol, type Interval } from './market.service.js';
 import type { Direction, I18nText, MacroEvent, Signal, Strategy, Verdict } from '../types/domain.js';
 import { atr, clamp, ema, macd, round, roundPrice, rsi, sma } from '../utils/indicators.js';
@@ -319,13 +318,10 @@ export async function getSignals(
     .sort((a, b) => b.confidence - a.confidence);
 
   /*
-   * Fire-and-forget: the notifier decides for itself what is worth sending and
-   * never throws, so a Telegram outage cannot affect the response. Alerts are
-   * emitted as signals are computed — on a serverless deploy that means while
-   * the dashboard is being used, not on a schedule.
+   * No alerting here any more. It used to hang off this read path, which meant
+   * the bot only spoke while somebody had the dashboard open; `/api/cron/signals`
+   * owns it now and runs on a schedule instead.
    */
-  notifySignals(signals, headline);
-
   return signals;
 }
 

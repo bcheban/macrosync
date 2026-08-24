@@ -1,0 +1,92 @@
+import { env } from '../../config/env.js';
+
+/**
+ * Persistence for the little state that must outlive a serverless invocation:
+ * which alerts have already gone out, and which trades are still open.
+ *
+ * Backed by Upstash Redis over its REST API — no TCP socket, no SDK, and no
+ * connection to keep warm, which is the only shape that works reliably in a
+ * function that may be cold on every request. Falls back to an in-memory map
+ * when unconfigured, so local development and an un-provisioned deploy still
+ * run; they simply forget everything between invocations.
+ */
+
+type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
+
+const memory = new Map<string, string>();
+
+/** Vercel's marketplace integration and Upstash's own docs use different names. */
+const REST_URL = env.redisUrl;
+const REST_TOKEN = env.redisToken;
+
+export const storeBackend = (): 'redis' | 'memory' => (REST_URL && REST_TOKEN ? 'redis' : 'memory');
+
+let lastError: string | undefined;
+
+export const storeStatus = () => ({
+  backend: storeBackend(),
+  /** Memory means alerts and open trades do not survive a cold start. */
+  persistent: storeBackend() === 'redis',
+  lastError: lastError ?? null,
+});
+
+async function command<T = Json>(args: (string | number)[]): Promise<T | null> {
+  if (storeBackend() === 'memory') return null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), env.redisTimeoutMs);
+  try {
+    const response = await fetch(REST_URL, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        authorization: `Bearer ${REST_TOKEN}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(args),
+    });
+
+    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    const payload = (await response.json()) as { result?: T; error?: string };
+    if (payload.error) throw new Error(payload.error);
+
+    lastError = undefined;
+    return payload.result ?? null;
+  } catch (error) {
+    lastError = (error as Error).message;
+    console.warn('[store] command failed:', args[0], lastError);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Reads a JSON value.
+ *
+ * A store failure returns the fallback rather than throwing: losing the
+ * alert-dedup record costs a duplicate message, which is far better than the
+ * cron run failing outright.
+ */
+export async function getJson<T>(key: string, fallback: T): Promise<T> {
+  const raw = storeBackend() === 'memory' ? (memory.get(key) ?? null) : await command<string>(['GET', key]);
+  if (raw === null || raw === undefined) return fallback;
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+export async function setJson(key: string, value: unknown): Promise<void> {
+  const raw = JSON.stringify(value);
+  if (storeBackend() === 'memory') {
+    memory.set(key, raw);
+    return;
+  }
+  await command(['SET', key, raw]);
+}
+
+/** Namespaced so one Redis instance can host several deployments. */
+export const storeKey = (name: string): string => `${env.redisPrefix}:${name}`;
