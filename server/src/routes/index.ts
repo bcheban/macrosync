@@ -8,8 +8,11 @@ import { getInsights, getMarketContext, invalidateInsights } from '../services/i
 import { getSignals, isStrategy, STRATEGY_PROFILES } from '../services/signal.engine.js';
 import { alertsStatus, notifyClosed, notifySignals, sendTestAlert } from '../services/telegram/alerts.service.js';
 import { telegramStatus } from '../services/telegram/telegram.client.js';
-import { storeStatus } from '../services/store/store.js';
-import { evaluateTrades, tradesStatus } from '../services/trades/trades.service.js';
+import { acquireLock, getJson, releaseLock, setJson, storeKey, storeStatus } from '../services/store/store.js';
+import { evaluateTrades, tradesStatus, winRate } from '../services/trades/trades.service.js';
+
+/** Where the scheduled run records that it happened. */
+const CRON_KEY = storeKey('cron:last');
 import type { Locale } from '../types/domain.js';
 
 export const api = Router();
@@ -65,6 +68,7 @@ api.get(
     universe: assetCatalog().length,
     locales: LOCALES,
       trades: await tradesStatus(),
+      cron: await getJson<{ runs: number; lastRunAt?: string }>(CRON_KEY, { runs: 0 }),
       time: new Date().toISOString(),
     });
   }),
@@ -181,6 +185,17 @@ api.all(
       return;
     }
 
+    /*
+     * One run at a time. Two overlapping runs would both read the trade ledger,
+     * both write it, and the second would erase the first — losing a settled
+     * trade along with its win or loss.
+     */
+    const lock = storeKey('cron:lock');
+    if (!(await acquireLock(lock, 120))) {
+      res.json({ ok: true, skipped: 'another run is in progress' });
+      return;
+    }
+
     const startedAt = Date.now();
     const strategies = env.cronStrategies.filter(isStrategy);
     const headline = await getHeadlineEvent();
@@ -198,6 +213,11 @@ api.all(
     const { closed, stats, open } = await evaluateTrades();
     const announced = await notifyClosed(closed, stats);
 
+    // Recorded so `/health` can answer "is my scheduler actually running?".
+    const history = await getJson<{ runs: number }>(CRON_KEY, { runs: 0 });
+    await setJson(CRON_KEY, { runs: history.runs + 1, lastRunAt: new Date().toISOString() });
+    await releaseLock(lock);
+
     res.json({
       ok: true,
       evaluated,
@@ -205,7 +225,7 @@ api.all(
       closed: closed.map((trade) => ({ base: trade.base, strategy: trade.strategy, outcome: trade.outcome })),
       announced,
       open,
-      winRate: stats.wins + stats.losses ? Math.round((stats.wins / (stats.wins + stats.losses)) * 100) : null,
+      winRate: winRate(stats),
       tookMs: Date.now() - startedAt,
     });
   }),

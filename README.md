@@ -387,8 +387,24 @@ When a single bar touched both levels the **stop wins**: intrabar order is unkno
 and counting it as a win would flatter the record. One open trade per asset+strategy, so a reversal
 cannot leave two contradictory trades running against each other.
 
+Four outcomes are recorded, but only two move the rate:
+
+| Outcome | Counts | Meaning |
+| --- | --- | --- |
+| `win` / `loss` | yes | The target or the stop came first |
+| `expired` | no | Never reached either level inside its horizon (~3x the advertised duration) |
+| `superseded` | no | Replaced by a reversal on the same pair |
+
+Counting an expired call as a loss would be as dishonest as counting it as a win, so both are kept
+out of the denominator and reported separately — otherwise the rate would quietly measure only the
+decisive calls, which is the most flattering possible sample.
+
 > The rate measures whether the target or the stop came first. It is not a P&L: it assumes a fill at
 > the stated entry, no fees and no slippage. Treat it as a scoreboard for the engine, not a return.
+
+Covered by `server/src/services/trades/trades.service.test.ts` — eleven cases over a scripted
+exchange: target, stop, short direction, both levels in one bar, a level touched before entry,
+expiry, supersession, duplicate suppression and re-settlement. `npm test`.
 
 #### Provisioning storage (Upstash Redis)
 

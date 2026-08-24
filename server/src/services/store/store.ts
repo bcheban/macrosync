@@ -88,5 +88,49 @@ export async function setJson(key: string, value: unknown): Promise<void> {
   await command(['SET', key, raw]);
 }
 
+const locks = new Map<string, number>();
+
+/**
+ * Clears the in-memory backend.
+ *
+ * Exists for tests: they share one module graph, so without this each case
+ * would inherit the previous one's ledger. A no-op against Redis, so it cannot
+ * touch real data even if called by mistake.
+ */
+export function resetMemoryStore(): void {
+  memory.clear();
+  locks.clear();
+}
+
+/**
+ * Best-effort mutual exclusion for the scheduled run.
+ *
+ * Two overlapping runs would both read the trade ledger, both write it, and the
+ * second would erase the first — losing a settled trade and its win or loss.
+ * `SET NX EX` makes the second run stand down instead. It is not a distributed
+ * lock in the strict sense, but the failure mode it guards is a slow run
+ * overlapping the next tick, which this covers exactly.
+ */
+export async function acquireLock(key: string, ttlSeconds: number): Promise<boolean> {
+  if (storeBackend() === 'memory') {
+    const now = Date.now();
+    const held = locks.get(key);
+    if (held && held > now) return false;
+    locks.set(key, now + ttlSeconds * 1000);
+    return true;
+  }
+
+  const result = await command<string>(['SET', key, String(Date.now()), 'NX', 'EX', ttlSeconds]);
+  return result === 'OK';
+}
+
+export async function releaseLock(key: string): Promise<void> {
+  if (storeBackend() === 'memory') {
+    locks.delete(key);
+    return;
+  }
+  await command(['DEL', key]);
+}
+
 /** Namespaced so one Redis instance can host several deployments. */
 export const storeKey = (name: string): string => `${env.redisPrefix}:${name}`;

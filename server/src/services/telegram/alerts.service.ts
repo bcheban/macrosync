@@ -73,7 +73,8 @@ export function formatAlert(
   }
 
   if (stats && stats.wins + stats.losses > 0) {
-    lines.push('', `📊 Win rate so far: <b>${winRate(stats)}%</b> (${stats.wins}W / ${stats.losses}L)`);
+    const unresolved = stats.expired ? ` · ${stats.expired} expired` : '';
+    lines.push('', `📊 Win rate so far: <b>${winRate(stats)}%</b> (${stats.wins}W / ${stats.losses}L${unresolved})`);
   }
 
   lines.push('', '<i>Model output over public market data. Not financial advice.</i>');
@@ -154,6 +155,12 @@ export async function notifyClosed(closed: ClosedTrade[], stats: TradeStats): Pr
 
   let sent = 0;
   for (const trade of closed) {
+    /*
+     * Only decisive outcomes are announced. An expired or superseded call is
+     * bookkeeping — telling the channel about it would be noise, and dressing
+     * it up as a result would be worse.
+     */
+    if (trade.outcome !== 'win' && trade.outcome !== 'loss') continue;
     if (await sendTelegramMessage(formatClose(trade, stats))) sent += 1;
   }
   return sent;
