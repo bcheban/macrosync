@@ -102,6 +102,12 @@ export const env = {
    */
   telegramCooldownMs: positiveInt(process.env.TELEGRAM_COOLDOWN_MS, 5_400_000),
   telegramTimeoutMs: positiveInt(process.env.TELEGRAM_TIMEOUT_MS, 5000),
+  /**
+   * Shared secret for `POST /api/alerts/test`. The endpoint 404s while this is
+   * unset, so an unconfigured deploy cannot have its owner's Telegram spammed
+   * by anyone who reads the source.
+   */
+  alertsTestSecret: process.env.ALERTS_TEST_SECRET ?? '',
 
   /* --- AI risk layer ----------------------------------------------------- */
 

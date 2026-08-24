@@ -6,7 +6,7 @@ import { getNews, newsStatus } from '../services/news/news.service.js';
 import { getTickers, upstreamStatus } from '../services/market.service.js';
 import { getInsights, getMarketContext, invalidateInsights } from '../services/insight.service.js';
 import { getSignals, isStrategy, STRATEGY_PROFILES } from '../services/signal.engine.js';
-import { alertsStatus } from '../services/telegram/alerts.service.js';
+import { alertsStatus, sendTestAlert } from '../services/telegram/alerts.service.js';
 import { telegramStatus } from '../services/telegram/telegram.client.js';
 import type { Locale } from '../types/domain.js';
 
@@ -148,6 +148,27 @@ api.post(
   route(async (req, res) => {
     invalidateInsights();
     res.json({ insights: await getInsights(6, parseLocale(req)), context: await getMarketContext() });
+  }),
+);
+
+/**
+ * Proves the alert path without waiting for the market. Disabled entirely
+ * unless `ALERTS_TEST_SECRET` is configured.
+ */
+api.post(
+  '/alerts/test',
+  route(async (req, res) => {
+    const provided = typeof req.query.secret === 'string' ? req.query.secret : '';
+    if (!env.alertsTestSecret || provided !== env.alertsTestSecret) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    const [signals, headline] = await Promise.all([
+      getSignals('day', [...env.symbols]),
+      getHeadlineEvent(),
+    ]);
+    res.json(await sendTestAlert(signals, headline));
   }),
 );
 

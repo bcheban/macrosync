@@ -98,6 +98,41 @@ export function notifySignals(signals: Signal[], event: MacroEvent | undefined):
   }
 }
 
+/**
+ * Sends the highest-conviction signal on the board as a test.
+ *
+ * Deliberately a real signal rather than an invented one: it proves the whole
+ * path — engine, formatter, Bot API, chat id — and shows exactly what a live
+ * alert will look like, using today's numbers. The marker line makes clear it
+ * was requested rather than triggered.
+ */
+export async function sendTestAlert(
+  signals: Signal[],
+  event: MacroEvent | undefined,
+): Promise<{ sent: boolean; reason?: string }> {
+  if (!telegramConfigured()) return { sent: false, reason: 'TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID missing' };
+  if (!signals.length) return { sent: false, reason: 'no signals available to sample' };
+
+  const sample = signals.reduce((best, item) => (item.confidence > best.confidence ? item : best));
+  // A `wait` card has no side to print, so the test shows what it *would* look
+  // like once the same setup confirms.
+  const shaped: Signal =
+    sample.verdict === 'wait'
+      ? { ...sample, verdict: sample.direction === 'short' ? 'sell' : 'buy' }
+      : sample;
+
+  const header =
+    sample.verdict === 'wait'
+      ? '🧪 <b>TEST</b> — no confirmed call right now, so this is the strongest current setup shown as it would arrive:'
+      : '🧪 <b>TEST</b> — this is a live call, resent on request:';
+
+  const body = formatAlert(shaped, shaped.summary.text, event);
+  const sent = await sendTelegramMessage(`${header}
+
+${body}`);
+  return sent ? { sent: true } : { sent: false, reason: 'Telegram rejected the message — see /api/health' };
+}
+
 /** Exposed for `/health`, so a silent channel can be diagnosed. */
 export const alertsStatus = () => ({
   tracked: lastAlert.size,
