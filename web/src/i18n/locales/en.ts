@@ -87,7 +87,7 @@ export const en = {
 
   signals: {
     title: 'Strategy Signals',
-    live: '{{count}} live',
+    live: '{{count}} actionable',
     error: 'Signal engine unreachable — {{message}}',
     empty: 'No signals for this selection',
     onboarding:
@@ -132,6 +132,33 @@ export const en = {
       live: 'Live',
       forming: 'Forming',
       cooling: 'Cooling',
+    },
+    /**
+     * The one-sentence conclusion, keyed by verdict and by the read that drove
+     * it. Descriptive on purpose: it names what the tape is doing, not what it
+     * will do next.
+     */
+    verdict: {
+      label: { buy: 'BUY', sell: 'SELL', wait: 'WAIT' },
+      side: { buy: 'Long', sell: 'Short', wait: 'No position' },
+      buy: {
+        trend: 'EMA {{fast}} has pulled above EMA {{slow}} on the {{timeframe}} and the other reads agree — an uptrend that has confirmed, not one being guessed at.',
+        momentum: 'MACD is expanding upward on the {{timeframe}} while price holds its trend — momentum is what is carrying this one.',
+        reversion: 'RSI {{rsi}} is washed out and momentum has started to turn — this is a snap-back entry, not a trend chase.',
+        volume: 'Volume at {{ratio}}× its 20-bar average is confirming the move up — real participation behind the price, not a drift.',
+      },
+      sell: {
+        trend: 'EMA {{fast}} has rolled under EMA {{slow}} on the {{timeframe}} and the other reads agree — a downtrend that has confirmed.',
+        momentum: 'MACD is expanding downward on the {{timeframe}} while price stays under its trend — momentum is driving this one lower.',
+        reversion: 'RSI {{rsi}} is stretched and momentum has started to roll over — a fade of an overextended move, not a breakdown.',
+        volume: 'Volume at {{ratio}}× its 20-bar average is behind the move down — sellers are actually there.',
+      },
+      wait: {
+        trend: 'EMA {{fast}} and EMA {{slow}} are too close to call a direction on the {{timeframe}} — nothing to act on until the trend picks a side.',
+        momentum: 'MACD has not committed on the {{timeframe}} — the setup may be building, but it has not confirmed.',
+        reversion: 'RSI {{rsi}} sits mid-range with no stretch to fade — no edge either way right now.',
+        volume: 'Volume at {{ratio}}× its average is not backing either side — wait for participation before acting.',
+      },
     },
     /** Emitted by `server/src/services/signal.engine.ts`. */
     rationale: {

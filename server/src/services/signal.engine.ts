@@ -1,7 +1,7 @@
 import { env } from '../config/env.js';
 import { getHeadlineEvent } from './calendar.service.js';
 import { getKlines, splitSymbol, type Interval } from './market.service.js';
-import type { Direction, I18nText, MacroEvent, Signal, Strategy } from '../types/domain.js';
+import type { Direction, I18nText, MacroEvent, Signal, Strategy, Verdict } from '../types/domain.js';
 import { atr, clamp, ema, macd, round, roundPrice, rsi, sma } from '../utils/indicators.js';
 
 interface StrategyProfile {
@@ -73,7 +73,11 @@ export const STRATEGIES = Object.keys(STRATEGY_PROFILES) as Strategy[];
 export const isStrategy = (value: string): value is Strategy =>
   (STRATEGIES as string[]).includes(value);
 
+/** Which of the four reads a component represents. */
+type ComponentKind = 'trend' | 'momentum' | 'reversion' | 'volume';
+
 interface Component {
+  kind: ComponentKind;
   score: number;
   /** The sentence that explains this component, as a translatable descriptor. */
   note: I18nText;
@@ -106,6 +110,7 @@ function scoreComponents(profile: StrategyProfile, closes: number[], volumes: nu
 
   const emaParams = { fast: profile.emaFast, slow: profile.emaSlow, spread: Math.abs(round(trendSpread, 2)) };
   const trend: Component = {
+    kind: 'trend',
     score: clamp(trendSpread * 22, -40, 40),
     note:
       Math.abs(trendSpread) < 0.05
@@ -120,6 +125,7 @@ function scoreComponents(profile: StrategyProfile, closes: number[], volumes: nu
   const positive = momentum.histogram >= 0;
   const expanding = Math.abs(histogramPct) > 0.05;
   const impulse: Component = {
+    kind: 'momentum',
     score: clamp(histogramPct * 260, -30, 30),
     note: note(
       `macd${positive ? 'Positive' : 'Negative'}${expanding ? 'Expanding' : 'Flat'}`,
@@ -131,6 +137,7 @@ function scoreComponents(profile: StrategyProfile, closes: number[], volumes: nu
   // Mean reversion pushes against the trend at RSI extremes.
   const rsiValue = Math.round(strength);
   const reversion: Component = {
+    kind: 'reversion',
     score: clamp((50 - strength) * 0.62, -20, 20),
     note:
       strength > 68
@@ -141,6 +148,7 @@ function scoreComponents(profile: StrategyProfile, closes: number[], volumes: nu
   };
 
   const participation: Component = {
+    kind: 'volume',
     score: clamp((volumeRatio - 1) * 24, -12, 18) * Math.sign(trendSpread || 1),
     note: note(
       'volume',
@@ -161,6 +169,34 @@ function scoreComponents(profile: StrategyProfile, closes: number[], volumes: nu
     components: [trend, impulse, reversion, participation],
     total: trend.score + impulse.score + reversion.score + participation.score,
   };
+}
+
+/**
+ * One plain sentence explaining the call.
+ *
+ * The card used to lead with three indicator sentences and leave the reader to
+ * assemble a conclusion. This states the conclusion and names the read that
+ * produced it — descriptive, never a promise: the strongest component is the
+ * reason, and the rest of the card is still there to check it against.
+ */
+function buildSummary(
+  verdict: Verdict,
+  dominant: Component,
+  profile: StrategyProfile,
+  read: ReturnType<typeof scoreComponents>,
+): I18nText {
+  const params: Record<string, string | number> = {
+    timeframe: profile.timeframe,
+    rsi: Math.round(read.strength),
+    ratio: round(read.volumeRatio, 2),
+    fast: profile.emaFast,
+    slow: profile.emaSlow,
+  };
+
+  // `wait` has no direction to explain, so it describes the disagreement.
+  const key = verdict === 'wait' ? `signals.verdict.wait.${dominant.kind}` : `signals.verdict.${verdict}.${dominant.kind}`;
+
+  return { key, params, text: dominant.note.text };
 }
 
 function buildSignal(
@@ -192,11 +228,16 @@ function buildSignal(
     2,
   );
 
-  const rationale = read.components
-    .slice()
-    .sort((a, b) => Math.abs(b.score) - Math.abs(a.score))
-    .slice(0, 3)
-    .map((component) => component.note);
+  const ranked = read.components.slice().sort((a, b) => Math.abs(b.score) - Math.abs(a.score));
+  const rationale = ranked.slice(0, 3).map((component) => component.note);
+
+  /*
+   * A directional call is only made once the reads actually agree. A `long`
+   * that is still `forming` is a watch item, not an instruction, so it reads
+   * as "wait" rather than a weak buy.
+   */
+  const verdict: Verdict = direction === 'neutral' || status !== 'live' ? 'wait' : direction === 'long' ? 'buy' : 'sell';
+  const summary = buildSummary(verdict, ranked[0] as Component, profile, read);
 
   const minutesToEvent = headline ? (Date.parse(headline.startsAt) - Date.now()) / 60_000 : Number.NaN;
   const minutes = Math.round(minutesToEvent);
@@ -217,6 +258,8 @@ function buildSignal(
     strategy: profile.strategy,
     timeframe: profile.timeframe,
     direction,
+    verdict,
+    summary,
     confidence,
     status,
     price: roundPrice(read.price),

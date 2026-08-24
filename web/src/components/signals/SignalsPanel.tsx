@@ -75,7 +75,9 @@ export function SignalsPanel() {
   }, [focus, bases]);
 
   const visible = focus ? signals.filter((item) => item.base === focus) : signals;
-  const liveCount = visible.filter((item) => item.status === 'live').length;
+  // Counts actionable calls, which is what the badge implies — a `forming`
+  // long is a watch item, and counting it made the header overstate the tape.
+  const liveCount = visible.filter((item) => item.verdict !== 'wait').length;
 
   const waiting = (loading || scopeLoading) && !signals.length;
   const isEmpty = !waiting && !error && !visible.length;

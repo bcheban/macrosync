@@ -12,6 +12,17 @@ import type { Ticker } from '@/types/domain';
 /** Fixed height, so the strip never resizes between empty and populated. */
 const STRIP_HEIGHT = 'h-[41px]';
 
+/**
+ * How long one asset takes to cross the strip.
+ *
+ * The duration has to scale with the number of assets, not be a constant: the
+ * track is `tickers x 4` long and the animation always travels half of it, so a
+ * fixed 42s meant sixteen assets scrolled at twice the speed of eight. Deriving
+ * it from the count keeps the pixels-per-second constant, and slow enough to
+ * actually read a price as it passes.
+ */
+const SECONDS_PER_ASSET = 2.6;
+
 export function TickerStrip({ tickers }: { tickers: Ticker[] }) {
   const { t } = useTranslation();
 
@@ -52,9 +63,15 @@ export function TickerStrip({ tickers }: { tickers: Ticker[] }) {
       <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-24 bg-linear-to-l from-void to-transparent" />
 
       <div
+        style={{ animationDuration: `${Math.max(24, loop.length * 0.5 * SECONDS_PER_ASSET)}s` }}
         className={cn(
           'flex w-max items-center gap-8 pr-8',
-          rolling && 'animate-marquee hover:[animation-play-state:paused]',
+          /*
+           * Paused on hover and on keyboard focus, so a price can be read or
+           * tabbed to instead of chased.
+           */
+          rolling &&
+            'animate-marquee hover:[animation-play-state:paused] focus-within:[animation-play-state:paused]',
         )}
       >
         {loop.map((ticker, index) => {

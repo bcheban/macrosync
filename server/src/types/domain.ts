@@ -67,6 +67,13 @@ export interface SignalIndicators {
   volumeRatio: number;
 }
 
+/**
+ * What a trader should do with this card, collapsing direction and maturity
+ * into one call. `wait` covers both "no edge" and "a setup that has not
+ * confirmed yet" — from the desk's point of view they are the same instruction.
+ */
+export type Verdict = 'buy' | 'sell' | 'wait';
+
 export interface Signal {
   id: string;
   symbol: string;
@@ -74,6 +81,9 @@ export interface Signal {
   strategy: Strategy;
   timeframe: string;
   direction: Direction;
+  verdict: Verdict;
+  /** One plain sentence on why, in place of the indicator dump. */
+  summary: I18nText;
   /** 0–100. Agreement between trend, momentum, mean-reversion and volume. */
   confidence: number;
   status: 'live' | 'forming' | 'cooling';

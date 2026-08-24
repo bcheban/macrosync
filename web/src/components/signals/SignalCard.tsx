@@ -1,5 +1,5 @@
 import { m } from 'framer-motion';
-import { ArrowDownRight, ArrowUpRight, Minus, ShieldAlert } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Hourglass, ShieldAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge, LiveDot } from '@/components/ui/Badge';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -10,17 +10,69 @@ import { cn } from '@/lib/cn';
 import { formatPrice } from '@/lib/format';
 import type { Signal } from '@/types/domain';
 
-const DIRECTION = {
-  long: { icon: ArrowUpRight, tone: 'bull', text: 'text-bull', glow: 'bull' },
-  short: { icon: ArrowDownRight, tone: 'bear', text: 'text-bear', glow: 'bear' },
-  neutral: { icon: Minus, tone: 'neutral', text: 'text-white/60', glow: 'none' },
+/**
+ * One colour per verdict, used everywhere the card refers to it.
+ *
+ * Green only ever means buy or take-profit, red only ever sell or stop-loss,
+ * amber only ever "not yet". Nothing else in the card borrows those colours, so
+ * any part of it read on its own carries the same meaning.
+ */
+const VERDICT = {
+  buy: {
+    icon: ArrowUpRight,
+    text: 'text-bull',
+    chip: 'border-bull/40 bg-bull/12 text-bull',
+    rail: 'via-bull/70',
+    glow: 'bull',
+    meter: 'bull',
+    dot: 'bull',
+  },
+  sell: {
+    icon: ArrowDownRight,
+    text: 'text-bear',
+    chip: 'border-bear/40 bg-bear/12 text-bear',
+    rail: 'via-bear/70',
+    glow: 'bear',
+    meter: 'bear',
+    dot: 'bear',
+  },
+  wait: {
+    icon: Hourglass,
+    text: 'text-warn',
+    chip: 'border-warn/30 bg-warn/10 text-warn',
+    rail: 'via-warn/50',
+    glow: 'none',
+    meter: 'neutral',
+    dot: 'warn',
+  },
 } as const;
 
-function Level({ label, value, className }: { label: string; value: number; className?: string }) {
+function Level({
+  label,
+  value,
+  tone,
+  emphasis,
+}: {
+  label: string;
+  value: number;
+  tone: string;
+  emphasis?: boolean;
+}) {
   return (
     <div className="min-w-0">
-      <p className="truncate text-[10px] tracking-[0.14em] text-white/30 uppercase">{label}</p>
-      <p className={cn('tnum mt-0.5 truncate font-mono text-[13px] font-medium', className)}>
+      <p className="truncate text-[10px] tracking-[0.14em] text-white/40 uppercase">{label}</p>
+      <p
+        className={cn(
+          'tnum mt-1 truncate font-mono font-semibold',
+          /*
+           * Entry is the number a trader acts on first; the other two only
+           * matter once the position exists. The size difference is the
+           * hierarchy — colour alone was carrying it before.
+           */
+          emphasis ? 'text-[15px] sm:text-base' : 'text-[13px]',
+          tone,
+        )}
+      >
         {formatPrice(value)}
       </p>
     </div>
@@ -30,14 +82,14 @@ function Level({ label, value, className }: { label: string; value: number; clas
 export function SignalCard({ signal, index }: { signal: Signal; index: number }) {
   const { t, text } = useTx();
   const { t: tt } = useTranslation();
-  const direction = DIRECTION[signal.direction];
-  const Icon = direction.icon;
-  const isLive = signal.status === 'live';
+
+  const verdict = VERDICT[signal.verdict];
+  const Icon = verdict.icon;
 
   return (
     <GlassCard
       interactive
-      glow={direction.glow}
+      glow={verdict.glow}
       layout
       initial={{ opacity: 0, y: 14, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -46,34 +98,21 @@ export function SignalCard({ signal, index }: { signal: Signal; index: number })
       whileHover={{ y: -4 }}
       className="p-4 sm:p-5"
     >
-      {/* direction accent line */}
       <span
         aria-hidden
         className={cn(
-          'absolute inset-x-0 top-0 h-px',
-          signal.direction === 'long'
-            ? 'bg-linear-to-r from-transparent via-bull/70 to-transparent'
-            : signal.direction === 'short'
-              ? 'bg-linear-to-r from-transparent via-bear/70 to-transparent'
-              : 'bg-linear-to-r from-transparent via-white/20 to-transparent',
+          'absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent to-transparent',
+          verdict.rail,
         )}
       />
 
+      {/* Asset, price and the call — the three things read at a glance. */}
       <div className="flex items-start justify-between gap-2.5">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h3 className="text-base font-semibold tracking-tight text-white">{signal.base}</h3>
             <Badge tone="neutral">{signal.timeframe}</Badge>
-            {isLive ? (
-              <span className="inline-flex items-center gap-1.5 text-[10px] tracking-wider text-bull uppercase">
-                <LiveDot tone={signal.direction === 'short' ? 'bear' : 'bull'} />
-                {t(`signals.status.${signal.status}`)}
-              </span>
-            ) : (
-              <span className="text-[10px] tracking-wider text-white/30 uppercase">
-                {t(`signals.status.${signal.status}`)}
-              </span>
-            )}
+            {signal.status === 'live' && <LiveDot tone={verdict.dot} />}
           </div>
           <p className="tnum mt-1.5 font-mono text-xl font-semibold text-white/90">
             {formatPrice(signal.price)}
@@ -82,25 +121,29 @@ export function SignalCard({ signal, index }: { signal: Signal; index: number })
 
         <div
           className={cn(
-            'flex max-w-[45%] shrink-0 items-center gap-1.5 rounded-xl border px-2.5 py-1.5',
-            signal.direction === 'long'
-              ? 'border-bull/25 bg-bull/8'
-              : signal.direction === 'short'
-                ? 'border-bear/25 bg-bear/8'
-                : 'border-white/10 bg-white/4',
+            'flex max-w-[52%] shrink-0 flex-col items-end gap-0.5 rounded-xl border px-2.5 py-1.5',
+            verdict.chip,
           )}
         >
-          <Icon className={cn('size-3.5 shrink-0', direction.text)} />
-          <span className={cn('min-w-0 truncate text-[11px] font-semibold', direction.text)}>
-            {t(`signals.direction.${signal.direction}`)}
+          <span className="flex items-center gap-1.5 text-[13px] leading-none font-bold tracking-wide">
+            <Icon className="size-3.5 shrink-0" strokeWidth={2.6} />
+            {t(`signals.verdict.label.${signal.verdict}`)}
+          </span>
+          <span className="text-[10px] leading-none opacity-70">
+            {t(`signals.verdict.side.${signal.verdict}`)}
           </span>
         </div>
       </div>
 
-      <div className="mt-4">
+      {/* Why, in one sentence — the card's conclusion rather than its inputs. */}
+      <p className="mt-3.5 rounded-xl border border-white/8 bg-white/3 px-3 py-2.5 text-[12.5px] leading-relaxed text-white/75">
+        {text(signal.summary)}
+      </p>
+
+      <div className="mt-3.5">
         <Meter
           value={signal.confidence}
-          tone={signal.direction === 'short' ? 'bear' : signal.direction === 'long' ? 'bull' : 'neutral'}
+          tone={verdict.meter}
           label={t('signals.confluence')}
           labelTip={
             <InfoTip label={tt('glossary.confluenceLabel')} align="start">
@@ -119,47 +162,39 @@ export function SignalCard({ signal, index }: { signal: Signal; index: number })
           </InfoTip>
         </div>
         <div className="grid grid-cols-3 gap-3">
-          <Level label={t('signals.entry')} value={signal.entry} className="text-white/90" />
-          <Level label={t('signals.stop')} value={signal.stopLoss} className="text-bear" />
-          <Level label={t('signals.target')} value={signal.takeProfit} className="text-bull" />
+          <Level label={t('signals.entry')} value={signal.entry} tone="text-white" emphasis />
+          <Level label={t('signals.stop')} value={signal.stopLoss} tone="text-bear" />
+          <Level label={t('signals.target')} value={signal.takeProfit} tone="text-bull" />
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[11px] text-white/40 [&>span]:whitespace-nowrap">
+      {/* The raw reads, demoted — there to check the sentence against. */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[11px] text-white/35 [&>span]:whitespace-nowrap">
         <span className="tnum font-mono">
-          {t('signals.riskReward')} <span className="text-white/70">{signal.riskReward || '—'}</span>
+          {t('signals.riskReward')} <span className="text-white/60">{signal.riskReward || '—'}</span>
         </span>
         <span className="tnum font-mono">
-          {t('signals.risk')} <span className="text-white/70">{signal.suggestedRiskPct}%</span>
+          {t('signals.risk')} <span className="text-white/60">{signal.suggestedRiskPct}%</span>
         </span>
         <span className="tnum font-mono">
-          {t('signals.rsi')} <span className="text-white/70">{signal.indicators.rsi}</span>
+          {t('signals.rsi')} <span className="text-white/60">{signal.indicators.rsi}</span>
         </span>
         <span className="tnum font-mono">
-          {t('signals.atr')} <span className="text-white/70">{signal.indicators.atrPct}%</span>
+          {t('signals.atr')} <span className="text-white/60">{signal.indicators.atrPct}%</span>
         </span>
         <span className="tnum font-mono">
-          {t('signals.volume')} <span className="text-white/70">{signal.indicators.volumeRatio}×</span>
+          {t('signals.volume')} <span className="text-white/60">{signal.indicators.volumeRatio}×</span>
         </span>
       </div>
-
-      <ul className="mt-3.5 space-y-1.5">
-        {signal.rationale.map((node) => (
-          <li key={node.key ?? node.text} className="flex gap-2 text-[11.5px] leading-relaxed text-white/50">
-            <span className={cn('mt-1.5 size-1 shrink-0 rounded-full', direction.text, 'bg-current')} />
-            <span className="line-clamp-2 min-w-0">{text(node)}</span>
-          </li>
-        ))}
-      </ul>
 
       {signal.eventWarning && (
         <m.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="mt-3.5 flex items-start gap-2 rounded-lg border border-warn/20 bg-warn/6 px-2.5 py-2"
+          className="mt-3.5 flex items-start gap-2 rounded-lg border border-warn/25 bg-warn/8 px-2.5 py-2"
         >
           <ShieldAlert className="mt-px size-3.5 shrink-0 text-warn" />
-          <p className="line-clamp-3 min-w-0 text-[11px] leading-relaxed text-warn/85">
+          <p className="line-clamp-3 min-w-0 text-[11px] leading-relaxed text-warn/90">
             {text(signal.eventWarning)}
           </p>
         </m.div>
