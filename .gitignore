@@ -8,3 +8,8 @@ dist/
 .vite/
 .tmp/
 *.tsbuildinfo
+.vercel
+.env*
+# ...but the documented examples are part of the repo.
+!.env.example
+!**/.env.example
