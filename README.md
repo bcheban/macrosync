@@ -94,6 +94,14 @@ translated client-side; the LLM is simply asked to answer in the active language
 
 <br />
 
+<img src="https://img.shields.io/badge/lightweight--charts-5-2962FF?logoColor=white" align="left" height="24" /> &nbsp;
+TradingView's own renderer, behind the chart on a live trade. Chosen over their embeddable widget
+because the free widget cannot draw horizontal lines, and entry, stop and target are the only reason
+to open a chart from a signal. Lazy-loaded on the first click, so its weight never reaches a session
+that does not use it.
+
+<br />
+
 <img src="https://img.shields.io/badge/Lucide-icons-F56565?logo=lucide&logoColor=white" align="left" height="24" /> &nbsp;
 Every icon in the interface. Tree-shaken per import, so only the ~25 glyphs actually used reach
 the bundle.
@@ -335,7 +343,8 @@ is why the API function is pinned to `fra1` in `vercel.json`.
 | GET    | `/api/insights?limit=6&lang=uk`| AI risk breakdowns + market context                        |
 | POST   | `/api/insights/refresh`        | Busts the insight cache and regenerates                    |
 | GET    | `/api/context`                 | Volatility regime, breadth, next event                     |
-| GET    | `/api/signals/active`          | Open trades from the ledger, priced — the Live Trades card |
+| GET    | `/api/signals/active`          | Open trades from the ledger, priced — the Live Trades board |
+| GET    | `/api/market/candles`          | OHLC for one symbol — the bars behind the trade chart      |
 | POST   | `/api/cron/signals`            | The scheduled scan. `Bearer $CRON_SECRET`; 404s while unset |
 | POST   | `/api/telegram/webhook`        | Telegram updates. Guarded by `secret_token`; 404s while unset |
 | POST   | `/api/alerts/test`             | Sends one real signal to prove the path. `?secret=`        |
@@ -463,6 +472,53 @@ for every signal tells the reader nothing.
 
 > It answers exactly one question: will liquidation close this trade before the stop does. It says
 > nothing about whether the position is sensibly sized.
+
+### Breakeven stops — `server/src/services/trades/`
+
+A trade that travels halfway to its target has its stop pulled to entry, and the channel is told.
+From that point the position cannot cost anything.
+
+The rule forced the resolution loop to be rewritten. It used to ask whether *any* bar touched the
+stop and whether *any* bar touched the target — order-blind, and perfectly adequate while the stop
+never moved. With a stop that moves, "did it hit the stop" has no answer until you know **which**
+stop was in force, and that depends on what happened earlier in the sequence. It now walks the bars
+in order, with the stop in force at the start of each bar.
+
+That cuts both ways, and the second direction is the one worth stating:
+
+- A trade that reached halfway and then reversed to its original stop used to be a **loss**. It is
+  now a scratch, which flatters the rate — hence the separate count above.
+- A bar with its low at entry and its high past the target now reads as the **scratch**, not the win.
+  A real position with a stop at entry would have been closed before the target printed. This is the
+  same "flatters least" reading the levels have always used for an ambiguous bar.
+
+Writing the tests for this caught a bug it had introduced: the "is this a real trade" check wanted
+the stop strictly below entry, so a stop sitting *at* entry read as malformed and every protected
+trade was silently voided on the run after it was protected. The check now judges the levels the call
+was published with, which is what that question was always about.
+
+### Position sizing — `/balance`
+
+`/balance 1000 1` stores a deposit and a risk appetite against a chat id, and every subsequent alert
+carries the margin worked out for that person. Nobody else's message changes.
+
+The whole calculation is one identity:
+
+```
+notional * stopFraction = riskAmount        =>   notional = riskAmount / stopFraction
+margin  = notional / leverage
+```
+
+Leverage does not appear in the first line, which is the part people get wrong. It cannot make a
+trade safer; it decides only how much collateral the same position needs. A position whose margin
+exceeds the balance is capped and **flagged**, because silently sizing something unfundable means
+the reader finds out from the exchange.
+
+Reading `$2,500` as 2.5 was a real bug in the first cut, found by running it rather than by review. A
+comma is a decimal mark in half the world and a thousands separator in the other half; getting it
+wrong sizes a position at a thousandth of what was meant, and saves it without complaint. Groups of
+exactly three digits are now read as separators, anything else as a decimal mark, and a dot settles
+it outright.
 
 ### Clean slate — `POST /api/admin/reset`
 
@@ -617,6 +673,8 @@ broken.
 | --- | --- |
 | `/start` | Subscribe. Also lifts a mute — starting again reads as "talk to me" |
 | `/stats` | Win rate, record and open trades |
+| `/settings` | Choose which strategies reach you |
+| `/balance 1000 1` | Size positions for a deposit and a risk appetite |
 | `/mute` · 🛑 button | Two hours of quiet for that one person |
 | `/unmute` | Lift it early |
 | `/stop` | Unsubscribe |
@@ -713,13 +771,44 @@ way to its stop is exactly what somebody looking at this panel needs to see.
 They are priced from the exchange-wide ticker feed. One request covers every open trade no matter how
 many there are, where per-symbol lookups would be one round trip each on a panel that polls.
 
-The **Live Trades** card groups them by strategy and every row selects that asset, so a call that
-arrives on the phone is one tap from its chart. That last part needed a fix underneath: the scan
+The **Live Trades** board lays them out as one column per strategy rather than a single list. Thirty
+open trades in one column is a scroll; split three ways it is a board, and that split is the one that
+matters — a scalp and a swing on the same asset are different positions with different horizons, and
+reading them interleaved hides it.
+
+Clicking a card opens its chart and brings the asset into every other panel's scope at once. That last part needed a fix underneath: the scan
 reaches sixty-odd pairs while the dashboard's curated catalogue knew twenty-eight, and symbol
 validation rejected the difference — a trade the bot opened on a coin outside the catalogue could be
 announced in Telegram and then be un-chartable on the site that announced it. `/api/assets` now
 serves the catalogue **plus** whatever the radar currently covers, under a `radar` group, and
 validation accepts both while still refusing anything the exchange does not list.
+
+#### The chart — `web/src/components/signals/TradeChart.tsx`
+
+Built on **lightweight-charts**, not a TradingView embed, and the reason is the requirement itself:
+the free embeddable widget has no API for drawing horizontal lines — `createShape` belongs to the
+licensed Charting Library — and entry, stop and target are the only reason to open a chart from a
+signal. A widget that cannot draw them would look right and answer nothing.
+
+It also means the candles are **ours**: the same bars the signal was computed from, served by
+`/api/market/candles`. A third-party chart would show a third party's idea of what the market did
+next to our idea of what to do about it, and any disagreement between the two would be invisible and
+unexplainable.
+
+The renderer is 163 KB and most sessions never open a chart, so it is lazy-loaded on the first click
+and stays out of the entry bundle entirely.
+
+#### Which assets the picker shows
+
+Merging the radar into the catalogue took the switcher from twenty-eight names to a hundred and
+fifty, and past the head of that list the names stop meaning anything — the tail is where a pair
+turns over a few hundred thousand dollars a day and is present only because the scanner can price it.
+
+The list opens on the top forty by volume, plus **anything currently selected and anything carrying
+an open trade** — a coin the bot is trading must never vanish from the list because it has since
+drifted down the ranking. Searching or picking a group escapes the shortlist entirely, because at
+that point the reader has said what they are looking for and hiding a match would be wrong. The count
+being held back is printed under the list, since a list that quietly hides most of itself lies.
 
 #### Win rate — `server/src/services/trades/`
 
@@ -731,7 +820,7 @@ When a single bar touched both levels the **stop wins**: intrabar order is unkno
 and counting it as a win would flatter the record. One open trade per asset+strategy, so a reversal
 cannot leave two contradictory trades running against each other.
 
-Five outcomes are recorded, but only two move the rate:
+Six outcomes are recorded, but only two move the rate:
 
 | Outcome | Counts | Meaning |
 | --- | --- | --- |
@@ -739,10 +828,16 @@ Five outcomes are recorded, but only two move the rate:
 | `expired` | no | Never reached either level inside its horizon (~3x the advertised duration) |
 | `superseded` | no | Replaced by a reversal on the same pair |
 | `voided` | no | Its levels were not prices, so it could never have resolved |
+| `breakeven` | no | Travelled halfway, had its stop pulled to entry, and came back to it |
 
 Counting an expired call as a loss would be as dishonest as counting it as a win, so both are kept
 out of the denominator and reported separately — otherwise the rate would quietly measure only the
 decisive calls, which is the most flattering possible sample.
+
+`breakeven` deserves suspicion, and gets it. Before that rule existed every one of these was a
+**loss**; now they leave the denominator entirely, so the published win rate rises without the
+strategy having improved at all. It is counted and reported separately for exactly that reason — a
+rate quoted without its breakeven count is a better-looking number about a smaller question.
 
 `voided` exists because of a real defect rather than a hypothetical one. The engine used to size a
 stop from ATR and a target from the stop with no ceiling, so on an asset whose ATR approached its own
