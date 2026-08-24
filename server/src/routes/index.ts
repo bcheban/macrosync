@@ -14,7 +14,7 @@ import { evaluateTrades, tradesStatus, winRate } from '../services/trades/trades
 
 /** Where the scheduled run records that it happened. */
 const CRON_KEY = storeKey('cron:last');
-import type { Locale } from '../types/domain.js';
+import type { Locale, Signal } from '../types/domain.js';
 
 export const api = Router();
 
@@ -216,17 +216,21 @@ api.all(
 
     // Sequential across strategies on purpose: every strategy in parallel over a
     // whole batch is exactly the burst the exchange rate limits.
-    const alerts = { sent: 0, failed: 0, dropped: 0 };
     const evaluated: Record<string, number> = {};
+    const board: Signal[] = [];
     for (const strategy of strategies) {
       const signals = await getSignals(strategy, scanned);
       evaluated[strategy] = signals.length;
-
-      const run = await notifySignals(signals, headline);
-      alerts.sent += run.sent;
-      alerts.failed += run.failed;
-      alerts.dropped += run.dropped;
+      board.push(...signals);
     }
+
+    /*
+     * Alerting happens once over the whole board rather than once per strategy.
+     * Per-strategy calls made the per-run cap a per-strategy cap — three times
+     * the messages intended — and left the strategies ranking their calls in
+     * isolation, so a marginal scalp could go out ahead of a far stronger swing.
+     */
+    const alerts = await notifySignals(board, headline);
 
     const { closed, stats, open } = await evaluateTrades();
     const announced = await notifyClosed(closed, stats);

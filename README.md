@@ -208,7 +208,7 @@ Everything lives in `server/.env` (see `server/.env.example`). Every value has a
 | `RADAR_MIN_VOLUME_USD`  | `1000000`               | Liquidity floor; usually binds before the cap                |
 | `RADAR_BATCH_SIZE`      | `18`                    | Pairs evaluated per run; the cursor sweeps the rest          |
 | `RADAR_UNIVERSE_TTL_MS` | `21600000`              | How long a ranking is reused before rebuilding               |
-| `ALERTS_MAX_PER_RUN`    | `6`                     | Cap on messages per run; lowest conviction is dropped first  |
+| `ALERTS_MAX_PER_RUN`    | `4`                     | Budget for the whole run; lowest conviction is dropped first |
 | `ALERTS_SEND_GAP_MS`    | `1200`                  | Pacing, to stay under Telegram's per-chat rate limit         |
 | `ALERTS_SEND_RETRIES`   | `3`                     | Attempts before a message is abandoned for the run           |
 | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | —        | Upstash Redis; injected by the Vercel integration           |
@@ -435,6 +435,12 @@ retrying malformed HTML or a wrong chat id cannot succeed. Delivery counters liv
 Because a wide radar can confirm many calls at once, a run sends its highest-conviction calls up to
 `ALERTS_MAX_PER_RUN` and **reports the rest as `dropped`** — a cap that hid what it discarded would
 read as a quiet market.
+
+That budget covers the **whole run, across every strategy**. Alerting once per strategy instead made
+it a per-strategy cap — three times the messages intended — and let each strategy rank its calls in
+isolation, so a marginal scalp could go out ahead of a much stronger swing. On a five-minute
+schedule the budget sets the ceiling directly: four per run is at most 48 messages an hour, and far
+fewer in practice once the per-pair quiet period fills in.
 
 #### Win rate — `server/src/services/trades/`
 

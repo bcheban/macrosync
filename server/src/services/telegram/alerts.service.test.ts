@@ -48,12 +48,12 @@ after(() => {
   globalThis.fetch = realFetch;
 });
 
-const signal = (base: string, verdict: 'buy' | 'sell' | 'wait', confidence = 70) =>
+const signal = (base: string, verdict: 'buy' | 'sell' | 'wait', confidence = 70, strategy = 'day') =>
   ({
     id: base,
     symbol: `${base}USDT`,
     base,
-    strategy: 'day',
+    strategy,
     timeframe: '1h',
     direction: verdict === 'sell' ? 'short' : 'long',
     verdict,
@@ -155,6 +155,28 @@ describe('alert dispatch', () => {
     assert.equal(run.sent, 2);
     // Reported, not swallowed: a cap that hides what it dropped is a lie.
     assert.equal(run.dropped, 1);
+    assert.match(posted[0] ?? '', /BBB/);
+    assert.match(posted[1] ?? '', /CCC/);
+  });
+
+  it('spends one budget across every strategy in the run', async () => {
+    /*
+     * The cap is a per-run budget, not a per-strategy one. Alerting once per
+     * strategy tripled it, and let a marginal scalp go out ahead of a far
+     * stronger swing because each strategy ranked its calls in isolation.
+     */
+    const run = await alerts.notifySignals(
+      [
+        signal('AAA', 'buy', 66, 'scalping'),
+        signal('BBB', 'buy', 95, 'swing'),
+        signal('CCC', 'buy', 71, 'day'),
+      ],
+      undefined,
+    );
+
+    assert.equal(run.sent, 2);
+    assert.equal(run.dropped, 1);
+    // Conviction decides, whichever strategy produced it.
     assert.match(posted[0] ?? '', /BBB/);
     assert.match(posted[1] ?? '', /CCC/);
   });

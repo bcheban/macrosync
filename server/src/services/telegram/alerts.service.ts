@@ -113,7 +113,11 @@ export function formatClose(trade: ClosedTrade, stats: TradeStats): string {
  * Considers one batch of freshly computed signals for alerting.
  *
  * Awaited rather than fire-and-forget, so a serverless function is not torn
- * down mid-send. The dashboard path calls it without waiting.
+ * down mid-send.
+ *
+ * Called **once per run** over every strategy's signals together. Calling it per
+ * strategy turned the per-run cap into a per-strategy one — three times the
+ * messages intended — and let each strategy rank its calls in isolation.
  */
 export async function notifySignals(signals: Signal[], event: MacroEvent | undefined): Promise<AlertRun> {
   const empty: AlertRun = { sent: 0, failed: 0, dropped: 0 };

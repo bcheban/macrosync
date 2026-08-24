@@ -152,11 +152,16 @@ export const env = {
   /* --- alert dispatch ----------------------------------------------------- */
 
   /*
-   * A 150-pair radar can confirm many calls at once. Telegram accepts about one
+   * A wide radar can confirm many calls at once. Telegram accepts about one
    * message per second to a chat and a channel that fires twenty at once is
-   * noise, so a run sends its highest-confidence calls and drops the rest.
+   * noise, so a run sends its highest-conviction calls and drops the rest.
+   *
+   * This is a budget for the *whole* run, across every strategy. On a
+   * five-minute schedule it sets the ceiling directly: four per run is at most
+   * forty-eight messages an hour, and in practice far fewer once the per-pair
+   * quiet period fills in.
    */
-  alertsMaxPerRun: positiveInt(process.env.ALERTS_MAX_PER_RUN, 6),
+  alertsMaxPerRun: positiveInt(process.env.ALERTS_MAX_PER_RUN, 4),
   /** Gap between sends, to stay under Telegram's per-chat rate limit. */
   alertsSendGapMs: positiveInt(process.env.ALERTS_SEND_GAP_MS, 1200),
   /** Attempts per message before the call is abandoned for this run. */
