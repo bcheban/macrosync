@@ -99,6 +99,18 @@ describe('position sizing', () => {
     assert.deepEqual(parseBalanceCommand('/balance 2,500.75'), { balance: 2500.75, riskPct: 1 });
   });
 
+  it('reads the ways somebody clears it', () => {
+    /*
+     * `0 0` is the obvious thing to type and used to be rejected as an invalid
+     * number — the reader would see "invalid format" for doing exactly what the
+     * help told them.
+     */
+    assert.deepEqual(parseBalanceCommand('/balance 0 0'), { reset: true });
+    assert.deepEqual(parseBalanceCommand('/balance 0'), { reset: true });
+    assert.deepEqual(parseBalanceCommand('/balance off'), { reset: true });
+    assert.deepEqual(parseBalanceCommand('/balance reset'), { reset: true });
+  });
+
   it('refuses input it cannot size from', () => {
     assert.deepEqual(parseBalanceCommand('/balance'), { error: 'usage' });
     assert.deepEqual(parseBalanceCommand('/balance abc'), { error: 'balance' });

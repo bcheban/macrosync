@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import 'dotenv/config';
+import { readFile } from 'node:fs/promises';
 
 /**
  * Points Telegram at this deployment's webhook.
@@ -66,14 +67,22 @@ if (i.last_error_message) {
   console.log(`  ⚠ last error    : ${i.last_error_message} (${new Date((i.last_error_date ?? 0) * 1000).toISOString()})`);
 }
 
-// The command menu is what makes the bot discoverable; without it people guess.
+/*
+ * The command menu is what puts the blue Menu button in the chat, and without it
+ * people guess. Read from the same file the bot builds its own `/help` from, so
+ * the button and the glossary cannot describe different bots.
+ */
+const specs = JSON.parse(
+  await readFile(new URL('../src/data/commands.json', import.meta.url), 'utf8'),
+);
+
 const menu = await call('setMyCommands', {
-  commands: [
-    { command: 'start', description: 'Subscribe to signal alerts' },
-    { command: 'stats', description: 'Win rate and open trades' },
-    { command: 'mute', description: 'Two hours of quiet' },
-    { command: 'unmute', description: 'Turn alerts back on' },
-    { command: 'stop', description: 'Unsubscribe' },
-  ],
+  commands: specs.map((spec) => ({ command: spec.command, description: spec.menu })),
 });
-console.log(menu.ok ? '✔ Command menu published' : `⚠ Command menu failed: ${menu.description}`);
+console.log(menu.ok ? `✔ Command menu published (${specs.length} commands)` : `⚠ Command menu failed: ${menu.description}`);
+
+// The same list, in the shape @BotFather's /setcommands wants it pasted.
+console.log('');
+console.log('  To set it by hand instead — @BotFather -> /setcommands -> paste:');
+console.log('');
+for (const spec of specs) console.log(`  ${spec.command} - ${spec.menu}`);

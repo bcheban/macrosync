@@ -203,6 +203,46 @@ describe('subscriber roster', () => {
     assert.match(posted[0]?.[1] ?? '', /trades on the record|Win rate|still open/);
   });
 
+  it('welcomes with the same glossary /help answers with', async () => {
+    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
+    const welcome = posted.at(-1)?.[1] ?? '';
+
+    posted = [];
+    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/help' } });
+    const help = posted.at(-1)?.[1] ?? '';
+
+    /*
+     * Both are built from one list, so the blue Menu button, the welcome and
+     * /help cannot end up describing different bots.
+     */
+    for (const command of ['/settings', '/balance', '/stats', '/help', '/mute', '/stop']) {
+      assert.ok(welcome.includes(command), `welcome is missing ${command}`);
+      assert.ok(help.includes(command), `help is missing ${command}`);
+    }
+  });
+
+  it('publishes a menu Telegram will accept', () => {
+    for (const entry of webhook.menuCommands()) {
+      assert.match(entry.command, /^[a-z0-9_]{1,32}$/, `${entry.command} is not a valid command name`);
+      assert.ok(entry.description.length > 0 && entry.description.length <= 256);
+      // The Menu button shows one line; a newline in it renders as a break.
+      assert.ok(!entry.description.includes(String.fromCharCode(10)));
+    }
+  });
+
+  it('answers an empty /balance with the shape it wants', async () => {
+    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
+    posted = [];
+
+    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/balance' } });
+    const reply = posted.at(-1)?.[1] ?? '';
+
+    assert.match(reply, /Invalid format/);
+    // The example matters more than the complaint.
+    assert.match(reply, /balance 1000 1/);
+    assert.match(reply, /balance 0 0/);
+  });
+
   it('defaults a new subscriber to every strategy', async () => {
     await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
 

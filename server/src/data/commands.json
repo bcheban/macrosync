@@ -1,0 +1,58 @@
+[
+  {
+    "command": "settings",
+    "usage": "/settings",
+    "menu": "Choose which strategies you receive",
+    "help": "Choose which strategies you want — Scalping, Day Trading, Swing. Only what is ticked reaches you.",
+    "primary": true
+  },
+  {
+    "command": "balance",
+    "usage": "/balance <deposit> <risk%>",
+    "menu": "Set deposit and risk for position sizing",
+    "help": "Set your account size and risk per trade to get a personalised margin in every signal. <code>/balance 1000 1</code> is a $1,000 deposit at 1% risk.",
+    "primary": true
+  },
+  {
+    "command": "stats",
+    "usage": "/stats",
+    "menu": "Win rate and open trades",
+    "help": "The global win rate and how the algorithm has actually performed.",
+    "primary": true
+  },
+  {
+    "command": "help",
+    "usage": "/help",
+    "menu": "Show this instruction menu",
+    "help": "Show this instruction menu.",
+    "primary": true
+  },
+  {
+    "command": "mute",
+    "usage": "/mute",
+    "menu": "Two hours of quiet",
+    "help": "Two hours of quiet. You stay subscribed.",
+    "primary": false
+  },
+  {
+    "command": "unmute",
+    "usage": "/unmute",
+    "menu": "Turn alerts back on",
+    "help": "Lift a mute early.",
+    "primary": false
+  },
+  {
+    "command": "start",
+    "usage": "/start",
+    "menu": "Subscribe to signal alerts",
+    "help": "Subscribe. Also lifts a mute.",
+    "primary": false
+  },
+  {
+    "command": "stop",
+    "usage": "/stop",
+    "menu": "Unsubscribe",
+    "help": "Unsubscribe. Send /start whenever you want them back.",
+    "primary": false
+  }
+]

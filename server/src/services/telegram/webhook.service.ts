@@ -1,3 +1,4 @@
+import COMMAND_SPECS from '../../data/commands.json' with { type: 'json' };
 import { env } from '../../config/env.js';
 import { loadActive, loadStats, winRate } from '../trades/trades.service.js';
 import { mute, mutedUntil, subscribe, subscribersStatus, unmute, unsubscribe } from './subscribers.service.js';
@@ -41,6 +42,9 @@ export interface TelegramUpdate {
 }
 
 const MUTE_HOURS = 2;
+
+/** A non-breaking space, so a command and its description never wrap apart. */
+const NBSP = ' ';
 
 const MENU: InlineKeyboard = [
   [
@@ -102,34 +106,78 @@ async function statsLine(): Promise<string> {
   ].join('\n');
 }
 
+/**
+ * The command list, from the one file that defines it.
+ *
+ * The same array feeds the in-chat glossary and the menu published to Telegram
+ * through `setMyCommands`, so the blue Menu button and `/help` cannot describe
+ * different bots — which is what happens the moment the two are maintained as
+ * separate lists.
+ */
+interface CommandSpec {
+  command: string;
+  usage: string;
+  /** One line, under 256 chars: what Telegram shows in the Menu button. */
+  menu: string;
+  /** The fuller sentence, for `/help`. May contain HTML. */
+  help: string;
+  /** Listed first in the glossary; the rest follow as a smaller group. */
+  primary: boolean;
+}
+
+const COMMANDS = COMMAND_SPECS as CommandSpec[];
+
+const glossaryLines = (specs: CommandSpec[]): string[] =>
+  specs.map((spec) => `<code>${escapeHtml(spec.usage)}</code>${NBSP}— ${spec.help}`);
+
+/** Everything the bot answers, primary commands first. */
+function glossary(): string {
+  const primary = COMMANDS.filter((spec) => spec.primary);
+  const rest = COMMANDS.filter((spec) => !spec.primary);
+
+  return [
+    '<b>Commands</b>',
+    ...glossaryLines(primary),
+    '',
+    '<b>Also</b>',
+    ...glossaryLines(rest),
+  ].join('\n');
+}
+
 const WELCOME = [
-  '👋 <b>You are subscribed.</b>',
+  '📡 <b>MacroSync</b> — an automated futures radar.',
   '',
-  'You will get a message when a call is confirmed — entry, stop, target and the reasoning, plus a note when it reaches either level.',
+  'It scans the liquid USDT perpetuals on MEXC around the clock, and when a setup confirms you get the call: entry, stop, target, the reasoning in one sentence, and the leverage at which liquidation still sits clear of the stop.',
   '',
-  'The scan covers the liquid USDT pairs on MEXC and rotates through the whole board, so this is not limited to the majors.',
+  'You are subscribed. Nothing else is needed — but the commands below make the alerts yours rather than generic.',
   '',
-  '<b>Commands</b>',
-  '/stats — the current record',
-  '/settings — choose which strategies reach you',
-  '/balance — size positions for your deposit',
-  '/mute — two hours of quiet',
-  '/unmute — turn alerts back on',
-  '/stop — unsubscribe',
+  glossary(),
   '',
-  '<i>MEXC perpetuals. Model output over public market data — not financial advice.</i>',
+  '<i>MEXC perpetuals. Model output over public market data — not financial advice, and no order is ever placed for you.</i>',
 ].join('\n');
 
 const HELP = [
-  '<b>Commands</b>',
-  '/start — subscribe to alerts',
-  '/stats — win rate and open trades',
-  '/settings — choose which strategies reach you',
-  '/balance — size positions for your deposit',
-  '/mute — two hours of quiet',
-  '/unmute — turn alerts back on',
-  '/stop — unsubscribe',
+  '📡 <b>MacroSync</b> — an automated futures radar for MEXC perpetuals.',
+  '',
+  glossary(),
+  '',
+  '<i>Not financial advice. No order is ever placed for you.</i>',
 ].join('\n');
+
+/**
+ * The block to paste into @BotFather under `/setcommands`.
+ *
+ * Exposed on `/api/health` rather than kept in a document, because a list that
+ * lives in prose drifts from the list the code answers to. `setMyCommands` in
+ * `scripts/register-webhook.mjs` publishes the same thing automatically; this is
+ * for setting it by hand.
+ */
+export const botFatherBlock = (): string =>
+  COMMANDS.map((spec) => `${spec.command} - ${spec.menu}`).join('\n');
+
+/** What `setMyCommands` takes. */
+export const menuCommands = (): { command: string; description: string }[] =>
+  COMMANDS.map((spec) => ({ command: spec.command, description: spec.menu }));
 
 async function handleCommand(chatId: string, text: string, profile: { name?: string; username?: string }): Promise<void> {
   // `/start@SomeBot` in a group, and any argument, both trail the command.
@@ -156,41 +204,42 @@ async function handleCommand(chatId: string, text: string, profile: { name?: str
     case '/balance': {
       const parsed = parseBalanceCommand(text);
 
+      if ('reset' in parsed) {
+        await clearAccount(chatId);
+        await sendTelegramMessage(
+          '💰 Cleared. Alerts will arrive without a position size until you set one again.',
+          { chatId },
+        );
+        return;
+      }
+
       if ('error' in parsed) {
-        if (parsed.error === 'usage') {
-          const existing = await getAccount(chatId);
-          await sendTelegramMessage(
-            [
-              '💰 <b>Position sizing</b>',
-              '',
-              'Tell me your deposit and how much of it you are willing to risk on one trade, and every alert will carry the margin worked out for you.',
-              '',
-              '<code>/balance 1000 1</code> — $1,000 deposit, 1% risk',
-              '<code>/balance 500</code> — risk defaults to 1%',
-              '<code>/balance off</code> — forget it',
-              '',
-              existing
-                ? `Currently: <b>${existing.balance}</b> at <b>${existing.riskPct}%</b> — ${Math.round((existing.balance * existing.riskPct) / 100)} per trade.`
-                : '<i>Nothing saved. Alerts arrive without a size until you set one.</i>',
-            ].join(String.fromCharCode(10)),
-            { chatId },
-          );
-          return;
-        }
-
-        if (text.trim().split(/\s+/)[1]?.toLowerCase() === 'off') {
-          await clearAccount(chatId);
-          await sendTelegramMessage('💰 Forgotten. Alerts will arrive without a size.', { chatId });
-          return;
-        }
-
-        const complaint: Record<string, string> = {
-          balance: 'That deposit did not read as a number. Try <code>/balance 1000 1</code>.',
-          'balance-large': 'That deposit looks like a typo. If it is not, size it by hand.',
-          risk: 'That risk did not read as a number. Try <code>/balance 1000 1</code>.',
-          'risk-large': 'Over 20% of an account on one trade is not something this bot will size for you.',
+        /*
+         * One message for every way of getting it wrong. Distinguishing "you
+         * typed nothing" from "you typed letters" adds a branch and tells the
+         * reader the same thing either way: here is the shape it wants.
+         */
+        const detail: Record<string, string> = {
+          'balance-large': 'That deposit looks like a typo — if it is not, size that one by hand.',
+          'risk-large': 'Risking more than 20% of an account on a single trade is not something this bot will size for you.',
         };
-        await sendTelegramMessage(`⚠️ ${complaint[parsed.error] ?? 'Could not read that.'}`, { chatId });
+
+        await sendTelegramMessage(
+          [
+            '⚠️ <b>Invalid format.</b>',
+            '',
+            'To set up your position sizing, send your deposit and the percentage of it you are willing to risk on one trade.',
+            '',
+            '<code>/balance 1000 1</code>  — $1,000 deposit, 1% risk',
+            '<code>/balance 500</code>  — risk defaults to 1%',
+            '<code>/balance 0 0</code>  — reset',
+            detail[parsed.error] ? '' : undefined,
+            detail[parsed.error],
+          ]
+            .filter((line) => line !== undefined)
+            .join('\n'),
+          { chatId },
+        );
         return;
       }
 
@@ -199,12 +248,12 @@ async function handleCommand(chatId: string, text: string, profile: { name?: str
 
       await sendTelegramMessage(
         [
-          `💰 Saved: <b>${account.balance}</b> at <b>${account.riskPct}%</b> risk.`,
+          `💰 Saved: <b>${account.balance.toLocaleString('en-US')}</b> at <b>${account.riskPct}%</b> risk.`,
           '',
           `Every alert will now carry the margin for a position that loses <b>${perTrade.toFixed(2)}</b> if its stop fills.`,
           '',
           '<i>Sizing only. Nothing is placed for you, and nothing here is advice.</i>',
-        ].join(String.fromCharCode(10)),
+        ].join('\n'),
         { chatId, keyboard: MENU },
       );
       return;
@@ -349,5 +398,10 @@ export async function handleUpdate(update: TelegramUpdate): Promise<{ handled: s
 
 export async function botStatus() {
   const [subscribers, muted] = await Promise.all([subscribersStatus(), mutedUntil(env.telegramChatId)]);
-  return { ...subscribers, webhookConfigured: Boolean(env.telegramWebhookSecret), ownerMuted: Boolean(muted) };
+  return {
+    ...subscribers,
+    webhookConfigured: Boolean(env.telegramWebhookSecret),
+    ownerMuted: Boolean(muted),
+    commands: COMMANDS.length,
+  };
 }

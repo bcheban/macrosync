@@ -66,9 +66,21 @@ function readNumber(raw: string): number {
  * `$` and `%` are tolerated: people type what they see, and rejecting `$1,000`
  * on principle only makes the command feel broken.
  */
-export function parseBalanceCommand(text: string): { balance: number; riskPct: number } | { error: string } {
+export function parseBalanceCommand(
+  text: string,
+): { balance: number; riskPct: number } | { reset: true } | { error: string } {
   const parts = text.trim().split(/\s+/).slice(1);
   if (!parts.length) return { error: 'usage' };
+
+  /*
+   * `0 0` clears it, and reads as clearing it to anyone who tries. `off` works
+   * too — it is what the help said first — but a deposit of zero is the more
+   * obvious thing to type, and it used to be rejected as an invalid number.
+   */
+  const first = (parts[0] ?? '').toLowerCase();
+  if (first === 'off' || first === 'reset' || (Number(first) === 0 && /^0+([.,]0+)?$/.test(first))) {
+    return { reset: true };
+  }
 
   const balance = readNumber(parts[0] ?? '');
   // Risk defaults to 1% — the figure the alerts already suggest.
