@@ -98,6 +98,21 @@ translated client-side; the LLM is simply asked to answer in the active language
 Every icon in the interface. Tree-shaken per import, so only the ~25 glyphs actually used reach
 the bundle.
 
+<br />
+
+<img src="https://img.shields.io/badge/Protobuf-over_WebSocket-4B8BBE?logoColor=white" align="left" height="24" /> &nbsp;
+How the live price arrives. MEXC retired its JSON websocket channels — only the `.pb` variants push
+data now, as binary protobuf frames — so `web/src/lib/mexc-stream.ts` reads the wire format
+directly, by field number, rather than shipping a schema compiler and a runtime for one message.
+The frame layout in that file's header was confirmed against the live socket, not copied from docs.
+
+<br />
+
+<img src="https://img.shields.io/badge/clsx_+_tailwind--merge-utility-06B6D4?logoColor=white" align="left" height="24" /> &nbsp;
+The `cn()` helper behind every component. `clsx` builds the conditional class list and
+`tailwind-merge` resolves the collisions inside it, so a variant prop can override a base class
+without the two both landing in the DOM and the later one winning by accident.
+
 ### Backend
 
 <img src="https://img.shields.io/badge/Node.js-20.19+-5FA04E?logo=nodedotjs&logoColor=white" align="left" height="24" /> &nbsp;
@@ -125,6 +140,21 @@ screen is the exchange's own, to the last decimal. No key, and no invented data 
 
 <br />
 
+<img src="https://img.shields.io/badge/ForexFactory-macro_calendar-B22222?logoColor=white" align="left" height="24" /> &nbsp;
+The countdown's source of truth: the weekly economic calendar as JSON, no key and no scraping.
+Releases are weighted by currency and impact tier so the hero timer counts down to something that
+actually moves crypto rather than to the next regional survey.
+
+<br />
+
+<img src="https://img.shields.io/badge/CryptoPanic_·_CryptoCompare_·_NewsData-headlines-FF9800?logoColor=white" align="left" height="24" /> &nbsp;
+Real newsrooms behind the AI feed, tried in order and falling through to publisher RSS
+(CoinDesk, Cointelegraph, Decrypt, The Block) when none is configured. Sentiment and ticker
+extraction run locally over whatever arrives, so the feed degrades to a worse source rather than to
+no news.
+
+<br />
+
 <img src="https://img.shields.io/badge/Claude-Opus_5-D97757?logo=anthropic&logoColor=white" align="left" height="24" /> &nbsp;
 The risk analyst. Given a headline plus the live volatility regime it returns posture, scenarios,
 controls and an invalidation — never a direction. Swappable for OpenAI, and a deterministic rule
@@ -141,6 +171,28 @@ toolchain and the shared domain contract stays in step.
 <img src="https://img.shields.io/badge/Vercel-serverless-000000?logo=vercel&logoColor=white" align="left" height="24" /> &nbsp;
 One project hosts both halves: static output for the dashboard, the Express app as a function on
 `/api` of the same origin — no second host, no CORS, no API base URL to configure.
+
+<br />
+
+<img src="https://img.shields.io/badge/cron--job.org-scheduler-2E7D32?logoColor=white" align="left" height="24" /> &nbsp;
+What actually makes the bot autonomous. Vercel's own cron is limited to one run a day on the free
+tier, which is useless for a scanner that rotates through the board every twenty minutes, so an
+external pinger POSTs `/api/cron/signals` every five minutes with a bearer secret. Nothing about
+the endpoint assumes this particular service — it is an authenticated POST, so any scheduler,
+including Vercel Cron on a paid plan, is a drop-in replacement.
+
+<br />
+
+<img src="https://img.shields.io/badge/concurrently-dev_runner-CB3837?logo=npm&logoColor=white" align="left" height="24" /> &nbsp;
+`npm run dev` brings up the API and the Vite server together with colour-tagged output, so the
+dashboard and the endpoints it calls start and stop as one thing.
+
+<br />
+
+<img src="https://img.shields.io/badge/Headless_Chrome-OG_image-4285F4?logo=googlechrome&logoColor=white" align="left" height="24" /> &nbsp;
+The 1200x630 social card is a real page in the app's own design language, screenshotted by the
+locally installed Chrome over CDP. It cannot drift from the brand, because it *is* the brand's CSS
+— and no design tool sits between the two.
 
 <br />
 
