@@ -23,6 +23,16 @@ interface StrategyProfile {
   threshold: number;
 }
 
+/**
+ * The furthest a target may sit from entry, as a fraction of price.
+ *
+ * Generous on purpose: half of entry is already an enormous move, so this
+ * excludes only setups that are absurd rather than merely aggressive. Its real
+ * job is the hard floor — for a short, a target beyond 100% of entry is not a
+ * price at all.
+ */
+const MAX_TARGET_FRACTION = 0.5;
+
 export const STRATEGY_PROFILES: Record<Strategy, StrategyProfile> = {
   scalping: {
     strategy: 'scalping',
@@ -209,18 +219,43 @@ function buildSignal(
   const volumes = set.candles.map((candle) => candle.volume);
   const read = scoreComponents(profile, closes, volumes, set.candles);
 
-  const direction: Direction =
+  const entry = read.price;
+  const risk = read.atrAbs * profile.stopAtr || entry * 0.004;
+
+  /*
+   * A read can be right about direction and still describe no trade.
+   *
+   * The stop is a multiple of ATR and the target a multiple of the stop, so on
+   * an asset whose ATR approaches its own price the target runs past what a
+   * price can be: a 2.2R short on a coin with a 50% ATR lands *below zero*. That
+   * call can never reach its target — only its stop, or expiry — so publishing
+   * it would be advertising a trade that cannot win and quietly poisoning the
+   * win rate with it.
+   *
+   * This never came up while the scan covered eight majors. It appeared the
+   * moment the radar reached microcaps, which is where a latent bug of this
+   * shape was always going to surface.
+   */
+  const tradable = risk * profile.rewardRatio <= entry * MAX_TARGET_FRACTION;
+
+  const bias: Direction =
     read.total >= profile.threshold ? 'long' : read.total <= -profile.threshold ? 'short' : 'neutral';
+  // No expressible trade is no trade, whatever the indicators agree on.
+  const direction: Direction = tradable ? bias : 'neutral';
 
   const confidence = Math.round(clamp(Math.abs(read.total) * 1.15, 4, 97));
   const status: Signal['status'] =
     direction === 'neutral' ? 'cooling' : confidence >= 62 ? 'live' : 'forming';
 
-  const entry = read.price;
-  const risk = read.atrAbs * profile.stopAtr || entry * 0.004;
   const sign = direction === 'short' ? -1 : 1;
-  const stopLoss = direction === 'neutral' ? entry - risk : entry - sign * risk;
-  const takeProfit = direction === 'neutral' ? entry + risk : entry + sign * risk * profile.rewardRatio;
+  /*
+   * A neutral read draws a volatility band rather than a trade, so it is capped
+   * separately — otherwise the same wild ATR that made the setup untradable
+   * would print a negative price on the card instead of in the alert.
+   */
+  const band = Math.min(risk, entry * 0.25);
+  const stopLoss = direction === 'neutral' ? entry - band : entry - sign * risk;
+  const takeProfit = direction === 'neutral' ? entry + band : entry + sign * risk * profile.rewardRatio;
 
   // Volatility-adjusted sizing: the wider the ATR, the smaller the ticket.
   const suggestedRiskPct = round(

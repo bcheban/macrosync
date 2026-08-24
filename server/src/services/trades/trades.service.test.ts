@@ -200,10 +200,52 @@ describe('trade ledger', () => {
     assert.equal(again.stats.wins, 1);
   });
 
+  it('voids a call whose target is not a price', async () => {
+    script = { WILDUSDT: [[120], [80]] };
+
+    /*
+     * A short with a target below zero. The engine cannot produce these any
+     * more, but ones already in the ledger could still be stopped out — they
+     * could lose and could never win, which is the one shape that genuinely
+     * poisons a win rate.
+     */
+    await trades.openTrade(signal('WILD', 'sell', 100, 130, -25));
+    // Refused at the door, so nothing to settle.
+    assert.equal((await trades.loadActive()).length, 0);
+  });
+
+  it('voids an unresolvable trade already on the books', async () => {
+    script = { OLDUSDT: [[300], [50]] };
+
+    // Written straight to the store, as a deploy before the guard would have.
+    const { setJson, storeKey } = await import('../store/store.js');
+    await setJson(storeKey('trades:active'), [
+      {
+        id: 'OLDUSDT:day:1',
+        symbol: 'OLDUSDT',
+        base: 'OLD',
+        strategy: 'day',
+        side: 'sell',
+        entry: 100,
+        stopLoss: 130,
+        takeProfit: -25,
+        timeframe: '1h',
+        openedAt: new Date().toISOString(),
+      },
+    ]);
+
+    const { closed, stats } = await trades.evaluateTrades();
+
+    assert.equal(closed[0]?.outcome, 'voided');
+    // The stop was reachable — left alone it would have been recorded a loss.
+    assert.equal(stats.losses, 0);
+    assert.equal(stats.voided, 1);
+  });
+
   it('reports a win rate over decided trades only', async () => {
-    assert.equal(trades.winRate({ wins: 3, losses: 1, expired: 0, superseded: 0, byStrategy: {}, updatedAt: '' }), 75);
+    assert.equal(trades.winRate({ wins: 3, losses: 1, expired: 0, superseded: 0, voided: 0, byStrategy: {}, updatedAt: '' }), 75);
     // Expired and superseded calls must not dilute the denominator.
-    assert.equal(trades.winRate({ wins: 3, losses: 1, expired: 9, superseded: 4, byStrategy: {}, updatedAt: '' }), 75);
-    assert.equal(trades.winRate({ wins: 0, losses: 0, expired: 5, superseded: 0, byStrategy: {}, updatedAt: '' }), 0);
+    assert.equal(trades.winRate({ wins: 3, losses: 1, expired: 9, superseded: 4, voided: 0, byStrategy: {}, updatedAt: '' }), 75);
+    assert.equal(trades.winRate({ wins: 0, losses: 0, expired: 5, superseded: 0, voided: 0, byStrategy: {}, updatedAt: '' }), 0);
   });
 });

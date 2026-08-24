@@ -32,8 +32,14 @@ export interface ActiveTrade {
  * `superseded` is one replaced by a reversal on the same pair. Counting either
  * as a loss would be as dishonest as counting it as a win — they are recorded
  * separately so the denominator stays meaningful and nothing is quietly dropped.
+ *
+ * `voided` is a call that could never have resolved: a target that is not a
+ * price. Those existed — the engine could put a short's target below zero on a
+ * violent microcap — and they are the one case that genuinely does poison the
+ * record, because such a trade can still hit its stop. It can lose and it cannot
+ * win. Leaving them to expire would have counted every one of them as a loss.
  */
-export type Outcome = 'win' | 'loss' | 'expired' | 'superseded';
+export type Outcome = 'win' | 'loss' | 'expired' | 'superseded' | 'voided';
 
 export interface ClosedTrade extends ActiveTrade {
   outcome: Outcome;
@@ -47,6 +53,7 @@ export interface TradeStats {
   losses: number;
   expired: number;
   superseded: number;
+  voided: number;
   byStrategy: Record<string, { wins: number; losses: number }>;
   updatedAt: string;
 }
@@ -60,6 +67,7 @@ const EMPTY_STATS: TradeStats = {
   losses: 0,
   expired: 0,
   superseded: 0,
+  voided: 0,
   byStrategy: {},
   updatedAt: new Date(0).toISOString(),
 };
@@ -120,6 +128,25 @@ const close = (trade: ActiveTrade, outcome: Outcome, exit: number): ClosedTrade 
 export async function openTrade(signal: Signal): Promise<{ opened: boolean; superseded?: ClosedTrade }> {
   if (signal.verdict === 'wait') return { opened: false };
 
+  /*
+   * The engine refuses these upstream now, but the ledger checks too: a trade
+   * whose target is not a price is one the record can only ever count against
+   * itself, and that is too costly a thing to guard in exactly one place.
+   */
+  if (
+    !(signal.entry > 0 && signal.stopLoss > 0 && signal.takeProfit > 0) ||
+    (signal.verdict === 'buy'
+      ? !(signal.takeProfit > signal.entry && signal.stopLoss < signal.entry)
+      : !(signal.takeProfit < signal.entry && signal.stopLoss > signal.entry))
+  ) {
+    console.error(`[trades] refused unusable levels for ${signal.symbol}:`, {
+      entry: signal.entry,
+      stopLoss: signal.stopLoss,
+      takeProfit: signal.takeProfit,
+    });
+    return { opened: false };
+  }
+
   const active = await loadActive();
   const key = tradeKey(signal);
   const existing = active.find((trade) => tradeKey(trade) === key);
@@ -162,8 +189,26 @@ export async function openTrade(signal: Signal): Promise<{ opened: boolean; supe
  * When one bar touched both levels the stop wins: intrabar order is unknowable
  * from candles, and reading it the other way would flatter the engine.
  */
+/**
+ * Whether a trade's levels are prices, and on the right sides of entry.
+ *
+ * Cheap, and it has already earned its keep: calls were published with a target
+ * below zero, which the exchange can never reach, so they could only ever be
+ * stopped out.
+ */
+function resolvable(trade: ActiveTrade): boolean {
+  if (!(trade.entry > 0) || !(trade.stopLoss > 0) || !(trade.takeProfit > 0)) return false;
+
+  return trade.side === 'buy'
+    ? trade.takeProfit > trade.entry && trade.stopLoss < trade.entry
+    : trade.takeProfit < trade.entry && trade.stopLoss > trade.entry;
+}
+
 async function resolve(trade: ActiveTrade, now: number): Promise<ClosedTrade | undefined> {
   const age = now - Date.parse(trade.openedAt);
+
+  // Voided before any candle is fetched: there is nothing this tape could say.
+  if (!resolvable(trade)) return close(trade, 'voided', trade.entry);
 
   const set = await getKlines(trade.symbol, INTERVAL[trade.strategy], LOOKBACK[trade.strategy]).catch(
     () => undefined,
@@ -206,6 +251,7 @@ async function record(closed: ClosedTrade[]): Promise<TradeStats> {
     losses: stats.losses + closed.filter((trade) => trade.outcome === 'loss').length,
     expired: stats.expired + closed.filter((trade) => trade.outcome === 'expired').length,
     superseded: stats.superseded + closed.filter((trade) => trade.outcome === 'superseded').length,
+    voided: stats.voided + closed.filter((trade) => trade.outcome === 'voided').length,
     byStrategy: { ...stats.byStrategy },
     updatedAt: new Date().toISOString(),
   };
@@ -257,6 +303,7 @@ export async function tradesStatus() {
     losses: stats.losses,
     expired: stats.expired,
     superseded: stats.superseded,
+    voided: stats.voided,
     winRate: winRate(stats),
     byStrategy: stats.byStrategy,
   };
