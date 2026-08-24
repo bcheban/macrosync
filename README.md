@@ -14,6 +14,9 @@ MacroSync keeps the chart in sync with the macro calendar.
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss&logoColor=white&style=for-the-badge)](https://tailwindcss.com)
 [![Node.js](https://img.shields.io/badge/Node.js-20.19+-5FA04E?logo=nodedotjs&logoColor=white&style=for-the-badge)](https://nodejs.org)
 [![Express](https://img.shields.io/badge/Express-5-000000?logo=express&logoColor=white&style=for-the-badge)](https://expressjs.com)
+[![Upstash Redis](https://img.shields.io/badge/Upstash-Redis-00E9A3?logo=upstash&logoColor=white&style=for-the-badge)](https://upstash.com)
+[![Telegram](https://img.shields.io/badge/Telegram-Bot_API-229ED9?logo=telegram&logoColor=white&style=for-the-badge)](https://core.telegram.org/bots/api)
+[![Tests](https://img.shields.io/badge/tests-50_passing-3FB950?logo=nodedotjs&logoColor=white&style=for-the-badge)](#tech-stack)
 [![Vercel](https://img.shields.io/badge/Vercel-deployed-000000?logo=vercel&logoColor=white&style=for-the-badge)](https://vercel.com)
 
 </div>
@@ -31,12 +34,17 @@ MacroSync keeps the chart in sync with the macro calendar.
    rather than trade calls. The model is instructed never to say buy or sell; it outputs
    conditional posture: `Bearish tone + high volatility → tighten stops to 0.8× ATR, cut size 50%,
    no new leveraged longs until the print clears.`
+4. **An autonomous Telegram bot** — a scheduled scan sweeps the liquid MEXC board on rotation,
+   broadcasts confirmed calls to anyone who sent `/start`, and keeps a ledger of every one it
+   published. When a call reaches its target or its stop the channel is told, and the running win
+   rate is the record of what it got right. The open trades appear on the dashboard too, grouped
+   by strategy and one tap from their chart.
 
 Everything on the screen is live: prices and candles from **MEXC**, headlines from real newsrooms,
-indicators computed from those candles. Three cross-cutting features shape the product: a
-**28-asset universe** with a switcher that re-scopes every panel at once, **prices straight from
-the exchange socket**, and full **English / Ukrainian localization** — down to the sentences the
-signal engine and the AI risk layer generate.
+indicators computed from those candles. Three cross-cutting features shape the product: an asset
+switcher spanning a **curated 28 plus every liquid pair the scanner reaches**, which re-scopes
+every panel at once; **prices straight from the exchange socket**; and full **English / Ukrainian
+localization** — down to the sentences the signal engine and the AI risk layer generate.
 
 ---
 
@@ -136,16 +144,36 @@ One project hosts both halves: static output for the dashboard, the Express app 
 
 <br />
 
+<img src="https://img.shields.io/badge/Upstash-Redis-00E9A3?logo=upstash&logoColor=white" align="left" height="24" /> &nbsp;
+The little state that must outlive a serverless invocation: who is subscribed, which alerts have
+gone out, which trades are open, and where the radar's cursor is. Over Upstash's REST API rather
+than a TCP client — there is no connection to keep warm in a function that may be cold on every
+request. Falls back to an in-memory map when unconfigured, so a local run and an un-provisioned
+deploy still work; they simply forget between invocations.
+
+<br />
+
+<img src="https://img.shields.io/badge/node:test-50_tests-5FA04E?logo=nodedotjs&logoColor=white" align="left" height="24" /> &nbsp;
+The trade ledger, the radar's rotation, the alert dispatch path and the level arithmetic, under test
+with **zero added dependencies** — Node's own runner, executed directly through `tsx`. These are the
+parts where a quiet bug is actively misleading rather than merely broken, and several of the cases
+in there exist because they caught something: a failed send starting a 90-minute silence, an owner
+who could never be unsubscribed, a short priced with a target below zero.
+
+<br />
+
 <img src="https://img.shields.io/badge/GA4-analytics-E37400?logo=googleanalytics&logoColor=white" align="left" height="24" /> &nbsp;
 Product analytics, injected on idle after first paint so it never competes with the app bundle,
 and skipped entirely when unconfigured or when the browser sends Do Not Track.
 
 <br />
 
-<img src="https://img.shields.io/badge/Telegram-alerts-229ED9?logo=telegram&logoColor=white" align="left" height="24" /> &nbsp;
-Push delivery for confirmed calls. The Bot API over plain `fetch` — no SDK — behind a transition
-check and a per-asset cooldown, so a score flapping across its threshold cannot spam the channel
-while a genuine reversal still goes out immediately.
+<img src="https://img.shields.io/badge/Telegram-Bot_API-229ED9?logo=telegram&logoColor=white" align="left" height="24" /> &nbsp;
+A two-way bot over plain `fetch` — no SDK. Outbound, it broadcasts confirmed calls to a subscriber
+roster behind a transition check and a per-asset cooldown, so a score flapping across its threshold
+cannot spam the channel while a genuine reversal still goes out immediately. Inbound, a webhook
+handles `/start`, mutes and inline buttons, verified by the `secret_token` Telegram echoes on every
+call.
 
 ---
 
@@ -179,6 +207,8 @@ provider and Telegram alerts.
 | `npm run build`     | Type-checked production build of both workspaces      |
 | `npm start`         | Run the compiled API from `server/dist`               |
 | `npm run typecheck` | `tsc --noEmit` across both workspaces                 |
+| `npm test`          | The server test suite — Node's runner through `tsx`    |
+| `npm run telegram:webhook --workspace server -- <url>` | Points Telegram at a deployment and publishes the command menu |
 | `npm run og:image --workspace web` | Re-renders the social card from `web/scripts/og-image.html` |
 
 ---
@@ -241,8 +271,8 @@ is why the API function is pinned to `fra1` in `vercel.json`.
 
 | Method | Route                          | Returns                                                    |
 | ------ | ------------------------------ | ---------------------------------------------------------- |
-| GET    | `/api/health`                  | Status, live-data flag, tracked symbols, locales           |
-| GET    | `/api/assets`                  | The tradable universe + groups — powers the asset switcher |
+| GET    | `/api/health`                  | Upstream, store, radar, bot roster, trade ledger, cron runs |
+| GET    | `/api/assets`                  | Curated catalogue **plus** the radar's pairs — the switcher |
 | GET    | `/api/market/tickers`          | 24h stats + 48-point sparkline per symbol                  |
 | GET    | `/api/strategies`              | Strategy definitions (timeframe, stop multiple, R:R)       |
 | GET    | `/api/signals?strategy=day`    | Signals; omit `strategy` for all three                     |
@@ -251,10 +281,19 @@ is why the API function is pinned to `fra1` in `vercel.json`.
 | GET    | `/api/insights?limit=6&lang=uk`| AI risk breakdowns + market context                        |
 | POST   | `/api/insights/refresh`        | Busts the insight cache and regenerates                    |
 | GET    | `/api/context`                 | Volatility regime, breadth, next event                     |
+| GET    | `/api/signals/active`          | Open trades from the ledger, priced — the Live Trades card |
+| POST   | `/api/cron/signals`            | The scheduled scan. `Bearer $CRON_SECRET`; 404s while unset |
+| POST   | `/api/telegram/webhook`        | Telegram updates. Guarded by `secret_token`; 404s while unset |
+| POST   | `/api/alerts/test`             | Sends one real signal to prove the path. `?secret=`        |
 
-`/api/market/tickers` and `/api/signals` both accept `?symbols=BTCUSDT,ETHUSDT` — unknown tickers
-are dropped and the list is capped at `MAX_SYMBOLS_PER_REQUEST`. `?lang=en|uk` on `/api/insights`
-only selects the language the **model** writes in; see *Localization* below.
+The last three **404 rather than 401 while their secret is unset** — an unconfigured deploy denies
+that they exist at all, so nothing is triggerable by anyone who reads the source.
+
+`/api/market/tickers` and `/api/signals` both accept `?symbols=BTCUSDT,ETHUSDT`, validated against
+the curated catalogue *and* whatever the radar currently covers — so a coin the scan found can be
+charted, while anything the exchange does not list is still dropped. The list is capped at
+`MAX_SYMBOLS_PER_REQUEST`. `?lang=en|uk` on `/api/insights` only selects the language the **model**
+writes in; see *Localization* below.
 
 ---
 
@@ -630,12 +669,18 @@ provisioned both fall back to memory and the old caveats return; `/api/health` s
 
 ### Asset universe — `server/src/data/assets.ts`
 
-One catalogue defines everything the platform can price: 28 MEXC spot pairs grouped into
+One catalogue defines the *curated* universe: 28 MEXC spot pairs grouped into
 `majors · layer1 · layer2 · defi · meme · ai`. Every symbol is verified against MEXC's own
 `/api/v3/ticker/24hr`, so a listing that is retired or renamed is caught in the catalogue rather
 than at request time.
 
-`GET /api/assets` exposes the catalogue; `AssetScopeProvider` (`web/src/state/AssetScope.tsx`) holds
+It is no longer the whole story. The scheduled scan covers far more than 28 pairs, and the two
+lists had drifted apart — a trade the bot opened on a coin outside the catalogue was announced in
+Telegram and then could not be charted on the site that announced it. `GET /api/assets` now serves
+the catalogue **plus** whatever the radar currently covers, the latter under a `radar` group because
+grouping is editorial and a ticker is all the exchange provides. See *Global radar* above.
+
+`GET /api/assets` exposes the merged list; `AssetScopeProvider` (`web/src/state/AssetScope.tsx`) holds
 the user's slice of it and every panel reads from that one place, so the header switcher re-scopes
 the ticker tape, the watchlist and the signal grid together. The selection is persisted to
 `localStorage` and validated against the live catalogue on load, so a retired ticker cannot get
@@ -752,20 +797,26 @@ macrosync/
 ├── api/index.mjs                   # Vercel serverless entry — re-exports the Express app
 ├── vercel.json                     # install/build/output + /api rewrite
 ├── server/
+│   ├── scripts/register-webhook.mjs   # points Telegram at a deployment
+│   ├── tsconfig.json                  # build config — excludes *.test.ts
+│   ├── tsconfig.test.json             # typecheck config — includes them
 │   └── src/
 │       ├── app.ts                     # the Express app (no listener — reused by api/)
 │       ├── config/env.ts              # typed configuration
-│       ├── data/assets.ts             # the tradable universe (28 MEXC pairs)
-│       ├── data/{calendar,news}.ts    # mock feeds — replace with real providers
+│       ├── data/assets.ts             # the curated catalogue (28 MEXC pairs)
 │       ├── routes/index.ts            # the whole REST surface
 │       ├── services/
 │       │   ├── market.service.ts      # MEXC REST + TTL cache + circuit breaker
 │       │   ├── calendar.service.ts    # economic calendar, impact-filtered
 │       │   ├── news/                  # provider-agnostic headlines + sentiment
-│       │   ├── telegram/              # alert formatting, debounce, Bot API
+│       │   ├── radar/                 # exchange-wide universe, ranking + cursor
+│       │   ├── store/                 # Upstash Redis over REST, + memory fallback
+│       │   ├── telegram/              # roster · broadcast · webhook · Bot API
+│       │   ├── trades/                # the ledger behind the win rate
 │       │   ├── signal.engine.ts       # strategy profiles → signals
 │       │   ├── insight.service.ts     # provider selection + fallback
-│       │   └── llm/                   # prompt, anthropic, openai, heuristic
+│       │   ├── llm/                   # prompt, anthropic, openai, heuristic
+│       │   └── **/*.test.ts           # colocated — `npm test` runs them via tsx
 │       ├── types/domain.ts            # the API contract
 │       └── utils/{cache,indicators}.ts# TTL cache · EMA/RSI/MACD/ATR
 └── web/
@@ -890,11 +941,13 @@ during a refresh so the dashboard never flashes empty.
 
 ## Roadmap / where to extend
 
-- Replace the mock feeds with real providers (CryptoPanic, NewsAPI, Trading Economics).
 - Backtest the signal thresholds — the win rate now records live outcomes, but the parameters
   behind them have still never been measured against history.
 - Persist insights so the feed has history, and score past scenarios against what actually happened.
-- Add auth + per-user watchlists and alerting on countdown thresholds.
+- Auth on the web side. Telegram already has per-person subscriptions and mutes, but the dashboard
+  has no accounts, so a watchlist cannot follow somebody between the two.
+- Per-recipient filters: a subscriber can mute everything or nothing, where most would want a
+  strategy or a confidence floor.
 - Grow the locale set — the `Translation` type makes a new language a mechanical, type-checked job.
 
 ---
