@@ -201,6 +201,10 @@ Everything lives in `server/.env` (see `server/.env.example`). Every value has a
 | `TELEGRAM_BOT_TOKEN`    | —                       | Enables signal alerts — see *Telegram alerts*                |
 | `TELEGRAM_CHAT_ID`      | —                       | Where alerts are posted                                     |
 | `TELEGRAM_COOLDOWN_MS`  | `5400000`               | Quiet period per asset; reversals ignore it                 |
+| `CRON_SECRET`           | —                       | Guards `/api/cron/signals`; the route 404s while unset       |
+| `CRON_STRATEGIES`       | all three               | Which strategies the scheduled run evaluates                |
+| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | —        | Upstash Redis; injected by the Vercel integration           |
+| `ALERTS_TEST_SECRET`    | —                       | Guards `/api/alerts/test`                                   |
 | `LLM_PROVIDER`          | `auto`                  | `auto` · `anthropic` · `openai` · `heuristic`                |
 | `ANTHROPIC_API_KEY`     | —                       | Enables the Claude risk analyst                             |
 | `ANTHROPIC_MODEL`       | `claude-opus-5`         |                                                             |
@@ -349,6 +353,69 @@ tagged "Bitcoin near current levels" as a NEAR story.
 Headlines are cached for five minutes, and a failed refresh serves the previous payload rather than
 emptying the feed.
 
+### Autonomous alerts — `/api/cron/signals`
+
+Alerting used to hang off the signal read path, which meant the bot only spoke while somebody had
+the dashboard open — on serverless, nothing runs between requests. A scheduled endpoint owns it now:
+
+1. recompute every tracked strategy and alert on calls that just confirmed
+2. settle any open trade that reached its target or its stop, and announce it
+
+It is **idempotent**: running it twice in a row sends nothing the second time, because the alert
+guards and the trade ledger both live in the store. Strategies are evaluated sequentially on
+purpose — three of them times sixteen symbols in parallel is exactly the burst MEXC rate limits.
+
+```bash
+curl -X POST "https://your-app.vercel.app/api/cron/signals"   -H "Authorization: Bearer $CRON_SECRET"
+```
+
+```jsonc
+{ "ok": true, "evaluated": { "scalping": 8, "day": 8, "swing": 8 },
+  "alerted": 0, "closed": [], "open": 0, "winRate": null, "tookMs": 1837 }
+```
+
+The route 404s while `CRON_SECRET` is unset, so an unconfigured deploy cannot be triggered by
+anyone who reads the source.
+
+#### Win rate — `server/src/services/trades/`
+
+Every alert opens a trade. Each scheduled run replays the candles **since entry** and settles the
+ones that touched a level — checking the last price would miss a wick that happened between two
+runs, so this uses the actual highs and lows.
+
+When a single bar touched both levels the **stop wins**: intrabar order is unknowable from candles,
+and counting it as a win would flatter the record. One open trade per asset+strategy, so a reversal
+cannot leave two contradictory trades running against each other.
+
+> The rate measures whether the target or the stop came first. It is not a P&L: it assumes a fill at
+> the stated entry, no fees and no slippage. Treat it as a scoreboard for the engine, not a return.
+
+#### Provisioning storage (Upstash Redis)
+
+Without it everything still runs, but the ledger and the alert guards live in memory and reset on
+every cold start — the win rate would restart at zero and alerts could repeat.
+
+1. Vercel dashboard → your project → **Storage** → **Create Database** → **Upstash for Redis** (in
+   the Marketplace section). The free tier is far larger than this needs.
+2. Choose a region near your function — `fra1` if you kept the pin in `vercel.json`.
+3. Connect it to the project. Vercel injects `KV_REST_API_URL` and `KV_REST_API_TOKEN`
+   automatically; the code also accepts Upstash's own `UPSTASH_REDIS_REST_*` names.
+4. Redeploy, then confirm: `GET /api/health` → `"store": { "backend": "redis", "persistent": true }`.
+
+#### Scheduling the run
+
+Vercel Cron on the Hobby plan only fires once a day, which is useless for this, so use an external
+pinger. [cron-job.org](https://cron-job.org) is free and enough:
+
+1. Create a cronjob with URL `https://your-app.vercel.app/api/cron/signals`
+2. **Method:** POST
+3. **Schedule:** every 5 minutes
+4. **Headers:** `Authorization: Bearer <your CRON_SECRET>`
+5. Enable failure notifications so a silent bot does not go unnoticed
+
+UptimeRobot, EasyCron or a GitHub Actions `schedule:` workflow all work the same way. Five minutes
+is a sensible floor: the scalping timeframe is 5m bars, so a faster poll cannot see anything new.
+
 ### Telegram alerts — `server/src/services/telegram/`
 
 Confirmed calls are pushed to a Telegram chat as they fire. The notifier is inert unless both
@@ -366,10 +433,9 @@ cannot affect the request that produced the signal.
 A genuine **reversal ignores the cooldown**: BUY → SELL is the tape turning over, not threshold
 flapping, and anyone holding the previous call needs it immediately.
 
-> **Known limitation.** The alert state lives in memory. On a serverless deploy each instance keeps
-> its own, so a cold start can repeat an alert a previous instance already sent, and alerts are
-> emitted while the dashboard is being used rather than on a schedule. Moving the state to Redis (or
-> running the API as a long-lived process) fixes both.
+Alert state lives in the shared store, so the guards survive a cold start, and delivery is driven by
+`/api/cron/signals` rather than by dashboard traffic — see *Autonomous alerts* above. With no Redis
+provisioned both fall back to memory and the old caveats return; `/api/health` says which.
 
 #### Setting up the bot
 
@@ -656,7 +722,8 @@ during a refresh so the dashboard never flashes empty.
 ## Roadmap / where to extend
 
 - Replace the mock feeds with real providers (CryptoPanic, NewsAPI, Trading Economics).
-- Persist alert state (Redis) so the Telegram cooldown survives a cold start.
+- Backtest the signal thresholds — the win rate now records live outcomes, but the parameters
+  behind them have still never been measured against history.
 - Persist insights so the feed has history, and score past scenarios against what actually happened.
 - Add auth + per-user watchlists and alerting on countdown thresholds.
 - Grow the locale set — the `Translation` type makes a new language a mechanical, type-checked job.
