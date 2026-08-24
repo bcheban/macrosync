@@ -70,6 +70,7 @@ export const en = {
       defi: 'DeFi',
       meme: 'Memecoins',
       ai: 'AI & DePIN',
+      radar: 'Radar',
     },
     names: {},
   },
@@ -83,6 +84,17 @@ export const en = {
     subtitle: '24h change · quote volume',
     volume: 'Vol {{value}}',
     empty: 'No assets selected.',
+  },
+
+  liveTrades: {
+    title: 'Live Trades',
+    subtitle: 'What the alert bot is tracking right now',
+    long: 'Long',
+    short: 'Short',
+    entry: 'Entry',
+    record: '{{rate}}% · {{decided}} settled',
+    empty:
+      'No trades open. The scanner sweeps the liquid MEXC pairs every few minutes and opens one here the moment a call is confirmed.',
   },
 
   signals: {
@@ -210,6 +222,8 @@ export const en = {
 
   /** Plain-language explanations for the terms a first-time visitor will stall on. */
   glossary: {
+    liveTrades:
+      'The trades behind the Telegram alerts. Each one opened when a call was confirmed and closes when price reaches its target or its stop — the win rate counts those two outcomes only. Tap a row to chart that asset.',
     signalsLabel: 'What are strategy signals?',
     signals:
       'Each card is one asset on one timeframe. Indicators are computed from live MEXC candles — nothing is predicted, they only describe what the tape has already done. If a macro release lands inside the trade’s horizon, the card says so.',

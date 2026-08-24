@@ -1,13 +1,20 @@
 import { Router, type Request, type Response } from 'express';
 import { env } from '../config/env.js';
-import { ASSET_GROUPS, assetCatalog, isKnownSymbol } from '../data/assets.js';
+import { ASSET_GROUPS } from '../data/assets.js';
 import { calendarStatus, getUpcomingEvents, getHeadlineEvent } from '../services/calendar.service.js';
 import { getNews, newsStatus } from '../services/news/news.service.js';
 import { getTickers, upstreamStatus } from '../services/market.service.js';
 import { getInsights, getMarketContext, invalidateInsights } from '../services/insight.service.js';
 import { getSignals, isStrategy, STRATEGY_PROFILES } from '../services/signal.engine.js';
 import { alertsStatus, notifyClosed, notifySignals, sendTestAlert } from '../services/telegram/alerts.service.js';
-import { nextBatch, radarStatus } from '../services/radar/universe.service.js';
+import { botStatus, handleUpdate, type TelegramUpdate } from '../services/telegram/webhook.service.js';
+import { getActiveSignals } from '../services/trades/active.service.js';
+import {
+  isSelectableSymbol,
+  nextBatch,
+  radarStatus,
+  selectableAssets,
+} from '../services/radar/universe.service.js';
 import { telegramStatus } from '../services/telegram/telegram.client.js';
 import { acquireLock, getJson, releaseLock, setJson, storeKey, storeStatus } from '../services/store/store.js';
 import { evaluateTrades, tradesStatus, winRate } from '../services/trades/trades.service.js';
@@ -37,13 +44,22 @@ const parseLocale = (req: Request): Locale => {
  * `?symbols=BTCUSDT,ETHUSDT` — unknown tickers are dropped rather than passed
  * upstream, and the list is capped because each symbol costs one kline fetch.
  */
-const parseSymbols = (req: Request): string[] | undefined => {
+const parseSymbols = async (req: Request): Promise<string[] | undefined> => {
   const raw = req.query.symbols;
   if (typeof raw !== 'string' || !raw.trim()) return undefined;
-  const symbols = raw
-    .split(',')
-    .map((symbol) => symbol.trim().toUpperCase())
-    .filter((symbol) => isKnownSymbol(symbol))
+
+  const requested = raw.split(',').map((symbol) => symbol.trim().toUpperCase());
+  /*
+   * Validated against the curated catalogue *and* the radar. The dashboard can
+   * now select a pair the scan found, and rejecting it here would have made
+   * those coins un-chartable on the very site that announced them — while still
+   * refusing anything the exchange does not list.
+   */
+  const checked = await Promise.all(requested.map(async (symbol) => [symbol, await isSelectableSymbol(symbol)] as const));
+
+  const symbols = checked
+    .filter(([, allowed]) => allowed)
+    .map(([symbol]) => symbol)
     .slice(0, env.maxSymbolsPerRequest);
   /*
    * `undefined`, never an empty array: the caller reads this as "no preference"
@@ -66,9 +82,11 @@ api.get(
     marketTimeoutMs: env.marketTimeoutMs,
     maxSymbolsPerRequest: env.maxSymbolsPerRequest,
     symbols: env.symbols,
-    universe: assetCatalog().length,
+    /** What the dashboard may select: the curated list plus the radar's pairs. */
+    selectable: (await selectableAssets()).length,
     locales: LOCALES,
       radar: await radarStatus(),
+      bot: await botStatus(),
       trades: await tradesStatus(),
       cron: await getJson<{ runs: number; lastRunAt?: string }>(CRON_KEY, { runs: 0 }),
       time: new Date().toISOString(),
@@ -77,19 +95,22 @@ api.get(
 );
 
 /** The tradable universe the dashboard's asset switcher is built from. */
-api.get('/assets', (_req, res) => {
-  res.json({
-    assets: assetCatalog(),
-    groups: ASSET_GROUPS,
-    defaults: env.symbols,
-    maxPerRequest: env.maxSymbolsPerRequest,
-  });
-});
+api.get(
+  '/assets',
+  route(async (_req, res) => {
+    res.json({
+      assets: await selectableAssets(),
+      groups: ASSET_GROUPS,
+      defaults: env.symbols,
+      maxPerRequest: env.maxSymbolsPerRequest,
+    });
+  }),
+);
 
 api.get(
   '/market/tickers',
   route(async (req, res) => {
-    res.json({ tickers: await getTickers(parseSymbols(req) ?? [...env.symbols]) });
+    res.json({ tickers: await getTickers((await parseSymbols(req)) ?? [...env.symbols]) });
   }),
 );
 
@@ -114,7 +135,7 @@ api.get(
       return;
     }
     const strategy = isStrategy(raw) ? raw : undefined;
-    res.json({ signals: await getSignals(strategy, parseSymbols(req) ?? [...env.symbols]) });
+    res.json({ signals: await getSignals(strategy, (await parseSymbols(req)) ?? [...env.symbols]) });
   }),
 );
 
@@ -280,5 +301,47 @@ api.get(
   '/context',
   route(async (_req, res) => {
     res.json(await getMarketContext());
+  }),
+);
+
+/**
+ * Telegram's webhook.
+ *
+ * Answers 200 to anything it accepts, whatever happened inside: Telegram
+ * redelivers a non-200, and an update that fails once fails identically every
+ * time, so an error here becomes an infinite retry loop rather than a fix.
+ *
+ * The guard is `secret_token`, which Telegram echoes on every call. This is a
+ * public URL — without the header check, anyone could forge a subscription or a
+ * button press. The route 404s while the secret is unset rather than running
+ * open, so a half-configured deploy accepts nothing.
+ */
+api.post(
+  '/telegram/webhook',
+  route(async (req, res) => {
+    const provided = req.headers['x-telegram-bot-api-secret-token'];
+
+    if (!env.telegramWebhookSecret || provided !== env.telegramWebhookSecret) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    const result = await handleUpdate((req.body ?? {}) as TelegramUpdate);
+    res.json({ ok: true, ...result });
+  }),
+);
+
+/**
+ * The trades the bot is currently tracking.
+ *
+ * Priced from the exchange-wide ticker feed rather than per symbol: one request
+ * covers every open trade no matter how many there are, where nineteen separate
+ * lookups would be nineteen round trips and a rate-limit risk for a panel that
+ * polls.
+ */
+api.get(
+  '/signals/active',
+  route(async (_req, res) => {
+    res.json(await getActiveSignals());
   }),
 );

@@ -211,6 +211,8 @@ Everything lives in `server/.env` (see `server/.env.example`). Every value has a
 | `ALERTS_MAX_PER_RUN`    | `4`                     | Budget for the whole run; lowest conviction is dropped first |
 | `ALERTS_SEND_GAP_MS`    | `1200`                  | Pacing, to stay under Telegram's per-chat rate limit         |
 | `ALERTS_SEND_RETRIES`   | `3`                     | Attempts before a message is abandoned for the run           |
+| `TELEGRAM_WEBHOOK_SECRET` | —                     | Guards `/api/telegram/webhook`; the route 404s while unset    |
+| `PUBLIC_BASE_URL`       | —                       | Where Telegram delivers, for the registration script          |
 | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | —        | Upstash Redis; injected by the Vercel integration           |
 | `ALERTS_TEST_SECRET`    | —                       | Guards `/api/alerts/test`                                   |
 | `LLM_PROVIDER`          | `auto`                  | `auto` · `anthropic` · `openai` · `heuristic`                |
@@ -415,6 +417,63 @@ widens the net into thinner markets — a deliberate trade, not an oversight.
 At 18 pairs per run a full sweep takes four runs, so a five-minute schedule covers the whole board
 every twenty minutes and each run finishes in three to four seconds.
 
+#### Subscribers — `server/src/services/telegram/subscribers.service.ts`
+
+The bot posts to a roster, not to a chat id. Anyone who sends `/start` is added to a Redis set and
+receives every subsequent call; `TELEGRAM_CHAT_ID` is still honoured, seeded into that roster **once**
+so a fresh deploy alerts its operator before anybody has subscribed.
+
+Seeding once rather than merging the owner in on every read is the whole subtlety. Injecting them at
+send time made the owner the one recipient who could never be removed — if they blocked the bot,
+every run would keep trying to reach them, for ever.
+
+Each recipient is isolated during a broadcast. One person blocking the bot cannot cost the rest of
+the roster their alert: Telegram's `403 bot was blocked` (and `chat not found`, and `user is
+deactivated`) drops that chat from the set and the loop carries on. That is attrition, not a fault,
+so it is not counted as a delivery failure — recording it as one would make a healthy roster look
+broken.
+
+| Command | Effect |
+| --- | --- |
+| `/start` | Subscribe. Also lifts a mute — starting again reads as "talk to me" |
+| `/stats` | Win rate, record and open trades |
+| `/mute` · 🛑 button | Two hours of quiet for that one person |
+| `/unmute` | Lift it early |
+| `/stop` | Unsubscribe |
+
+Mutes are per-recipient and stored as a key with a TTL, so Redis expiring it *is* the unmute — there
+is nothing scheduled and nothing to clean up. A muted subscriber is skipped, never dropped.
+
+A call still opens a trade when every subscriber is muted. Muting a phone is a delivery preference,
+not a change to the call, and letting it stop the ledger would leave the win rate with holes wherever
+the only subscriber wanted an evening off.
+
+#### Webhook — `POST /api/telegram/webhook`
+
+Telegram delivers updates by POSTing to a public URL, so the endpoint is reachable by anyone who
+guesses it. `setWebhook` accepts a `secret_token` which Telegram then echoes in
+`X-Telegram-Bot-Api-Secret-Token` on every call, and checking that header is the only thing between
+this handler and a stranger forging subscriptions or button presses. **The route 404s while
+`TELEGRAM_WEBHOOK_SECRET` is unset** rather than running open.
+
+It answers 200 to everything it accepts, whatever happened inside: Telegram redelivers a non-200, and
+an update that fails once fails identically every time — so an error here becomes a retry loop rather
+than a fix.
+
+Registering it:
+
+```bash
+# 1. Generate a secret and set it in BOTH places
+node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"
+vercel env add TELEGRAM_WEBHOOK_SECRET production
+
+# 2. Point Telegram at the deployment (also publishes the command menu)
+npm run telegram:webhook --workspace server -- https://your-app.vercel.app
+```
+
+The script prints `getWebhookInfo` afterwards, including `last_error_message` — which is where a
+wrong URL or a secret that only got set locally shows up.
+
 #### Delivery — `server/src/services/telegram/`
 
 A notifier that fails quietly is worse than one that fails loudly, and this one used to do the
@@ -441,6 +500,25 @@ it a per-strategy cap — three times the messages intended — and let each str
 isolation, so a marginal scalp could go out ahead of a much stronger swing. On a five-minute
 schedule the budget sets the ceiling directly: four per run is at most 48 messages an hour, and far
 fewer in practice once the per-pair quiet period fills in.
+
+#### Live trades on the dashboard — `GET /api/signals/active`
+
+The ledger and the website used to be separate worlds: Telegram knew which calls were open and the
+site did not, so the two could describe the same moment differently. `/api/signals/active` returns
+the open trades with a live price, the unrealised move, and how far each has travelled from entry
+toward its target — negative when it has gone the other way, unclamped, because a trade most of the
+way to its stop is exactly what somebody looking at this panel needs to see.
+
+They are priced from the exchange-wide ticker feed. One request covers every open trade no matter how
+many there are, where per-symbol lookups would be one round trip each on a panel that polls.
+
+The **Live Trades** card groups them by strategy and every row selects that asset, so a call that
+arrives on the phone is one tap from its chart. That last part needed a fix underneath: the scan
+reaches sixty-odd pairs while the dashboard's curated catalogue knew twenty-eight, and symbol
+validation rejected the difference — a trade the bot opened on a coin outside the catalogue could be
+announced in Telegram and then be un-chartable on the site that announced it. `/api/assets` now
+serves the catalogue **plus** whatever the radar currently covers, under a `radar` group, and
+validation accepts both while still refusing anything the exchange does not list.
 
 #### Win rate — `server/src/services/trades/`
 

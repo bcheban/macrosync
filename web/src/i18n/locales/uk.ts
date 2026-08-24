@@ -70,6 +70,7 @@ export const uk: Translation = {
       defi: 'DeFi',
       meme: 'Мемкоїни',
       ai: 'AI та DePIN',
+      radar: 'Радар',
     },
     // Only the names Ukrainian press actually localizes; the rest fall back to
     // the catalogue's proper nouns.
@@ -88,6 +89,17 @@ export const uk: Translation = {
     subtitle: 'Зміна за 24 год · обсяг у котирувальній валюті',
     volume: 'Обсяг {{value}}',
     empty: 'Активи не обрані.',
+  },
+
+  liveTrades: {
+    title: 'Активні угоди',
+    subtitle: 'Те, що бот відстежує просто зараз',
+    long: 'Лонг',
+    short: 'Шорт',
+    entry: 'Вхід',
+    record: '{{rate}}% · {{decided}} закрито',
+    empty:
+      'Відкритих угод немає. Сканер обходить ліквідні пари MEXC кожні кілька хвилин і відкриє угоду тут, щойно підтвердиться сигнал.',
   },
 
   signals: {
@@ -209,6 +221,8 @@ export const uk: Translation = {
 
   /** Plain-language explanations for the terms a first-time visitor will stall on. */
   glossary: {
+    liveTrades:
+      'Угоди, що стоять за сповіщеннями в Telegram. Кожна відкрилась на підтвердженому сигналі й закриється, коли ціна дійде до цілі або до стопа — вінрейт рахує лише ці два результати. Натисни рядок, щоб побачити графік.',
     signalsLabel: 'Що таке сигнали стратегій?',
     signals:
       'Кожна картка — це один актив на одному таймфреймі. Індикатори рахуються з живих свічок MEXC: вони нічого не передбачають, лише описують те, що ринок уже зробив. Якщо макропублікація потрапляє в горизонт угоди, картка про це попереджає.',

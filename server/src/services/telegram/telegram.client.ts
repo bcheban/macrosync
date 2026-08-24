@@ -63,6 +63,21 @@ export interface SendResult {
   error?: string;
   /** True when trying the same message again could plausibly work. */
   retryable?: boolean;
+  /**
+   * The recipient is gone for good — blocked the bot, deleted the account, or
+   * the chat no longer exists. The caller drops them from the roster; retrying
+   * would fail identically every run, forever.
+   */
+  blocked?: boolean;
+}
+
+/** One row of buttons under a message. */
+export type InlineKeyboard = { text: string; callback_data: string }[][];
+
+export interface SendOptions {
+  /** Defaults to the owner chat from the environment. */
+  chatId?: string;
+  keyboard?: InlineKeyboard;
 }
 
 /** What Telegram puts in the body. `ok` is authoritative; the status is not. */
@@ -72,10 +87,28 @@ interface BotApiResponse {
   parameters?: { retry_after?: number };
 }
 
-/** Rate limiting is the one failure worth waiting out rather than dropping. */
-let nextSendAt = 0;
+/**
+ * Telegram enforces two separate limits, so this tracks two clocks.
+ *
+ * About one message per second to any single chat, and about thirty a second
+ * across all of them. Pacing a broadcast at the per-chat rate would take half a
+ * minute to reach twenty subscribers for no reason — they are different chats.
+ */
+let nextGlobalSendAt = 0;
+const nextChatSendAt = new Map<string, number>();
 
-async function attempt(html: string): Promise<SendResult & { retryAfterMs?: number }> {
+/** ~25/s, comfortably inside the documented 30. */
+const GLOBAL_GAP_MS = 40;
+
+/** Descriptions that mean the recipient will never receive anything again. */
+const GONE = ['bot was blocked', 'user is deactivated', 'chat not found', 'bot was kicked', 'group chat was upgraded'];
+
+const isGone = (status: number, description: string): boolean => {
+  const detail = description.toLowerCase();
+  return (status === 403 || status === 400) && GONE.some((phrase) => detail.includes(phrase));
+};
+
+async function attempt(html: string, options: SendOptions): Promise<SendResult & { retryAfterMs?: number }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), env.telegramTimeoutMs);
 
@@ -85,11 +118,12 @@ async function attempt(html: string): Promise<SendResult & { retryAfterMs?: numb
       signal: controller.signal,
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        chat_id: env.telegramChatId,
+        chat_id: options.chatId ?? env.telegramChatId,
         text: html,
         parse_mode: 'HTML',
         // The alert is the message; a link preview would bury it.
         link_preview_options: { is_disabled: true },
+        ...(options.keyboard ? { reply_markup: { inline_keyboard: options.keyboard } } : {}),
       }),
     });
 
@@ -105,6 +139,10 @@ async function attempt(html: string): Promise<SendResult & { retryAfterMs?: numb
 
     const detail = body?.description ?? `${response.status} ${response.statusText}`;
     const retryAfter = body?.parameters?.retry_after;
+
+    if (isGone(response.status, detail)) {
+      return { delivered: false, retryable: false, blocked: true, error: detail };
+    }
 
     if (response.status === 429 || retryAfter) {
       return {
@@ -137,26 +175,30 @@ async function attempt(html: string): Promise<SendResult & { retryAfterMs?: numb
  * every outcome lands in the delivery counters, and the caller is told whether
  * the message actually arrived so it can decide what to record.
  */
-export async function sendTelegramMessage(html: string): Promise<SendResult> {
+export async function sendTelegramMessage(html: string, options: SendOptions = {}): Promise<SendResult> {
   if (!telegramConfigured()) return { delivered: false, error: 'not configured' };
 
-  // Telegram accepts roughly one message per second to a chat; pace to suit.
-  const wait = nextSendAt - Date.now();
+  const chat = options.chatId ?? env.telegramChatId;
+
+  // Whichever clock is further out decides when this message may go.
+  const wait = Math.max(nextGlobalSendAt, nextChatSendAt.get(chat) ?? 0) - Date.now();
   if (wait > 0) await sleep(wait);
 
   let retries = 0;
   let last: SendResult = { delivered: false, error: 'no attempt made' };
 
   for (let tries = 0; tries < env.alertsSendRetries; tries += 1) {
-    const result = await attempt(html);
-    nextSendAt = Date.now() + env.alertsSendGapMs;
+    const result = await attempt(html, options);
+    const now = Date.now();
+    nextGlobalSendAt = now + GLOBAL_GAP_MS;
+    nextChatSendAt.set(chat, now + env.alertsSendGapMs);
 
     if (result.delivered) {
       await bumpStats({ delivered: 1, retries });
       return { delivered: true };
     }
 
-    last = { delivered: false, error: result.error, retryable: result.retryable };
+    last = { delivered: false, error: result.error, retryable: result.retryable, blocked: result.blocked };
     if (!result.retryable) break;
 
     retries += 1;
@@ -165,6 +207,13 @@ export async function sendTelegramMessage(html: string): Promise<SendResult> {
     console.warn(`[telegram] attempt ${tries + 1} failed (${result.error}); retrying in ${backoff}ms`);
     if (tries + 1 < env.alertsSendRetries) await sleep(Math.min(backoff, 8_000));
   }
+
+  /*
+   * A recipient who blocked the bot is expected attrition, not a fault. Logging
+   * it as an error and recording it as a delivery failure would make a healthy
+   * roster look broken and bury real problems under the noise.
+   */
+  if (last.blocked) return last;
 
   console.error('[telegram] send failed:', last.error);
   await bumpStats({ failed: 1, retries, error: last.error ?? 'unknown' });
@@ -188,5 +237,26 @@ async function bumpStats(delta: { delivered?: number; failed?: number; retries: 
   } catch (error) {
     // Bookkeeping must never be the reason an alert path fails.
     console.warn('[telegram] could not record delivery stats:', (error as Error).message);
+  }
+}
+
+/**
+ * Acknowledges a button press.
+ *
+ * Telegram shows a spinner on the button until this is called, so it must
+ * happen on every callback — including the ones that fail — or the button looks
+ * stuck. The toast text is optional; without it the spinner just clears.
+ */
+export async function answerCallbackQuery(id: string, text?: string, showAlert = false): Promise<void> {
+  if (!telegramConfigured()) return;
+
+  try {
+    await fetch(`${API}/bot${env.telegramBotToken}/answerCallbackQuery`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ callback_query_id: id, text, show_alert: showAlert }),
+    });
+  } catch (error) {
+    console.warn('[telegram] callback ack failed:', (error as Error).message);
   }
 }

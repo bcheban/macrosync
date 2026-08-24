@@ -9,6 +9,7 @@ import { BackgroundFX } from '@/components/layout/BackgroundFX';
 import { TopBar } from '@/components/layout/TopBar';
 import { TickerStrip } from '@/components/market/TickerStrip';
 import { Watchlist } from '@/components/market/Watchlist';
+import { LiveTrades } from '@/components/signals/LiveTrades';
 import { SignalsPanel } from '@/components/signals/SignalsPanel';
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { useDocumentMeta } from '@/hooks/useDocumentMeta';
@@ -54,6 +55,12 @@ function Dashboard() {
   const [showLowImpact, setShowLowImpact] = useState(false);
   const events = usePolling((signal) => api.events(showLowImpact, signal), 30_000, [showLowImpact]);
   // Re-fetched on a language switch: model-written insights come back translated.
+  /*
+   * The ledger the Telegram bot writes. Polled on its own clock rather than with
+   * the signal grid: it changes when the scheduled scan runs, not when the user
+   * changes their asset selection, so it must not re-fetch on every toggle.
+   */
+  const active = usePolling((signal) => api.activeSignals(signal), 30_000, []);
   const insights = usePolling((signal) => api.insights(locale, signal), 60_000, [i18n.resolvedLanguage], {
     // Below the fold and the heaviest response of the three — it can wait.
     deferUntilIdle: true,
@@ -62,10 +69,11 @@ function Dashboard() {
   const refreshAll = () => {
     tickers.refresh();
     events.refresh();
+    active.refresh();
     insights.refresh();
   };
 
-  const refreshing = tickers.refreshing || events.refreshing || insights.refreshing;
+  const refreshing = tickers.refreshing || events.refreshing || active.refreshing || insights.refreshing;
 
   return (
     <div className="min-h-screen">
@@ -87,6 +95,7 @@ function Dashboard() {
           <SignalsPanel />
 
           <aside className="min-w-0 space-y-5 sm:space-y-6 lg:sticky lg:top-24 lg:self-start">
+            <LiveTrades data={active.data} loading={active.loading} />
             <Watchlist tickers={market.tickers} loading={tickers.loading} expected={selected.length || 8} />
             <EventQueue
               events={events.data?.events ?? []}

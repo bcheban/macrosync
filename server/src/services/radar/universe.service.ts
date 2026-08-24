@@ -1,5 +1,7 @@
 import { env } from '../../config/env.js';
-import { getAllTickers24h, type MarketSummary } from '../market.service.js';
+import { getAllTickers24h, splitSymbol, type MarketSummary } from '../market.service.js';
+import { assetCatalog, isKnownSymbol } from '../../data/assets.js';
+import type { AssetMeta } from '../../types/domain.js';
 import { getJson, setJson, storeKey } from '../store/store.js';
 
 /**
@@ -183,4 +185,42 @@ export async function radarStatus() {
     builtAt: universe.builtAt ? new Date(universe.builtAt).toISOString() : null,
     runsPerSweep: universe.symbols.length ? Math.ceil(universe.symbols.length / env.radarBatchSize) : 0,
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/*  What the dashboard may show                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The curated catalogue plus everything the radar currently covers.
+ *
+ * The two lists had drifted apart. The scan reaches sixty-odd pairs while the
+ * dashboard knew twenty-eight, and `isKnownSymbol` rejected the difference — so
+ * a trade the bot opened on a coin outside the catalogue could be announced in
+ * Telegram and then be un-chartable on the site that announced it.
+ *
+ * Radar-only pairs are given their own group rather than being guessed into a
+ * category. Grouping is editorial and there is nothing to edit them with; a
+ * ticker and a market is all the exchange provides.
+ */
+export async function selectableAssets(): Promise<AssetMeta[]> {
+  const curated = assetCatalog();
+  const known = new Set(curated.map((asset) => asset.symbol));
+  const { symbols } = await getUniverse();
+
+  const extras = symbols
+    .filter((symbol) => !known.has(symbol))
+    .map((symbol) => {
+      const { base, quote } = splitSymbol(symbol);
+      return { symbol, base, quote, name: base, group: 'radar' as const };
+    });
+
+  return [...curated, ...extras];
+}
+
+/** Whether a symbol may be priced on request — the curated list or the radar. */
+export async function isSelectableSymbol(symbol: string): Promise<boolean> {
+  if (isKnownSymbol(symbol)) return true;
+  const { symbols } = await getUniverse();
+  return symbols.includes(symbol);
 }

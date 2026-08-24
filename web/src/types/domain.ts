@@ -30,7 +30,7 @@ export interface I18nText {
   text: string;
 }
 
-export type AssetGroup = 'majors' | 'layer1' | 'layer2' | 'defi' | 'meme' | 'ai';
+export type AssetGroup = 'majors' | 'layer1' | 'layer2' | 'defi' | 'meme' | 'ai' | 'radar';
 
 export interface AssetMeta {
   symbol: string;
@@ -204,6 +204,36 @@ export interface EventsResponse {
   /** Absent when the calendar has nothing left this week. */
   headline?: MacroEvent;
 }
+/** One trade the bot is tracking right now, as the dashboard sees it. */
+export interface ActiveSignal {
+  id: string;
+  symbol: string;
+  base: string;
+  name: string;
+  strategy: Strategy;
+  side: 'buy' | 'sell';
+  timeframe: string;
+  entry: number;
+  stopLoss: number;
+  takeProfit: number;
+  /** Null when the exchange feed could not be read; the row still renders. */
+  price: number | null;
+  unrealisedPct: number | null;
+  /** Percent of the way from entry to target. Negative means toward the stop. */
+  progressPct: number | null;
+  openedAt: string;
+  ageMinutes: number;
+}
+
+export interface ActiveSignalsResponse {
+  signals: ActiveSignal[];
+  counts: Record<string, number>;
+  winRate: number;
+  /** Trades that reached a level — the denominator behind the win rate. */
+  decided: number;
+  updatedAt: string;
+}
+
 export interface InsightsResponse {
   insights: AiInsight[];
   context: MarketContext;

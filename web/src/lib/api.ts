@@ -1,4 +1,5 @@
 import type {
+  ActiveSignalsResponse,
   AssetsResponse,
   EventsResponse,
   InsightsResponse,
@@ -32,6 +33,9 @@ export const api = {
 
   signals: (strategy: Strategy, symbols: string[], signal?: AbortSignal) =>
     get<SignalsResponse>(`/signals${query(`strategy=${strategy}`, symbolsParam(symbols))}`, signal),
+
+  /** What the Telegram bot is tracking right now — the ledger, priced. */
+  activeSignals: (signal?: AbortSignal) => get<ActiveSignalsResponse>('/signals/active', signal),
 
   /** `includeLow` surfaces the regional-survey noise the calendar hides by default. */
   events: (includeLow: boolean, signal?: AbortSignal) =>

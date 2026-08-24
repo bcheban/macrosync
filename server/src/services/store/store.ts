@@ -14,6 +14,19 @@ import { env } from '../../config/env.js';
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 
 const memory = new Map<string, string>();
+/** Key -> expiry, for the memory backend only; Redis expires its own keys. */
+const expiries = new Map<string, number>();
+const sets = new Map<string, Set<string>>();
+
+/** Drops a memory-backend key that has passed its TTL. */
+const expired = (key: string): boolean => {
+  const until = expiries.get(key);
+  if (until === undefined) return false;
+  if (until > Date.now()) return false;
+  memory.delete(key);
+  expiries.delete(key);
+  return true;
+};
 
 /** Vercel's marketplace integration and Upstash's own docs use different names. */
 const REST_URL = env.redisUrl;
@@ -69,7 +82,10 @@ async function command<T = Json>(args: (string | number)[]): Promise<T | null> {
  * cron run failing outright.
  */
 export async function getJson<T>(key: string, fallback: T): Promise<T> {
-  const raw = storeBackend() === 'memory' ? (memory.get(key) ?? null) : await command<string>(['GET', key]);
+  const raw =
+    storeBackend() === 'memory'
+      ? (expired(key) ? null : (memory.get(key) ?? null))
+      : await command<string>(['GET', key]);
   if (raw === null || raw === undefined) return fallback;
 
   try {
@@ -79,13 +95,59 @@ export async function getJson<T>(key: string, fallback: T): Promise<T> {
   }
 }
 
-export async function setJson(key: string, value: unknown): Promise<void> {
+export async function setJson(key: string, value: unknown, ttlSeconds?: number): Promise<void> {
   const raw = JSON.stringify(value);
+
   if (storeBackend() === 'memory') {
     memory.set(key, raw);
+    if (ttlSeconds) expiries.set(key, Date.now() + ttlSeconds * 1000);
+    else expiries.delete(key);
     return;
   }
-  await command(['SET', key, raw]);
+
+  await command(ttlSeconds ? ['SET', key, raw, 'EX', ttlSeconds] : ['SET', key, raw]);
+}
+
+export async function deleteKey(key: string): Promise<void> {
+  if (storeBackend() === 'memory') {
+    memory.delete(key);
+    expiries.delete(key);
+    return;
+  }
+  await command(['DEL', key]);
+}
+
+/**
+ * Set membership, for the subscriber roster.
+ *
+ * A set rather than a JSON array because subscribing is a concurrent write from
+ * an unpredictable direction — a webhook, not the scheduled run — and two people
+ * pressing start at the same moment must not read-modify-write over each other.
+ * `SADD` is atomic; a JSON list is not.
+ */
+export async function addToSet(key: string, member: string): Promise<void> {
+  if (storeBackend() === 'memory') {
+    const existing = sets.get(key) ?? new Set<string>();
+    existing.add(member);
+    sets.set(key, existing);
+    return;
+  }
+  await command(['SADD', key, member]);
+}
+
+export async function removeFromSet(key: string, member: string): Promise<void> {
+  if (storeBackend() === 'memory') {
+    sets.get(key)?.delete(member);
+    return;
+  }
+  await command(['SREM', key, member]);
+}
+
+export async function setMembers(key: string): Promise<string[]> {
+  if (storeBackend() === 'memory') return [...(sets.get(key) ?? [])];
+
+  const result = await command<string[]>(['SMEMBERS', key]);
+  return Array.isArray(result) ? result.map(String) : [];
 }
 
 const locks = new Map<string, number>();
@@ -99,6 +161,8 @@ const locks = new Map<string, number>();
  */
 export function resetMemoryStore(): void {
   memory.clear();
+  expiries.clear();
+  sets.clear();
   locks.clear();
 }
 

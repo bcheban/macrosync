@@ -13,6 +13,8 @@ const GROUP_TONE: Record<AssetGroup, string> = {
   defi: 'text-bull',
   meme: 'text-warn',
   ai: 'text-accent-soft',
+  // Pairs the scanner reaches that the curated catalogue never categorised.
+  radar: 'text-white/45',
 };
 
 interface AssetPickerProps {

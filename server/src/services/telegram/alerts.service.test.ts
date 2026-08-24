@@ -82,7 +82,7 @@ describe('alert dispatch', () => {
   it('sends a confirmed call and records it', async () => {
     const run = await alerts.notifySignals([signal('INJ', 'buy')], undefined);
 
-    assert.deepEqual(run, { sent: 1, failed: 0, dropped: 0 });
+    assert.deepEqual(run, { sent: 1, failed: 0, dropped: 0, deliveries: 1, pruned: 0 });
     assert.equal(posted.length, 1);
     assert.match(posted[0] ?? '', /INJ/);
     // The ledger only ever tracks what the channel was actually told.

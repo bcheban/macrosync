@@ -30,7 +30,7 @@ export interface I18nText {
   text: string;
 }
 
-export type AssetGroup = 'majors' | 'layer1' | 'layer2' | 'defi' | 'meme' | 'ai';
+export type AssetGroup = 'majors' | 'layer1' | 'layer2' | 'defi' | 'meme' | 'ai' | 'radar';
 
 export interface AssetMeta {
   symbol: string;

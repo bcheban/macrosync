@@ -2,7 +2,13 @@ import { env } from '../../config/env.js';
 import type { MacroEvent, Signal, Strategy } from '../../types/domain.js';
 import { getJson, setJson, storeKey } from '../store/store.js';
 import { loadStats, openTrade, winRate, type ClosedTrade, type TradeStats } from '../trades/trades.service.js';
-import { escapeHtml, sendTelegramMessage, telegramConfigured } from './telegram.client.js';
+import {
+  escapeHtml,
+  sendTelegramMessage,
+  telegramConfigured,
+  type InlineKeyboard,
+} from './telegram.client.js';
+import { activeRecipients, unsubscribe } from './subscribers.service.js';
 
 /**
  * Alerting for confirmed calls.
@@ -37,6 +43,86 @@ export interface AlertRun {
   failed: number;
   /** Confirmed calls the per-run cap suppressed. Never silently dropped. */
   dropped: number;
+  /** Individual deliveries across every recipient, for the run log. */
+  deliveries: number;
+  /** Recipients removed because they blocked the bot or deleted the chat. */
+  pruned: number;
+}
+
+/** Buttons carried under every alert. `callback_data` is capped at 64 bytes. */
+const SIGNAL_KEYBOARD: InlineKeyboard = [
+  [
+    { text: '📊 Stats', callback_data: 'stats' },
+    { text: '🛑 Mute 2h', callback_data: 'mute:2' },
+  ],
+];
+
+interface BroadcastResult {
+  delivered: number;
+  failed: number;
+  pruned: number;
+  /**
+   * Nobody was told and nothing failed: an empty roster, everyone muted, or the
+   * last recipient having just been pruned. Distinct from a failure, because
+   * there was nothing to go wrong.
+   */
+  silent: boolean;
+  /**
+   * Every failure was one that retrying cannot fix — malformed HTML, say, which
+   * fails identically for every recipient. Without this a bad message would be
+   * re-sent to the whole roster on each of the next three runs before the
+   * failure counter gave up on it.
+   */
+  permanent: boolean;
+}
+
+/**
+ * Sends one message to every subscriber who is not muted.
+ *
+ * Each recipient is isolated. One person blocking the bot, or one send timing
+ * out, must never cost the rest of the roster their alert — so the loop
+ * continues past any single failure, and a recipient Telegram reports as gone is
+ * dropped from the roster rather than retried on every run forever.
+ */
+async function broadcast(html: string, keyboard?: InlineKeyboard): Promise<BroadcastResult> {
+  const { send } = await activeRecipients();
+  if (!send.length) return { delivered: 0, failed: 0, pruned: 0, silent: true, permanent: false };
+
+  let delivered = 0;
+  let failed = 0;
+  let pruned = 0;
+  let retryable = 0;
+
+  for (const chatId of send) {
+    try {
+      const result = await sendTelegramMessage(html, { chatId, keyboard });
+
+      if (result.delivered) {
+        delivered += 1;
+      } else if (result.blocked) {
+        await unsubscribe(chatId);
+        pruned += 1;
+        console.warn(`[alerts] dropped ${chatId} from the roster: ${result.error}`);
+      } else {
+        failed += 1;
+        if (result.retryable !== false) retryable += 1;
+      }
+    } catch (error) {
+      // Belt and braces: the send path is written not to throw, but a store
+      // failure inside the prune could. One bad recipient is not the roster.
+      failed += 1;
+      retryable += 1;
+      console.error(`[alerts] recipient ${chatId} errored:`, (error as Error).message);
+    }
+  }
+
+  return {
+    delivered,
+    failed,
+    pruned,
+    silent: delivered === 0 && failed === 0,
+    permanent: failed > 0 && retryable === 0,
+  };
 }
 
 const ALERTS_KEY = storeKey('alerts:last');
@@ -120,7 +206,7 @@ export function formatClose(trade: ClosedTrade, stats: TradeStats): string {
  * messages intended — and let each strategy rank its calls in isolation.
  */
 export async function notifySignals(signals: Signal[], event: MacroEvent | undefined): Promise<AlertRun> {
-  const empty: AlertRun = { sent: 0, failed: 0, dropped: 0 };
+  const empty: AlertRun = { sent: 0, failed: 0, dropped: 0, deliveries: 0, pruned: 0 };
   if (!telegramConfigured()) return empty;
 
   const [state, stats] = await Promise.all([
@@ -167,15 +253,25 @@ export async function notifySignals(signals: Signal[], event: MacroEvent | undef
 
   let sent = 0;
   let failed = 0;
+  let deliveries = 0;
+  let pruned = 0;
 
   for (const signal of chosen) {
     const key = keyFor(signal);
     const previous = state[key];
 
-    const result = await sendTelegramMessage(formatAlert(signal, signal.summary.text, event, stats));
+    const result = await broadcast(formatAlert(signal, signal.summary.text, event, stats), SIGNAL_KEYBOARD);
+    deliveries += result.delivered;
+    pruned += result.pruned;
     dirty = true;
 
-    if (result.delivered) {
+    /*
+     * A call counts as published if anyone received it, and also if there was
+     * nobody to receive it. Muting a phone is a delivery preference, not a
+     * change to the call — letting it stop the ledger would leave the win rate
+     * with holes wherever the only subscriber wanted an evening off.
+     */
+    if (result.delivered > 0 || result.silent) {
       /*
        * State is committed *after* delivery, not before. Marking the pair as
        * alerted up front meant a failed send still started its ninety-minute
@@ -183,8 +279,8 @@ export async function notifySignals(signals: Signal[], event: MacroEvent | undef
        * pair went silent for an hour and a half as though it had been announced.
        */
       state[key] = { verdict: signal.verdict, sentAt: now, failures: 0 };
-      sent += 1;
-      // Only track what was actually announced, so the record matches the channel.
+      if (!result.silent) sent += 1;
+      // Only track what was actually published, so the record matches the channel.
       await openTrade(signal);
       continue;
     }
@@ -192,13 +288,15 @@ export async function notifySignals(signals: Signal[], event: MacroEvent | undef
     failed += 1;
     const failures = (previous?.failures ?? 0) + 1;
 
-    if (result.retryable === false || failures >= MAX_DELIVERY_FAILURES) {
+    if (result.permanent || failures >= MAX_DELIVERY_FAILURES) {
       /*
        * Nothing more to try. The verdict is recorded anyway so a permanently
        * unsendable call — malformed, or a chat the bot has been removed from —
        * cannot pin the pair in a retry loop on every run from now on.
        */
-      console.error(`[alerts] giving up on ${key} after ${failures} failure(s): ${result.error}`);
+      console.error(
+        `[alerts] giving up on ${key} after ${failures} failed run(s)${result.permanent ? ' — not retryable' : ''}`,
+      );
       state[key] = { verdict: signal.verdict, sentAt: now, failures: 0 };
     } else {
       // Left un-alerted on purpose: the next run sees the same transition again.
@@ -211,7 +309,7 @@ export async function notifySignals(signals: Signal[], event: MacroEvent | undef
   }
 
   if (dirty) await setJson(ALERTS_KEY, state);
-  return { sent, failed, dropped };
+  return { sent, failed, dropped, deliveries, pruned };
 }
 
 /** Announces trades that reached their target or stop. */
@@ -226,9 +324,10 @@ export async function notifyClosed(closed: ClosedTrade[], stats: TradeStats): Pr
      * it up as a result would be worse.
      */
     if (trade.outcome !== 'win' && trade.outcome !== 'loss') continue;
-    const result = await sendTelegramMessage(formatClose(trade, stats));
-    if (result.delivered) sent += 1;
-    else console.error(`[alerts] close notice for ${trade.base} failed: ${result.error}`);
+
+    const result = await broadcast(formatClose(trade, stats));
+    if (result.delivered > 0) sent += 1;
+    else if (!result.silent) console.error(`[alerts] close notice for ${trade.base} reached nobody`);
   }
   return sent;
 }

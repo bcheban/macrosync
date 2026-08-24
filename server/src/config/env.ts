@@ -109,6 +109,14 @@ export const env = {
    */
   alertsTestSecret: process.env.ALERTS_TEST_SECRET ?? '',
 
+  /*
+   * Echoed by Telegram in `X-Telegram-Bot-Api-Secret-Token` on every webhook
+   * call. The endpoint is a public URL, so this is the only thing separating a
+   * real update from a forged subscription; the route refuses to serve while it
+   * is unset rather than accepting anything that arrives.
+   */
+  telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET ?? '',
+
   /* --- persistence -------------------------------------------------------- */
 
   /*
