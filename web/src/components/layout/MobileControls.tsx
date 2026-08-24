@@ -100,7 +100,7 @@ export function MobileControls({ context, live, streaming = false, className }: 
         aria-haspopup="dialog"
         aria-label={t('common.controls')}
         className={cn(
-          'glass-soft flex size-9 shrink-0 items-center justify-center rounded-xl text-white/60 transition-all duration-200 hover:text-white active:scale-95',
+          'glass-soft flex size-9 shrink-0 items-center justify-center rounded-xl text-white/60 transition-all duration-200 hover:border-white/20 hover:bg-white/6 hover:text-white focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none active:scale-95',
           className,
         )}
       >

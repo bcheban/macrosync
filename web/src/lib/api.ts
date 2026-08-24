@@ -33,7 +33,9 @@ export const api = {
   signals: (strategy: Strategy, symbols: string[], signal?: AbortSignal) =>
     get<SignalsResponse>(`/signals${query(`strategy=${strategy}`, symbolsParam(symbols))}`, signal),
 
-  events: (signal?: AbortSignal) => get<EventsResponse>('/events?limit=6', signal),
+  /** `includeLow` surfaces the regional-survey noise the calendar hides by default. */
+  events: (includeLow: boolean, signal?: AbortSignal) =>
+    get<EventsResponse>(`/events?limit=${includeLow ? 12 : 6}&includeLow=${includeLow}`, signal),
 
   /** `lang` only reaches the LLM layer — deterministic copy is translated client-side. */
   insights: (locale: Locale, signal?: AbortSignal) =>

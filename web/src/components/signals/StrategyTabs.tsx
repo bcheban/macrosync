@@ -55,7 +55,7 @@ export function StrategyTabs({ value, onChange }: StrategyTabsProps) {
               onChange(key);
             }}
             className={cn(
-              'relative flex shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors duration-200 sm:px-3.5 sm:text-[13px]',
+              'relative flex shrink-0 snap-start items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-medium whitespace-nowrap transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none active:scale-[0.97] sm:px-3.5 sm:py-2 sm:text-[13px]',
               active ? 'text-white' : 'text-white/45 hover:text-white/75',
             )}
           >

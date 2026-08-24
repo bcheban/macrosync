@@ -30,6 +30,8 @@ export function InsightsFeed({ insights, context, loading, error }: InsightsFeed
         icon={BrainCircuit}
         title={t('insights.title')}
         subtitle={t('insights.subtitle')}
+        tip={t('glossary.insights')}
+        tipLabel={t('glossary.insightsLabel')}
         actions={
           <div className="flex items-center gap-2">
             {context && <Badge tone="cyber">{t('topbar.atr', { value: String(context.avgAtrPct) })}</Badge>}

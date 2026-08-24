@@ -106,13 +106,17 @@ api.get(
   '/events',
   route(async (req, res) => {
     const limit = Number(req.query.limit ?? 8);
-    const [events, headline] = await Promise.all([
-      getUpcomingEvents(Number.isFinite(limit) ? limit : 8),
+    // Low-impact prints are hidden unless asked for; see calendar.service.ts.
+    const includeLow = req.query.includeLow === 'true';
+
+    const [page, headline] = await Promise.all([
+      getUpcomingEvents({ limit: Number.isFinite(limit) ? limit : 8, includeLow }),
       getHeadlineEvent(),
     ]);
+
     // `headline` is absent when the feed's week has run out — the dashboard
     // renders that as "nothing scheduled" instead of an empty countdown.
-    res.json({ events, ...(headline ? { headline } : {}) });
+    res.json({ events: page.events, counts: page.counts, ...(headline ? { headline } : {}) });
   }),
 );
 

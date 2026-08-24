@@ -84,7 +84,7 @@ export function TopBar({ context, tickers, streaming = false, refreshing, onRefr
               onClick={handleRefresh}
               aria-label={t('common.refresh')}
               title={t('common.refresh')}
-              className="glass-soft flex size-9 shrink-0 items-center justify-center rounded-xl text-white/60 transition-all duration-200 hover:scale-105 hover:text-white active:scale-95"
+              className="glass-soft flex size-9 shrink-0 items-center justify-center rounded-xl text-white/60 transition-all duration-200 hover:border-white/20 hover:bg-white/6 hover:text-white focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none active:scale-95"
             >
               <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
             </button>

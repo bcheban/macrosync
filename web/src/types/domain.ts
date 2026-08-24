@@ -189,6 +189,8 @@ export interface SignalsResponse {
 }
 export interface EventsResponse {
   events: MacroEvent[];
+  /** Upcoming prints per tier before filtering — drives the "N hidden" toggle. */
+  counts: { high: number; medium: number; low: number };
   /** Absent when the calendar has nothing left this week. */
   headline?: MacroEvent;
 }

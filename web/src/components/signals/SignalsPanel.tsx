@@ -1,5 +1,5 @@
 import { AnimatePresence, m } from 'framer-motion';
-import { CandlestickChart, Inbox } from 'lucide-react';
+import { CandlestickChart, Compass, Inbox } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/Badge';
@@ -86,6 +86,8 @@ export function SignalsPanel() {
         icon={CandlestickChart}
         title={t('signals.title')}
         subtitle={t(`signals.subtitles.${strategy}`)}
+        tip={t('glossary.signals')}
+        tipLabel={t('glossary.signalsLabel')}
         actions={
           <div className="flex items-center gap-3">
             {lastUpdated && (
@@ -110,22 +112,40 @@ export function SignalsPanel() {
       )}
 
       {isEmpty && (
-        <div className="rounded-card flex flex-col items-center gap-2 border border-white/8 bg-white/2 px-4 py-10 text-center">
-          <Inbox className="size-5 text-white/25" />
-          <p className="text-[13px] font-medium text-white/70">
+        <div className="rounded-card flex flex-col items-center gap-3 border border-white/8 bg-white/2 px-5 py-12 text-center">
+          {/*
+            An empty grid is the first thing a new visitor may see, so it
+            explains what the panel would show rather than just reporting that
+            it is empty.
+          */}
+          <span className="glass-soft flex size-11 items-center justify-center rounded-2xl text-accent-soft">
+            {focus ? <Inbox className="size-5" /> : <Compass className="size-5" />}
+          </span>
+
+          <p className="text-[14px] font-semibold text-white/85">
             {focus ? t('signals.emptyFocus', { asset: focus }) : t('signals.empty')}
           </p>
-          <p className="max-w-sm text-[11.5px] leading-relaxed text-white/40">
-            {focus ? t('signals.emptyFocusHint') : t('signals.emptyHint')}
+          <p className="max-w-md text-[12px] leading-relaxed text-white/45">
+            {focus ? t('signals.emptyFocusHint') : t('signals.onboarding')}
           </p>
-          {focus && (
+
+          {focus ? (
             <button
               type="button"
               onClick={() => setFocus(null)}
-              className="glass-soft mt-1 rounded-lg px-3 py-1.5 text-[11.5px] text-white/70 transition-colors duration-200 hover:text-white"
+              className="glass-soft mt-1 rounded-lg px-3.5 py-2 text-[12px] text-white/75 transition-all duration-200 hover:bg-white/8 hover:text-white active:scale-95"
             >
               {t('signals.showAll')}
             </button>
+          ) : (
+            <ul className="mt-1 grid gap-1.5 text-left text-[11.5px] text-white/40 sm:grid-cols-3">
+              {(['step1', 'step2', 'step3'] as const).map((step, index) => (
+                <li key={step} className="flex gap-2">
+                  <span className="tnum font-mono text-accent-soft/70">{index + 1}</span>
+                  {t(`signals.${step}`)}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}

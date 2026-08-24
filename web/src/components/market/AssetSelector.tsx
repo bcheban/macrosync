@@ -45,7 +45,7 @@ export function AssetSelector({ className }: { className?: string }) {
         aria-expanded={open}
         aria-haspopup="dialog"
         className={cn(
-          'glass-soft flex h-9 items-center gap-2 rounded-xl px-2.5 text-[12px] font-medium whitespace-nowrap transition-all duration-200 hover:text-white',
+          'glass-soft flex h-9 items-center gap-2 rounded-xl px-2.5 text-[12px] font-medium whitespace-nowrap transition-all duration-200 hover:border-white/20 hover:bg-white/6 hover:text-white focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none',
           open ? 'border-accent/30 text-white' : 'text-white/60',
         )}
       >

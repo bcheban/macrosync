@@ -21,7 +21,13 @@ export function Watchlist({ tickers, loading, expected = 4 }: WatchlistProps) {
 
   return (
     <GlassCard className="p-4 sm:p-5">
-      <SectionHeader icon={LineChart} title={t('watchlist.title')} subtitle={t('watchlist.subtitle')} />
+      <SectionHeader
+        icon={LineChart}
+        title={t('watchlist.title')}
+        subtitle={t('watchlist.subtitle')}
+        tip={t('glossary.watchlist')}
+        tipLabel={t('glossary.watchlistLabel')}
+      />
 
       {/* Scrolls once the selection grows past a handful of assets. */}
       <div className="mt-4 max-h-104 space-y-1 overflow-y-auto pr-1">

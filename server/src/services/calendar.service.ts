@@ -32,6 +32,13 @@ interface RawEvent {
 /** Currencies whose prints actually move crypto. */
 const TRACKED = new Set(['USD', 'EUR', 'GBP', 'JPY', 'CNY', 'ALL']);
 
+/**
+ * Crypto trades against the dollar, so a US print moves this tape harder than
+ * the same print out of Frankfurt or Tokyo. This is the weight that pushes the
+ * FOMC ahead of a German ifo survey in the queue.
+ */
+const CURRENCY_WEIGHT: Record<string, number> = { USD: 14, ALL: 6, EUR: 4, GBP: 2, JPY: 2, CNY: 2 };
+
 const REGION: Record<string, string> = {
   USD: 'US',
   EUR: 'EU',
@@ -50,8 +57,28 @@ const IMPORTANCE: Record<string, MacroEvent['importance']> = {
 /** Base volatility expectation from the feed's own impact rating. */
 const BASE_IMPACT: Record<MacroEvent['importance'], number> = { high: 82, medium: 54, low: 26 };
 
-/** Prints with a track record of moving crypto beyond their headline rating. */
-const AMPLIFIERS = ['fomc', 'federal funds', 'rate decision', 'cpi', 'non-farm', 'nonfarm', 'payroll', 'pce'];
+/**
+ * Prints with a track record of moving crypto beyond their headline rating.
+ * These are the ones a crypto desk actually clears the book for.
+ */
+const AMPLIFIERS = [
+  'fomc',
+  'federal funds',
+  'rate decision',
+  'interest rate',
+  'cpi',
+  'pce',
+  'non-farm',
+  'nonfarm',
+  'payroll',
+  'unemployment rate',
+  'gdp',
+  'ppi',
+  'retail sales',
+  'sec ',
+  'fed chair',
+  'powell',
+];
 
 const CATEGORY_RULES: [RegExp, EventCategory][] = [
   [/fomc|rate (decision|statement)|monetary policy|federal funds|boe |boj |ecb |central bank|press conf/i, 'monetary'],
@@ -90,7 +117,16 @@ function toMacroEvent(raw: RawEvent): MacroEvent | undefined {
     region: REGION[raw.country] ?? raw.country,
     currency: raw.country,
     startsAt: startsAt.toISOString(),
-    expectedImpact: Math.min(96, BASE_IMPACT[importance] + (amplified ? 12 : 0)),
+    /*
+     * A derived 0–100 volatility expectation, not a published figure: the
+     * feed's own impact rating, weighted up for dollar prints and for the
+     * handful of releases that reliably move crypto harder than their rating
+     * suggests. It drives ordering and the radar dial, nothing else.
+     */
+    expectedImpact: Math.min(
+      99,
+      BASE_IMPACT[importance] + (amplified ? 12 : 0) + (CURRENCY_WEIGHT[raw.country] ?? 0),
+    ),
     // Only present when the feed actually published them.
     ...(raw.forecast ? { forecast: raw.forecast } : {}),
     ...(raw.previous ? { previous: raw.previous } : {}),
@@ -145,9 +181,39 @@ async function safeCalendar(): Promise<MacroEvent[]> {
   }
 }
 
-export async function getUpcomingEvents(limit = 8, from = Date.now()): Promise<MacroEvent[]> {
-  const all = await safeCalendar();
-  return all.filter((event) => Date.parse(event.startsAt) > from).slice(0, limit);
+export interface CalendarQuery {
+  limit?: number;
+  /** Low-impact prints are noise for a crypto desk and are hidden by default. */
+  includeLow?: boolean;
+  from?: number;
+}
+
+export interface CalendarPage {
+  events: MacroEvent[];
+  /** How many upcoming prints each tier holds, before `limit` is applied. */
+  counts: { high: number; medium: number; low: number };
+}
+
+/**
+ * Upcoming prints, chronological, with the noise removed.
+ *
+ * The raw feed is mostly regional surveys and second-tier releases — of 66
+ * events in a typical week only nine are rated high. Showing all of them buries
+ * the two that matter, so low-impact prints are dropped unless asked for, and
+ * the caller is told how many were hidden.
+ */
+export async function getUpcomingEvents(query: CalendarQuery = {}): Promise<CalendarPage> {
+  const { limit = 8, includeLow = false, from = Date.now() } = query;
+  const upcoming = (await safeCalendar()).filter((event) => Date.parse(event.startsAt) > from);
+
+  const counts = {
+    high: upcoming.filter((event) => event.importance === 'high').length,
+    medium: upcoming.filter((event) => event.importance === 'medium').length,
+    low: upcoming.filter((event) => event.importance === 'low').length,
+  };
+
+  const visible = includeLow ? upcoming : upcoming.filter((event) => event.importance !== 'low');
+  return { events: visible.slice(0, limit), counts };
 }
 
 /**
@@ -155,7 +221,24 @@ export async function getUpcomingEvents(limit = 8, from = Date.now()): Promise<M
  * Returns undefined when the week has run out, which the UI renders as an
  * explicit "nothing scheduled" state rather than an empty countdown.
  */
+/**
+ * The print the radar counts down to.
+ *
+ * Not simply the next event: a German business survey in two hours is not the
+ * thing a crypto trader needs a countdown for, while an FOMC decision in two
+ * days is. High-impact prints win, and among them the soonest — falling back to
+ * moderate, and only then to whatever is left.
+ */
 export async function getHeadlineEvent(from = Date.now()): Promise<MacroEvent | undefined> {
-  const upcoming = await getUpcomingEvents(60, from);
-  return upcoming.find((event) => event.importance === 'high') ?? upcoming[0];
+  const { events } = await getUpcomingEvents({ limit: 200, includeLow: true, from });
+  const byTier = (tier: MacroEvent['importance']) => events.filter((event) => event.importance === tier);
+
+  const high = byTier('high');
+  if (high.length) {
+    // Among high-impact prints, the one the market weights heaviest wins ties.
+    return [...high].sort(
+      (a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt) || b.expectedImpact - a.expectedImpact,
+    )[0];
+  }
+  return byTier('medium')[0] ?? events[0];
 }

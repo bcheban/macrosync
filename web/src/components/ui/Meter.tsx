@@ -1,4 +1,5 @@
 import { m } from 'framer-motion';
+import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import type { Tone } from './Badge';
 
@@ -17,17 +18,24 @@ interface MeterProps {
   tone?: Tone;
   className?: string;
   label?: string;
+  /** Rendered beside the label — usually an `InfoTip`. */
+  labelTip?: ReactNode;
   showValue?: boolean;
 }
 
 /** Thin animated progress bar used for confidence, impact and volatility. */
-export function Meter({ value, tone = 'accent', className, label, showValue }: MeterProps) {
+export function Meter({ value, tone = 'accent', className, label, labelTip, showValue }: MeterProps) {
   const pct = Math.max(0, Math.min(100, value));
   return (
     <div className={cn('w-full', className)}>
       {(label || showValue) && (
         <div className="mb-1.5 flex items-baseline justify-between text-[11px] tracking-wide text-white/45 uppercase">
-          {label && <span>{label}</span>}
+          {label && (
+            <span className="flex items-center gap-1.5">
+              {label}
+              {labelTip}
+            </span>
+          )}
           {showValue && <span className="tnum font-mono text-white/70">{Math.round(pct)}</span>}
         </div>
       )}

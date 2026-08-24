@@ -1,7 +1,9 @@
 import { m } from 'framer-motion';
 import { ArrowDownRight, ArrowUpRight, Minus, ShieldAlert } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Badge, LiveDot } from '@/components/ui/Badge';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { InfoTip } from '@/components/ui/InfoTip';
 import { Meter } from '@/components/ui/Meter';
 import { useTx } from '@/i18n/useTx';
 import { cn } from '@/lib/cn';
@@ -27,6 +29,7 @@ function Level({ label, value, className }: { label: string; value: number; clas
 
 export function SignalCard({ signal, index }: { signal: Signal; index: number }) {
   const { t, text } = useTx();
+  const { t: tt } = useTranslation();
   const direction = DIRECTION[signal.direction];
   const Icon = direction.icon;
   const isLive = signal.status === 'live';
@@ -94,18 +97,32 @@ export function SignalCard({ signal, index }: { signal: Signal; index: number })
         </div>
       </div>
 
-      <Meter
-        className="mt-4"
-        value={signal.confidence}
-        tone={signal.direction === 'short' ? 'bear' : signal.direction === 'long' ? 'bull' : 'neutral'}
-        label={t('signals.confluence')}
-        showValue
-      />
+      <div className="mt-4">
+        <Meter
+          value={signal.confidence}
+          tone={signal.direction === 'short' ? 'bear' : signal.direction === 'long' ? 'bull' : 'neutral'}
+          label={t('signals.confluence')}
+          labelTip={
+            <InfoTip label={tt('glossary.confluenceLabel')} align="start">
+              {tt('glossary.confluence')}
+            </InfoTip>
+          }
+          showValue
+        />
+      </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-3 rounded-xl border border-white/6 bg-black/20 p-3">
-        <Level label={t('signals.entry')} value={signal.entry} className="text-white/85" />
-        <Level label={t('signals.stop')} value={signal.stopLoss} className="text-bear" />
-        <Level label={t('signals.target')} value={signal.takeProfit} className="text-bull" />
+      <div className="mt-4 rounded-xl border border-white/10 bg-black/30 p-3">
+        <div className="mb-2 flex items-center gap-1.5">
+          <p className="text-[10px] tracking-[0.16em] text-white/40 uppercase">{t('signals.plan')}</p>
+          <InfoTip label={tt('glossary.levelsLabel')} align="start">
+            {tt('glossary.levels')}
+          </InfoTip>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <Level label={t('signals.entry')} value={signal.entry} className="text-white/90" />
+          <Level label={t('signals.stop')} value={signal.stopLoss} className="text-bear" />
+          <Level label={t('signals.target')} value={signal.takeProfit} className="text-bull" />
+        </div>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[11px] text-white/40 [&>span]:whitespace-nowrap">

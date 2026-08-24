@@ -1,6 +1,6 @@
 import { LazyMotion } from 'framer-motion';
 import { ShieldAlert } from 'lucide-react';
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CountdownRadar } from '@/components/countdown/CountdownRadar';
 import { EventQueue } from '@/components/countdown/EventQueue';
@@ -50,7 +50,9 @@ function Dashboard() {
   const tickers = usePolling((signal) => api.tickers(selected, signal), 10_000, [symbolKey]);
   // REST snapshot overlaid with the exchange's live socket, so prices are exact.
   const market = useMarketTickers(tickers.data?.tickers ?? []);
-  const events = usePolling((signal) => api.events(signal), 30_000);
+  // Low-impact calendar noise is hidden by default; the queue can reveal it.
+  const [showLowImpact, setShowLowImpact] = useState(false);
+  const events = usePolling((signal) => api.events(showLowImpact, signal), 30_000, [showLowImpact]);
   // Re-fetched on a language switch: model-written insights come back translated.
   const insights = usePolling((signal) => api.insights(locale, signal), 60_000, [i18n.resolvedLanguage], {
     // Below the fold and the heaviest response of the three — it can wait.
@@ -86,7 +88,13 @@ function Dashboard() {
 
           <aside className="min-w-0 space-y-5 sm:space-y-6 lg:sticky lg:top-24 lg:self-start">
             <Watchlist tickers={market.tickers} loading={tickers.loading} expected={selected.length || 8} />
-            <EventQueue events={events.data?.events ?? []} loading={events.loading} />
+            <EventQueue
+              events={events.data?.events ?? []}
+              counts={events.data?.counts}
+              loading={events.loading}
+              showLow={showLowImpact}
+              onToggleLow={setShowLowImpact}
+            />
           </aside>
         </div>
 

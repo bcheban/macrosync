@@ -90,6 +90,11 @@ export const en = {
     live: '{{count}} live',
     error: 'Signal engine unreachable — {{message}}',
     empty: 'No signals for this selection',
+    onboarding:
+      'Pick an asset above to see live MEXC signals — indicators computed from real candles, with a warning when today’s macro calendar lands inside the trade’s horizon.',
+    step1: 'Choose assets in the header',
+    step2: 'Pick a strategy timeframe',
+    step3: 'Read the plan and the macro warning',
     allAssets: 'All',
     focusAria: 'Focus on one asset',
     emptyHint:
@@ -98,6 +103,7 @@ export const en = {
     emptyFocusHint: 'The other tracked assets may still have setups — switch back to All to see them.',
     showAll: 'Show all assets',
     confluence: 'Confluence',
+    plan: 'Trade plan',
     entry: 'Entry',
     stop: 'Stop',
     target: 'Target',
@@ -175,7 +181,46 @@ export const en = {
     low: 'low',
   },
 
+  /** Plain-language explanations for the terms a first-time visitor will stall on. */
+  glossary: {
+    signalsLabel: 'What are strategy signals?',
+    signals:
+      'Each card is one asset on one timeframe. Indicators are computed from live MEXC candles — nothing is predicted, they only describe what the tape has already done. If a macro release lands inside the trade’s horizon, the card says so.',
+    confluenceLabel: 'What is confluence?',
+    confluence:
+      '0–100: how much four independent reads agree — trend (EMA), momentum (MACD), stretch (RSI) and participation (volume). High means they point the same way, not that the trade will work.',
+    levelsLabel: 'Entry, stop and target',
+    levels:
+      'Entry is the current price. The stop is a multiple of ATR, so a volatile asset gets a wider stop rather than a fixed percentage. The target is a multiple of the risk taken — R:R 2.2 means you risk 1 to make 2.2.',
+    atrLabel: 'What is ATR?',
+    atr: 'Average True Range: how far this asset typically travels in one bar, as a percent of price. It is the volatility budget a stop has to respect.',
+    rsiLabel: 'What is RSI?',
+    rsi: 'Relative Strength Index, 0–100. Above ~70 the move is stretched, below ~30 it is washed out. Middle readings say little on their own.',
+    impactLabel: 'What is the impact number?',
+    impact:
+      'Our estimate, 0–99, of how much volatility this release usually injects — built from the calendar’s own impact rating, weighted up for US prints. It is a gauge, not a published figure.',
+    insightsLabel: 'How the AI layer works',
+    insights:
+      'Real headlines from live newsrooms, turned into risk posture: what to do about exposure, stops and sizing around the story. It is instructed never to give a direction. Without an API key a deterministic rule engine produces the same shape of answer.',
+    volatilityLabel: 'What is the volatility regime?',
+    volatility:
+      'Average ATR across the assets you track. Higher regimes mean wider stops and smaller position sizes for the same risk.',
+    watchlistLabel: 'About these prices',
+    watchlist:
+      'Streamed straight from MEXC over a websocket, so they match the exchange tick for tick. The 24h change is reconciled against MEXC’s own ticker.',
+  },
+
   eventQueue: {
+    tier: {
+      high: 'High impact',
+      medium: 'Moderate impact',
+      low: 'Low impact',
+    },
+    showLow: 'Show {{count}} low-impact prints',
+    hideLow: 'Hide low-impact prints',
+    empty: 'Nothing scheduled for the rest of the week. The calendar feed refreshes as next week is published.',
+    tipLabel: 'How the calendar is filtered',
+    tip: 'Scheduled economic releases, rated by how hard they usually move markets. Low-impact regional surveys are hidden — US prints get top billing because crypto trades against the dollar.',
     title: 'Event Queue',
     subtitle: 'Scheduled macro & political catalysts',
   },

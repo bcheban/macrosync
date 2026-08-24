@@ -125,7 +125,7 @@ export function AssetPicker({ listClassName = 'max-h-72', className }: AssetPick
                 disabled={blocked}
                 onClick={() => onToggle(asset.symbol)}
                 className={cn(
-                  'flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors duration-200 sm:py-1.5',
+                  'flex w-full items-center gap-2.5 rounded-lg px-2 py-2.5 text-left transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:outline-none sm:py-1.5',
                   active ? 'bg-white/6' : 'hover:bg-white/4',
                   blocked && 'cursor-not-allowed opacity-35 hover:bg-transparent',
                 )}

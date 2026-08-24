@@ -2,6 +2,7 @@ import { m } from 'framer-motion';
 import { AlertTriangle, BarChart3, Bitcoin, CalendarOff, Landmark, Megaphone, Radar } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Badge, LiveDot } from '@/components/ui/Badge';
+import { InfoTip } from '@/components/ui/InfoTip';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useCountdown } from '@/hooks/useCountdown';
@@ -163,6 +164,9 @@ export function CountdownRadar({ event, loading }: { event?: MacroEvent; loading
             <Badge tone={imminent ? 'bear' : 'accent'} size="md" className="shrink-0">
               <Radar className="size-3" />
               {t('countdown.badge')}
+              <InfoTip label={t('glossary.impactLabel')} align="start" className="text-current/60">
+                {t('glossary.impact')}
+              </InfoTip>
             </Badge>
             <Badge tone="neutral" size="md" className="shrink-0">
               <Icon className="size-3" />

@@ -56,7 +56,7 @@ export function AssetFocusTabs({ bases, value, onChange, counts }: AssetFocusTab
         aria-selected={value === null}
         onClick={() => select(null)}
         className={cn(
-          'relative flex shrink-0 snap-start items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11.5px] font-medium whitespace-nowrap transition-colors duration-200',
+          'relative flex shrink-0 snap-start items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11.5px] font-medium whitespace-nowrap transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-cyber/50 focus-visible:outline-none',
           value === null ? 'text-white' : 'text-white/45 hover:text-white/75',
         )}
       >
@@ -81,7 +81,7 @@ export function AssetFocusTabs({ bases, value, onChange, counts }: AssetFocusTab
             aria-selected={active}
             onClick={() => select(base)}
             className={cn(
-              'relative shrink-0 snap-start rounded-lg px-2.5 py-1.5 text-[11.5px] font-semibold whitespace-nowrap transition-colors duration-200',
+              'relative shrink-0 snap-start rounded-lg px-2.5 py-1.5 text-[11.5px] font-semibold whitespace-nowrap transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-cyber/50 focus-visible:outline-none',
               active ? 'text-white' : 'text-white/45 hover:text-white/75',
               !counts[base] && 'opacity-45',
             )}
