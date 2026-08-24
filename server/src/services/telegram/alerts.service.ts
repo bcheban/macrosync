@@ -9,6 +9,8 @@ import {
   type InlineKeyboard,
 } from './telegram.client.js';
 import { activeRecipients, unsubscribe } from './subscribers.service.js';
+import { getAccount, planPosition } from './sizing.service.js';
+import type { ActiveTrade } from '../trades/trades.service.js';
 
 /**
  * Alerting for confirmed calls.
@@ -85,7 +87,7 @@ interface BroadcastResult {
  * dropped from the roster rather than retried on every run forever.
  */
 async function broadcast(
-  html: string,
+  render: string | ((chatId: string) => Promise<string> | string),
   keyboard?: InlineKeyboard,
   strategy?: Strategy,
 ): Promise<BroadcastResult> {
@@ -101,6 +103,13 @@ async function broadcast(
 
   for (const chatId of send) {
     try {
+      /*
+       * Rendered per recipient rather than once. A subscriber who has told the
+       * bot their deposit gets a position size worked out for them, and one who
+       * has not gets the same message without that line — so the body is no
+       * longer a constant that can be built ahead of the loop.
+       */
+      const html = typeof render === 'string' ? render : await render(chatId);
       const result = await sendTelegramMessage(html, { chatId, keyboard });
 
       if (result.delivered) {
@@ -147,6 +156,32 @@ const SIDE_EMOJI = { buy: '🟢', sell: '🔴' } as const;
 /** Prices are already rounded for display by the engine. */
 const money = (value: number): string => escapeHtml(String(value));
 
+/** Account figures, rounded to something a person would actually type. */
+const usd = (value: number): string =>
+  value >= 100 ? Math.round(value).toLocaleString('en-US') : value.toFixed(2);
+
+/**
+ * What this call is worth to one particular reader.
+ *
+ * Appended only for subscribers who have told the bot their deposit. The
+ * arithmetic is theirs either way; doing it here removes the step most likely
+ * to be got wrong while a setup is live.
+ */
+async function sizingLine(chatId: string, signal: Signal): Promise<string | undefined> {
+  const account = await getAccount(chatId);
+  if (!account) return undefined;
+
+  const plan = planPosition(account, signal);
+  if (!plan) return undefined;
+
+  const base = `💰 <b>Margin ${usd(plan.margin)}</b> at ${plan.leverage}x — risking <b>${usd(plan.riskAmount)}</b> of ${usd(account.balance)}`;
+
+  return plan.capped
+    ? `${base}
+⚠️ <i>Capped at your balance: the full size for ${account.riskPct}% risk needs more collateral than the account holds.</i>`
+    : base;
+}
+
 export function formatAlert(
   signal: Signal,
   summary: string,
@@ -192,13 +227,20 @@ export function formatAlert(
 /** The message sent when a tracked trade reaches its target or its stop. */
 export function formatClose(trade: ClosedTrade, stats: TradeStats): string {
   const won = trade.outcome === 'win';
+  const scratched = trade.outcome === 'breakeven';
   const meta = STRATEGY_META[trade.strategy];
 
+  const headline = won
+    ? '✅ <b>Target hit</b>'
+    : scratched
+      ? '🛡 <b>Closed at breakeven</b>'
+      : '❌ <b>Stopped out</b>';
+
   return [
-    `${won ? '✅ <b>Target hit</b>' : '❌ <b>Stopped out</b>'} — <b>${escapeHtml(trade.base)}</b>`,
+    `${headline} — <b>${escapeHtml(trade.base)}</b>`,
     `${meta.label} · <i>${trade.side === 'buy' ? 'long' : 'short'} from ${money(trade.entry)}</i>`,
     '',
-    `${won ? '🏁' : '🛑'} Exit    <code>${money(won ? trade.takeProfit : trade.stopLoss)}</code>`,
+    `${won ? '🏁' : scratched ? '🛡' : '🛑'} Exit    <code>${money(won ? trade.takeProfit : trade.stopLoss)}</code>`,
     `📈 Result  <b>${trade.resultPct > 0 ? '+' : ''}${trade.resultPct}%</b>`,
     '',
     `📊 Win rate: <b>${winRate(stats)}%</b> (${stats.wins}W / ${stats.losses}L)`,
@@ -270,8 +312,15 @@ export async function notifySignals(signals: Signal[], event: MacroEvent | undef
     const key = keyFor(signal);
     const previous = state[key];
 
+    const body = formatAlert(signal, signal.summary.text, event, stats);
+
     const result = await broadcast(
-      formatAlert(signal, signal.summary.text, event, stats),
+      async (chatId) => {
+        const sizing = await sizingLine(chatId, signal);
+        return sizing ? `${body}
+
+${sizing}` : body;
+      },
       SIGNAL_KEYBOARD,
       signal.strategy,
     );
@@ -326,6 +375,34 @@ export async function notifySignals(signals: Signal[], event: MacroEvent | undef
   return { sent, failed, dropped, deliveries, pruned };
 }
 
+/**
+ * Announces a stop pulled up to entry.
+ *
+ * Sent to everyone unmuted, like a close notice and for the same reason: this
+ * concerns a position the recipient may be holding right now, and whether they
+ * have since turned that strategy off does not change that.
+ */
+export async function notifyBreakeven(moved: ActiveTrade[]): Promise<number> {
+  if (!telegramConfigured() || !moved.length) return 0;
+
+  let sent = 0;
+  for (const trade of moved) {
+    const meta = STRATEGY_META[trade.strategy];
+    const html = [
+      `🛡 <b>${escapeHtml(trade.base)}</b> — halfway to target`,
+      `${meta.label} · <i>${trade.side === 'buy' ? 'long' : 'short'} from ${money(trade.entry)}</i>`,
+      '',
+      `Stop moved to entry: <code>${money(trade.entry)}</code>`,
+      `<i>Was ${money(trade.initialStopLoss)}. From here the trade cannot cost you anything.</i>`,
+    ].join('\n');
+
+    const result = await broadcast(html);
+    if (result.delivered > 0) sent += 1;
+  }
+
+  return sent;
+}
+
 /** Announces trades that reached their target or stop. */
 export async function notifyClosed(closed: ClosedTrade[], stats: TradeStats): Promise<number> {
   if (!telegramConfigured() || !closed.length) return 0;
@@ -337,7 +414,7 @@ export async function notifyClosed(closed: ClosedTrade[], stats: TradeStats): Pr
      * bookkeeping — telling the channel about it would be noise, and dressing
      * it up as a result would be worse.
      */
-    if (trade.outcome !== 'win' && trade.outcome !== 'loss') continue;
+    if (trade.outcome !== 'win' && trade.outcome !== 'loss' && trade.outcome !== 'breakeven') continue;
 
     // No strategy filter: how a call *ended* is owed to whoever was told of it.
     const result = await broadcast(formatClose(trade, stats));

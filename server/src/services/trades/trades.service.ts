@@ -19,10 +19,22 @@ export interface ActiveTrade {
   strategy: Strategy;
   side: 'buy' | 'sell';
   entry: number;
+  /** Moves to `entry` once the trade is halfway to target. */
   stopLoss: number;
+  /**
+   * Where the stop started.
+   *
+   * Kept because `stopLoss` is no longer immutable: without it, a trade that
+   * moved to breakeven would look as though it had been opened with a
+   * zero-risk stop, and the risk the call actually carried would be
+   * unreconstructable from the record.
+   */
+  initialStopLoss: number;
   takeProfit: number;
   timeframe: string;
   openedAt: string;
+  /** When the stop was moved to entry, if it has been. */
+  breakevenAt?: string;
 }
 
 /**
@@ -38,8 +50,18 @@ export interface ActiveTrade {
  * violent microcap — and they are the one case that genuinely does poison the
  * record, because such a trade can still hit its stop. It can lose and it cannot
  * win. Leaving them to expire would have counted every one of them as a loss.
+ *
+ * `breakeven` is a trade that travelled halfway to target — moving its stop to
+ * entry — and then came back to it. It costs nothing and gains nothing.
+ *
+ * That one deserves suspicion, because it flatters. Before the breakeven rule
+ * existed, every one of these was a **loss**; now they leave the denominator
+ * entirely, so the published win rate rises without the strategy having
+ * improved at all. It is counted and reported separately for exactly that
+ * reason: a rate quoted without its breakeven count is a better-looking number
+ * about a smaller question.
  */
-export type Outcome = 'win' | 'loss' | 'expired' | 'superseded' | 'voided';
+export type Outcome = 'win' | 'loss' | 'expired' | 'superseded' | 'voided' | 'breakeven';
 
 export interface ClosedTrade extends ActiveTrade {
   outcome: Outcome;
@@ -54,6 +76,7 @@ export interface TradeStats {
   expired: number;
   superseded: number;
   voided: number;
+  breakeven: number;
   byStrategy: Record<string, { wins: number; losses: number }>;
   updatedAt: string;
 }
@@ -68,6 +91,7 @@ const EMPTY_STATS: TradeStats = {
   expired: 0,
   superseded: 0,
   voided: 0,
+  breakeven: 0,
   byStrategy: {},
   updatedAt: new Date(0).toISOString(),
 };
@@ -165,6 +189,7 @@ export async function openTrade(signal: Signal): Promise<{ opened: boolean; supe
     side: signal.verdict,
     entry: signal.entry,
     stopLoss: signal.stopLoss,
+    initialStopLoss: signal.stopLoss,
     takeProfit: signal.takeProfit,
     timeframe: signal.timeframe,
     openedAt: new Date().toISOString(),
@@ -195,39 +220,119 @@ export async function openTrade(signal: Signal): Promise<{ opened: boolean; supe
  * Cheap, and it has already earned its keep: calls were published with a target
  * below zero, which the exchange can never reach, so they could only ever be
  * stopped out.
+ *
+ * Judged on the stop the call was **published with**, not the current one. Once
+ * a stop moves to breakeven it sits exactly at entry, which this check read as
+ * malformed — so every protected trade was silently voided on the run after it
+ * was protected. The published levels are what "is this a real trade" asks
+ * about; where the stop has since been dragged to is a separate question.
  */
 function resolvable(trade: ActiveTrade): boolean {
-  if (!(trade.entry > 0) || !(trade.stopLoss > 0) || !(trade.takeProfit > 0)) return false;
+  // Records written before the stop could move carry no initial level.
+  const opened = trade.initialStopLoss ?? trade.stopLoss;
+
+  if (!(trade.entry > 0) || !(opened > 0) || !(trade.takeProfit > 0)) return false;
+  if (!(trade.stopLoss > 0)) return false;
 
   return trade.side === 'buy'
-    ? trade.takeProfit > trade.entry && trade.stopLoss < trade.entry
-    : trade.takeProfit < trade.entry && trade.stopLoss > trade.entry;
+    ? trade.takeProfit > trade.entry && opened < trade.entry
+    : trade.takeProfit < trade.entry && opened > trade.entry;
 }
 
-async function resolve(trade: ActiveTrade, now: number): Promise<ClosedTrade | undefined> {
+/**
+ * The point at which the stop is pulled up to entry.
+ *
+ * Halfway to target: far enough that the call has been paid for in movement,
+ * near enough that most trades reach it before they decide.
+ */
+const BREAKEVEN_FRACTION = 0.5;
+
+export interface Resolution {
+  trade: ActiveTrade;
+  closed?: ClosedTrade;
+  /** Set on the run where the stop moved, so it is announced exactly once. */
+  movedToBreakeven?: boolean;
+}
+
+/**
+ * Replays the candles since entry, bar by bar, in order.
+ *
+ * The order matters now in a way it did not before. This used to ask whether
+ * *any* bar touched the stop and whether *any* bar touched the target, which is
+ * order-blind — fine while the stop never moved. With a stop that is pulled to
+ * entry halfway to target, "did it hit the stop" has no answer until you know
+ * *which* stop was in force at the time, and that depends on what happened
+ * earlier in the sequence.
+ *
+ * Within a single bar the order is still unknowable, so the stop in force at
+ * the *start* of the bar is the one that applies: a bar that both reached the
+ * halfway mark and traded back through the original stop is read as the stop,
+ * because that is the reading that flatters least.
+ */
+async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
   const age = now - Date.parse(trade.openedAt);
 
   // Voided before any candle is fetched: there is nothing this tape could say.
-  if (!resolvable(trade)) return close(trade, 'voided', trade.entry);
+  if (!resolvable(trade)) return { trade, closed: close(trade, 'voided', trade.entry) };
 
   const set = await getKlines(trade.symbol, INTERVAL[trade.strategy], LOOKBACK[trade.strategy]).catch(
     () => undefined,
   );
 
+  const long = trade.side === 'buy';
+  // Signed so a long and a short read identically from here on.
+  const halfway = trade.entry + (trade.takeProfit - trade.entry) * BREAKEVEN_FRACTION;
+
+  let stop = trade.stopLoss;
+  let atBreakeven = Boolean(trade.breakevenAt);
+  let moved = false;
+
   if (set) {
     const openedAt = Date.parse(trade.openedAt);
-    const since = set.candles.filter((candle) => candle.openTime >= openedAt);
 
-    const hitStop = since.some((candle) =>
-      trade.side === 'buy' ? candle.low <= trade.stopLoss : candle.high >= trade.stopLoss,
-    );
-    const hitTarget = since.some((candle) =>
-      trade.side === 'buy' ? candle.high >= trade.takeProfit : candle.low <= trade.takeProfit,
-    );
+    for (const candle of set.candles) {
+      if (candle.openTime < openedAt) continue;
 
-    if (hitStop) return close(trade, 'loss', trade.stopLoss);
-    if (hitTarget) return close(trade, 'win', trade.takeProfit);
+      const hitStop = long ? candle.low <= stop : candle.high >= stop;
+      const hitTarget = long ? candle.high >= trade.takeProfit : candle.low <= trade.takeProfit;
+
+      if (hitStop) {
+        /*
+         * A stop sitting at entry is not a loss — nothing was lost. Recording it
+         * as one would be as wrong as recording it as a win, so it gets its own
+         * outcome and stays out of the rate.
+         */
+        const settled = { ...trade, stopLoss: stop };
+        return {
+          trade: settled,
+          closed: close(settled, atBreakeven ? 'breakeven' : 'loss', stop),
+          ...(moved ? { movedToBreakeven: true } : {}),
+        };
+      }
+
+      if (hitTarget) {
+        const settled = { ...trade, stopLoss: stop };
+        return {
+          trade: settled,
+          closed: close(settled, 'win', trade.takeProfit),
+          ...(moved ? { movedToBreakeven: true } : {}),
+        };
+      }
+
+      // Checked after the levels, so a bar cannot both save and settle itself.
+      if (!atBreakeven && (long ? candle.high >= halfway : candle.low <= halfway)) {
+        stop = trade.entry;
+        atBreakeven = true;
+        moved = true;
+      }
+    }
   }
+
+  const updated: ActiveTrade = {
+    ...trade,
+    stopLoss: stop,
+    ...(atBreakeven && !trade.breakevenAt ? { breakevenAt: new Date().toISOString() } : {}),
+  };
 
   /*
    * Timed out. Closed at the last price we can see rather than at a level,
@@ -236,10 +341,10 @@ async function resolve(trade: ActiveTrade, now: number): Promise<ClosedTrade | u
    */
   if (age > MAX_LIFETIME_MS[trade.strategy]) {
     const last = set?.candles[set.candles.length - 1]?.close ?? trade.entry;
-    return close(trade, 'expired', last);
+    return { trade: updated, closed: close(updated, 'expired', last), ...(moved ? { movedToBreakeven: true } : {}) };
   }
 
-  return undefined;
+  return { trade: updated, ...(moved ? { movedToBreakeven: true } : {}) };
 }
 
 /** Folds closed trades into the running statistics and the history log. */
@@ -252,6 +357,7 @@ async function record(closed: ClosedTrade[]): Promise<TradeStats> {
     expired: stats.expired + closed.filter((trade) => trade.outcome === 'expired').length,
     superseded: stats.superseded + closed.filter((trade) => trade.outcome === 'superseded').length,
     voided: stats.voided + closed.filter((trade) => trade.outcome === 'voided').length,
+    breakeven: stats.breakeven + closed.filter((trade) => trade.outcome === 'breakeven').length,
     byStrategy: { ...stats.byStrategy },
     updatedAt: new Date().toISOString(),
   };
@@ -275,24 +381,39 @@ async function record(closed: ClosedTrade[]): Promise<TradeStats> {
  * Checks every open trade and settles the ones that reached a level or ran out
  * of time. Returns what closed, so the caller can announce it.
  */
-export async function evaluateTrades(
-  now = Date.now(),
-): Promise<{ closed: ClosedTrade[]; stats: TradeStats; open: number }> {
+export async function evaluateTrades(now = Date.now()): Promise<{
+  closed: ClosedTrade[];
+  /** Trades whose stop moved to entry on this run — announced once. */
+  movedToBreakeven: ActiveTrade[];
+  stats: TradeStats;
+  open: number;
+}> {
   const active = await loadActive();
-  if (!active.length) return { closed: [], stats: await loadStats(), open: 0 };
+  if (!active.length) {
+    return { closed: [], movedToBreakeven: [], stats: await loadStats(), open: 0 };
+  }
 
-  const settled = await Promise.all(active.map((trade) => resolve(trade, now)));
-  const closed = settled.filter((trade): trade is ClosedTrade => Boolean(trade));
+  const resolutions = await Promise.all(active.map((trade) => resolve(trade, now)));
 
-  if (!closed.length) return { closed: [], stats: await loadStats(), open: active.length };
+  const closed = resolutions
+    .map((resolution) => resolution.closed)
+    .filter((trade): trade is ClosedTrade => Boolean(trade));
 
-  const closedIds = new Set(closed.map((trade) => trade.id));
-  const remaining = active.filter((trade) => !closedIds.has(trade.id));
+  const remaining = resolutions.filter((resolution) => !resolution.closed).map((resolution) => resolution.trade);
 
-  await setJson(ACTIVE_KEY, remaining);
-  const stats = await record(closed);
+  const movedToBreakeven = resolutions
+    .filter((resolution) => resolution.movedToBreakeven)
+    .map((resolution) => resolution.trade);
 
-  return { closed, stats, open: remaining.length };
+  /*
+   * Written even when nothing closed: a stop that moved has to survive the run,
+   * or the next one would find the original stop and announce the move again.
+   */
+  if (closed.length || movedToBreakeven.length) await setJson(ACTIVE_KEY, remaining);
+
+  const stats = closed.length ? await record(closed) : await loadStats();
+
+  return { closed, movedToBreakeven, stats, open: remaining.length };
 }
 
 export async function tradesStatus() {
@@ -304,6 +425,7 @@ export async function tradesStatus() {
     expired: stats.expired,
     superseded: stats.superseded,
     voided: stats.voided,
+    breakeven: stats.breakeven,
     winRate: winRate(stats),
     byStrategy: stats.byStrategy,
   };

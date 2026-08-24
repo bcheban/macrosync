@@ -1,6 +1,6 @@
 import { LazyMotion } from 'framer-motion';
 import { ShieldAlert } from 'lucide-react';
-import { Suspense, lazy, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CountdownRadar } from '@/components/countdown/CountdownRadar';
 import { EventQueue } from '@/components/countdown/EventQueue';
@@ -40,7 +40,7 @@ const loadMotionFeatures = () => import('framer-motion').then((mod) => mod.domMa
 
 function Dashboard() {
   const { t, i18n } = useTranslation();
-  const { selected } = useAssetScope();
+  const { selected, setWithTrades } = useAssetScope();
   const locale = currentLocale();
 
   // Owns everything language-dependent in <head>, plus GA4 page views.
@@ -61,6 +61,15 @@ function Dashboard() {
    * changes their asset selection, so it must not re-fetch on every toggle.
    */
   const active = usePolling((signal) => api.activeSignals(signal), 30_000, []);
+
+  /*
+   * An asset the bot has an open trade on is never filtered out of the picker,
+   * however far down the volume ranking it has drifted since the call.
+   */
+  const tradedSymbols = active.data?.signals.map((signal) => signal.symbol).join(',') ?? '';
+  useEffect(() => {
+    setWithTrades(tradedSymbols ? tradedSymbols.split(',') : []);
+  }, [tradedSymbols, setWithTrades]);
   const insights = usePolling((signal) => api.insights(locale, signal), 60_000, [i18n.resolvedLanguage], {
     // Below the fold and the heaviest response of the three — it can wait.
     deferUntilIdle: true,
@@ -91,11 +100,16 @@ function Dashboard() {
       <main className="mx-auto w-full max-w-[1600px] space-y-5 px-3 py-5 sm:space-y-6 sm:px-6 sm:py-6 lg:space-y-8 lg:py-8">
         <CountdownRadar event={events.data?.headline} loading={events.loading} />
 
+        {/*
+          Full width, above the fold's second screen. Thirty open trades in a
+          340px sidebar was a scroll; three strategy columns need the page.
+        */}
+        <LiveTrades data={active.data} loading={active.loading} />
+
         <div className="grid min-w-0 gap-5 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
           <SignalsPanel />
 
           <aside className="min-w-0 space-y-5 sm:space-y-6 lg:sticky lg:top-24 lg:self-start">
-            <LiveTrades data={active.data} loading={active.loading} />
             <Watchlist tickers={market.tickers} loading={tickers.loading} expected={selected.length || 8} />
             <EventQueue
               events={events.data?.events ?? []}

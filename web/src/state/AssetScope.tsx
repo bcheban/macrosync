@@ -4,9 +4,28 @@ import type { AssetGroup, AssetMeta } from '@/types/domain';
 
 const STORAGE_KEY = 'macrosync.assets';
 
+/**
+ * How far down the volume ranking the picker shows by default.
+ *
+ * The scan reaches 150 pairs, and beyond the head of that list the names stop
+ * meaning anything to a reader — the tail is where a coin turns over a few
+ * hundred thousand dollars a day and exists in the list only because the
+ * scanner can price it. Everything is still reachable through search and
+ * through the "all" filter; this is what the list opens on.
+ */
+export const TOP_TIER_RANK = 40;
+
 interface AssetScopeValue {
   /** Everything the API can price — the catalogue behind the switcher. */
   universe: AssetMeta[];
+  /**
+   * The slice worth showing unprompted: the top of the ranking, plus anything
+   * currently selected or carrying a live trade.
+   */
+  shortlist: AssetMeta[];
+  /** Symbols the bot has an open trade on, so they are never filtered away. */
+  withTrades: Set<string>;
+  setWithTrades: (symbols: string[]) => void;
   groups: AssetGroup[];
   bySymbol: Map<string, AssetMeta>;
   /** Currently tracked symbols, ordered as they appear in the catalogue. */
@@ -56,6 +75,7 @@ export function AssetScopeProvider({ children }: { children: ReactNode }) {
   const [maxSelected, setMaxSelected] = useState(16);
   const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [withTrades, setTraded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const controller = new AbortController();
@@ -119,9 +139,38 @@ export function AssetScopeProvider({ children }: { children: ReactNode }) {
     [commit, universe],
   );
 
+  const setWithTrades = useCallback((symbols: string[]) => {
+    // Replaced only when the set actually differs, or every poll re-renders.
+    setTraded((current) => {
+      if (current.size === symbols.length && symbols.every((symbol) => current.has(symbol))) return current;
+      return new Set(symbols);
+    });
+  }, []);
+
+  /*
+   * What the picker opens on. A curated asset is always in — somebody put it
+   * there deliberately — and so is anything selected or currently traded, which
+   * would otherwise vanish from the list the moment it stopped being liquid
+   * enough to rank.
+   */
+  const shortlist = useMemo(
+    () =>
+      universe.filter(
+        (asset) =>
+          asset.group !== 'radar' ||
+          (asset.rank !== undefined && asset.rank <= TOP_TIER_RANK) ||
+          selected.includes(asset.symbol) ||
+          withTrades.has(asset.symbol),
+      ),
+    [universe, selected, withTrades],
+  );
+
   const value = useMemo<AssetScopeValue>(
     () => ({
       universe,
+      shortlist,
+      withTrades,
+      setWithTrades,
       groups,
       bySymbol: new Map(universe.map((asset) => [asset.symbol, asset])),
       selected,
@@ -133,7 +182,20 @@ export function AssetScopeProvider({ children }: { children: ReactNode }) {
       selectGroup,
       reset: () => commit(defaults),
     }),
-    [universe, groups, selected, maxSelected, loading, toggle, commit, selectGroup, defaults],
+    [
+      universe,
+      shortlist,
+      withTrades,
+      setWithTrades,
+      groups,
+      selected,
+      maxSelected,
+      loading,
+      toggle,
+      commit,
+      selectGroup,
+      defaults,
+    ],
   );
 
   return <AssetScopeContext.Provider value={value}>{children}</AssetScopeContext.Provider>;

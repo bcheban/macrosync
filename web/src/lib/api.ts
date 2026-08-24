@@ -1,6 +1,7 @@
 import type {
   ActiveSignalsResponse,
   AssetsResponse,
+  CandlesResponse,
   EventsResponse,
   InsightsResponse,
   Locale,
@@ -33,6 +34,10 @@ export const api = {
 
   signals: (strategy: Strategy, symbols: string[], signal?: AbortSignal) =>
     get<SignalsResponse>(`/signals${query(`strategy=${strategy}`, symbolsParam(symbols))}`, signal),
+
+  /** OHLC for one symbol — the same bars the signal was computed from. */
+  candles: (symbol: string, interval: string, limit: number, signal?: AbortSignal) =>
+    get<CandlesResponse>(`/market/candles?symbol=${symbol}&interval=${interval}&limit=${limit}`, signal),
 
   /** What the Telegram bot is tracking right now — the ledger, priced. */
   activeSignals: (signal?: AbortSignal) => get<ActiveSignalsResponse>('/signals/active', signal),

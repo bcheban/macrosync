@@ -243,14 +243,24 @@ export async function selectableAssets(): Promise<AssetMeta[]> {
   const known = new Set(curated.map((asset) => asset.symbol));
   const { symbols } = await getUniverse();
 
+  /*
+   * The ranking is carried through rather than left behind. Merging the radar
+   * into the catalogue turned a curated list of twenty-eight into a hundred and
+   * fifty, most of which mean nothing to a reader — and without a rank the
+   * dashboard has no way to tell the head of the board from its tail.
+   */
+  const rankOf = new Map(symbols.map((symbol, index) => [symbol, index + 1]));
+
   const extras = symbols
     .filter((symbol) => !known.has(symbol))
     .map((symbol) => {
       const { base, quote } = splitSymbol(symbol);
-      return { symbol, base, quote, name: base, group: 'radar' as const };
+      return { symbol, base, quote, name: base, group: 'radar' as const, rank: rankOf.get(symbol) };
     });
 
-  return [...curated, ...extras];
+  const ranked = curated.map((asset) => ({ ...asset, rank: rankOf.get(asset.symbol) }));
+
+  return [...ranked, ...extras];
 }
 
 /** Whether a symbol may be priced on request — the curated list or the radar. */

@@ -3,10 +3,16 @@ import { env } from '../config/env.js';
 import { ASSET_GROUPS } from '../data/assets.js';
 import { calendarStatus, getUpcomingEvents, getHeadlineEvent } from '../services/calendar.service.js';
 import { getNews, newsStatus } from '../services/news/news.service.js';
-import { getTickers, upstreamStatus } from '../services/market.service.js';
+import { getKlines, getTickers, upstreamStatus, type Interval } from '../services/market.service.js';
 import { getInsights, getMarketContext, invalidateInsights } from '../services/insight.service.js';
 import { getSignals, isStrategy, STRATEGY_PROFILES } from '../services/signal.engine.js';
-import { alertsStatus, notifyClosed, notifySignals, sendTestAlert } from '../services/telegram/alerts.service.js';
+import {
+  alertsStatus,
+  notifyBreakeven,
+  notifyClosed,
+  notifySignals,
+  sendTestAlert,
+} from '../services/telegram/alerts.service.js';
 import { botStatus, handleUpdate, type TelegramUpdate } from '../services/telegram/webhook.service.js';
 import { getActiveSignals } from '../services/trades/active.service.js';
 import { resetStore, type ResetScope } from '../services/admin/reset.service.js';
@@ -254,7 +260,9 @@ api.all(
      */
     const alerts = await notifySignals(board, headline);
 
-    const { closed, stats, open } = await evaluateTrades();
+    const { closed, movedToBreakeven, stats, open } = await evaluateTrades();
+    // Announced before the closes, so a stop that moved is known before it fills.
+    const protectedCount = await notifyBreakeven(movedToBreakeven);
     const announced = await notifyClosed(closed, stats);
 
     // Recorded so `/health` can answer "is my scheduler actually running?".
@@ -270,6 +278,7 @@ api.all(
       alerts,
       closed: closed.map((trade) => ({ base: trade.base, strategy: trade.strategy, outcome: trade.outcome })),
       announced,
+      breakeven: protectedCount,
       open,
       winRate: winRate(stats),
       tookMs: Date.now() - startedAt,
@@ -385,5 +394,31 @@ api.post(
 
     console.warn(`[admin] store reset (${scope}): ${result.deleted} key(s) deleted`);
     res.json({ ok: true, ...result });
+  }),
+);
+
+/**
+ * Candles for one symbol, for the chart behind a live trade.
+ *
+ * The dashboard could have embedded a third-party chart widget instead, but then
+ * the picture and the call would come from different places — and the levels are
+ * the whole point of looking. These are the same bars the signal was computed
+ * from, so what is drawn and what was decided cannot disagree.
+ */
+api.get(
+  '/market/candles',
+  route(async (req, res) => {
+    const raw = typeof req.query.symbol === 'string' ? req.query.symbol.trim().toUpperCase() : '';
+    if (!raw || !(await isSelectableSymbol(raw))) {
+      res.status(404).json({ error: 'Unknown symbol' });
+      return;
+    }
+
+    const asked = typeof req.query.interval === 'string' ? req.query.interval : '1h';
+    const interval: Interval = asked === '5m' || asked === '4h' ? asked : '1h';
+    const limit = Math.min(Math.max(Number(req.query.limit) || 180, 30), 500);
+
+    const set = await getKlines(raw, interval, limit);
+    res.json({ symbol: set.symbol, interval: set.interval, candles: set.candles });
   }),
 );

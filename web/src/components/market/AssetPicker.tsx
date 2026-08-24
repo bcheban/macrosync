@@ -32,7 +32,8 @@ interface AssetPickerProps {
  */
 export function AssetPicker({ listClassName = 'max-h-72', className }: AssetPickerProps) {
   const { t, assetName } = useTx();
-  const { universe, groups, selected, maxSelected, isSelected, toggle, selectGroup, reset } = useAssetScope();
+  const { universe, shortlist, groups, selected, maxSelected, isSelected, toggle, selectGroup, reset } =
+    useAssetScope();
 
   const [query, setQuery] = useState('');
   const [group, setGroup] = useState<AssetGroup | 'all'>('all');
@@ -40,7 +41,18 @@ export function AssetPicker({ listClassName = 'max-h-72', className }: AssetPick
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return universe.filter((asset) => {
+
+    /*
+     * The shortlist is what the list opens on — merging the radar into the
+     * catalogue took it from twenty-eight names to a hundred and fifty, most of
+     * which mean nothing to a reader scanning for one.
+     *
+     * Searching or picking a group escapes it, because at that point the reader
+     * has said what they are looking for and hiding a match would be wrong.
+     */
+    const pool = needle || group !== 'all' ? universe : shortlist;
+
+    return pool.filter((asset) => {
       if (group !== 'all' && asset.group !== group) return false;
       if (!needle) return true;
       return (
@@ -49,7 +61,10 @@ export function AssetPicker({ listClassName = 'max-h-72', className }: AssetPick
         assetName(asset).toLowerCase().includes(needle)
       );
     });
-  }, [universe, query, group, assetName]);
+  }, [universe, shortlist, query, group, assetName]);
+
+  /** How many names the shortlist is holding back, for the hint under the list. */
+  const hidden = query.trim() || group !== 'all' ? 0 : universe.length - shortlist.length;
 
   const onToggle = (symbol: string) => {
     toggle(symbol);
@@ -162,6 +177,13 @@ export function AssetPicker({ listClassName = 'max-h-72', className }: AssetPick
         {!visible.length && (
           <li className="px-2 py-6 text-center text-[11.5px] break-words text-white/35">
             {t('assets.empty', { query })}
+          </li>
+        )}
+
+        {/* Said plainly, because a list that quietly hides most of itself lies. */}
+        {hidden > 0 && (
+          <li className="px-2 pt-2 pb-1 text-center text-[10.5px] text-white/25">
+            {t('assets.hidden', { n: String(hidden) })}
           </li>
         )}
       </ul>

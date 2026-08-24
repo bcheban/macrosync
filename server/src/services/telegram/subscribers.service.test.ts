@@ -266,7 +266,7 @@ describe('subscriber roster', () => {
       },
     ] as never;
 
-    await alerts.notifyClosed(closed, { wins: 1, losses: 0, expired: 0, superseded: 0, voided: 0, byStrategy: {}, updatedAt: '' });
+    await alerts.notifyClosed(closed, { wins: 1, losses: 0, expired: 0, superseded: 0, voided: 0, breakeven: 0, byStrategy: {}, updatedAt: '' });
 
     // Being told how a call *ended* is not subscribing to new ones of that kind.
     assert.ok(recipients().includes('500'));

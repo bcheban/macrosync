@@ -25,7 +25,10 @@ export interface ActiveSignal {
   side: 'buy' | 'sell';
   timeframe: string;
   entry: number;
+  /** The stop in force now — equal to entry once the trade is protected. */
   stopLoss: number;
+  /** Where the stop started, so the risk the call carried stays legible. */
+  initialStopLoss: number;
   takeProfit: number;
   /** Null when the exchange feed could not be read — the row still renders. */
   price: number | null;
@@ -41,6 +44,8 @@ export interface ActiveSignal {
   progressPct: number | null;
   openedAt: string;
   ageMinutes: number;
+  /** Set once the stop has been pulled to entry. */
+  breakevenAt?: string;
 }
 
 export interface ActiveSignalsResponse {
@@ -70,6 +75,7 @@ function priceTrade(trade: ActiveTrade, price: number | undefined): ActiveSignal
     timeframe: trade.timeframe,
     entry: trade.entry,
     stopLoss: trade.stopLoss,
+    initialStopLoss: trade.initialStopLoss ?? trade.stopLoss,
     takeProfit: trade.takeProfit,
     price: price ?? null,
     unrealisedPct: move === null ? null : round(trade.side === 'buy' ? move : -move),
@@ -77,6 +83,7 @@ function priceTrade(trade: ActiveTrade, price: number | undefined): ActiveSignal
     progressPct: price === undefined || span === 0 ? null : round(((price - trade.entry) / span) * 100, 1),
     openedAt: trade.openedAt,
     ageMinutes: Math.max(0, Math.round((Date.now() - Date.parse(trade.openedAt)) / 60_000)),
+    ...(trade.breakevenAt ? { breakevenAt: trade.breakevenAt } : {}),
   };
 }
 

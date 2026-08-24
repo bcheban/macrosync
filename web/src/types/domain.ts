@@ -39,6 +39,11 @@ export interface AssetMeta {
   /** Canonical project name, e.g. "Ethereum". Not translated — it is a proper noun. */
   name: string;
   group: AssetGroup;
+  /**
+   * Position in the radar's volume ranking, 1-based. Absent for a curated pair
+   * the scan does not currently reach.
+   */
+  rank?: number;
 }
 
 export interface Ticker {
@@ -216,7 +221,10 @@ export interface ActiveSignal {
   side: 'buy' | 'sell';
   timeframe: string;
   entry: number;
+  /** The stop in force now — equal to entry once the trade is protected. */
   stopLoss: number;
+  /** Where the stop started, so the risk the call carried stays legible. */
+  initialStopLoss: number;
   takeProfit: number;
   /** Null when the exchange feed could not be read; the row still renders. */
   price: number | null;
@@ -225,6 +233,23 @@ export interface ActiveSignal {
   progressPct: number | null;
   openedAt: string;
   ageMinutes: number;
+  /** Set once the stop has been pulled to entry. */
+  breakevenAt?: string;
+}
+
+export interface Candle {
+  openTime: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface CandlesResponse {
+  symbol: string;
+  interval: string;
+  candles: Candle[];
 }
 
 export interface ActiveSignalsResponse {

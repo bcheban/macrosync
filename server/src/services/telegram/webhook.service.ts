@@ -9,6 +9,7 @@ import {
   type InlineKeyboard,
 } from './telegram.client.js';
 import { getPrefs, STRATEGIES, togglePref, wantsNothing, type StrategyPrefs } from './preferences.service.js';
+import { clearAccount, getAccount, parseBalanceCommand, setAccount } from './sizing.service.js';
 
 /**
  * Everything the bot does when somebody talks to it.
@@ -111,11 +112,12 @@ const WELCOME = [
   '<b>Commands</b>',
   '/stats — the current record',
   '/settings — choose which strategies reach you',
+  '/balance — size positions for your deposit',
   '/mute — two hours of quiet',
   '/unmute — turn alerts back on',
   '/stop — unsubscribe',
   '',
-  '<i>Model output over public market data. Not financial advice.</i>',
+  '<i>MEXC perpetuals. Model output over public market data — not financial advice.</i>',
 ].join('\n');
 
 const HELP = [
@@ -123,6 +125,7 @@ const HELP = [
   '/start — subscribe to alerts',
   '/stats — win rate and open trades',
   '/settings — choose which strategies reach you',
+  '/balance — size positions for your deposit',
   '/mute — two hours of quiet',
   '/unmute — turn alerts back on',
   '/stop — unsubscribe',
@@ -147,6 +150,63 @@ async function handleCommand(chatId: string, text: string, profile: { name?: str
 
     case '/stats': {
       await sendTelegramMessage(await statsLine(), { chatId, keyboard: MENU });
+      return;
+    }
+
+    case '/balance': {
+      const parsed = parseBalanceCommand(text);
+
+      if ('error' in parsed) {
+        if (parsed.error === 'usage') {
+          const existing = await getAccount(chatId);
+          await sendTelegramMessage(
+            [
+              '💰 <b>Position sizing</b>',
+              '',
+              'Tell me your deposit and how much of it you are willing to risk on one trade, and every alert will carry the margin worked out for you.',
+              '',
+              '<code>/balance 1000 1</code> — $1,000 deposit, 1% risk',
+              '<code>/balance 500</code> — risk defaults to 1%',
+              '<code>/balance off</code> — forget it',
+              '',
+              existing
+                ? `Currently: <b>${existing.balance}</b> at <b>${existing.riskPct}%</b> — ${Math.round((existing.balance * existing.riskPct) / 100)} per trade.`
+                : '<i>Nothing saved. Alerts arrive without a size until you set one.</i>',
+            ].join(String.fromCharCode(10)),
+            { chatId },
+          );
+          return;
+        }
+
+        if (text.trim().split(/\s+/)[1]?.toLowerCase() === 'off') {
+          await clearAccount(chatId);
+          await sendTelegramMessage('💰 Forgotten. Alerts will arrive without a size.', { chatId });
+          return;
+        }
+
+        const complaint: Record<string, string> = {
+          balance: 'That deposit did not read as a number. Try <code>/balance 1000 1</code>.',
+          'balance-large': 'That deposit looks like a typo. If it is not, size it by hand.',
+          risk: 'That risk did not read as a number. Try <code>/balance 1000 1</code>.',
+          'risk-large': 'Over 20% of an account on one trade is not something this bot will size for you.',
+        };
+        await sendTelegramMessage(`⚠️ ${complaint[parsed.error] ?? 'Could not read that.'}`, { chatId });
+        return;
+      }
+
+      const account = await setAccount(chatId, parsed.balance, parsed.riskPct);
+      const perTrade = (account.balance * account.riskPct) / 100;
+
+      await sendTelegramMessage(
+        [
+          `💰 Saved: <b>${account.balance}</b> at <b>${account.riskPct}%</b> risk.`,
+          '',
+          `Every alert will now carry the margin for a position that loses <b>${perTrade.toFixed(2)}</b> if its stop fills.`,
+          '',
+          '<i>Sizing only. Nothing is placed for you, and nothing here is advice.</i>',
+        ].join(String.fromCharCode(10)),
+        { chatId, keyboard: MENU },
+      );
       return;
     }
 

@@ -13,7 +13,13 @@ import * as trades from './trades.service.js';
  * Uses `node:test` — no dependency, and `tsx --test` runs it directly.
  */
 
-/** `symbol -> [highs, lows]`, newest bar last. */
+/**
+ * `symbol -> [highs, lows]`, newest bar last.
+ *
+ * Every case needs its own ticker: candles are cached per symbol and interval,
+ * and `resetMemoryStore` clears the store rather than that cache — so two cases
+ * sharing a symbol silently replay the first one's tape.
+ */
 let script: Record<string, [number[], number[]]> = {};
 /** Every candle is stamped as opening after this, so trades see them. */
 let candleBase = Date.now();
@@ -87,7 +93,8 @@ describe('trade ledger', () => {
   });
 
   it('settles a long that tagged its target as a win', async () => {
-    script = { ETHUSDT: [[105, 111], [99, 99]] };
+    // Never dips back to entry, so the moved stop is never in the way.
+    script = { ETHUSDT: [[105, 111], [102, 106]] };
 
     await trades.openTrade(signal('ETH', 'buy', 100, 95, 110));
     const { closed, stats } = await trades.evaluateTrades();
@@ -96,6 +103,82 @@ describe('trade ledger', () => {
     assert.equal(closed[0]?.outcome, 'win');
     assert.equal(closed[0]?.resultPct, 10);
     assert.equal(trades.winRate(stats), 100);
+  });
+
+  it('moves the stop to entry at the halfway mark', async () => {
+    // Halfway from 100 to 110 is 105; the first bar reaches it and stops there.
+    script = { BEAUSDT: [[106], [101]] };
+
+    await trades.openTrade(signal('BEA', 'buy', 100, 95, 110));
+    const { closed, movedToBreakeven } = await trades.evaluateTrades();
+
+    assert.equal(closed.length, 0, 'still running');
+    assert.equal(movedToBreakeven.length, 1);
+    assert.equal(movedToBreakeven[0]?.stopLoss, 100, 'the stop is now entry');
+    assert.equal(movedToBreakeven[0]?.initialStopLoss, 95, 'and where it started is kept');
+  });
+
+  it('announces the move once, not on every run', async () => {
+    script = { BEBUSDT: [[106], [101]] };
+
+    await trades.openTrade(signal('BEB', 'buy', 100, 95, 110));
+    await trades.evaluateTrades();
+    const again = await trades.evaluateTrades();
+
+    // The moved stop has to survive the run, or this repeats forever.
+    assert.equal(again.movedToBreakeven.length, 0);
+    /*
+     * And the trade has to survive it. A stop at entry once read as malformed —
+     * the "is this a real trade" check wanted the stop strictly below entry —
+     * so every protected trade was voided on the run after it was protected.
+     */
+    assert.equal(again.closed.length, 0);
+    assert.equal((await trades.loadActive())[0]?.stopLoss, 100);
+  });
+
+  it('scratches rather than losing once the stop has moved', async () => {
+    // Reaches 106, then trades back through entry.
+    script = { BECUSDT: [[106, 101], [101, 99]] };
+
+    await trades.openTrade(signal('BEC', 'buy', 100, 95, 110));
+    const { closed, stats } = await trades.evaluateTrades();
+
+    assert.equal(closed[0]?.outcome, 'breakeven');
+    assert.equal(closed[0]?.resultPct, 0, 'nothing was lost');
+    /*
+     * And it is kept out of the rate. Before this rule the same tape was a
+     * loss, so counting it as one would double-punish and counting it as a win
+     * would flatter — which is why it is neither, and reported on its own.
+     */
+    assert.equal(stats.wins + stats.losses, 0);
+    assert.equal(stats.breakeven, 1);
+  });
+
+  it('costs a win when one bar both scratches and targets', async () => {
+    /*
+     * Documented rather than avoided. The second bar has a low of 99 and a high
+     * of 111: with the stop already at 100 the price traded through it at some
+     * point, and intrabar order is unknowable. A real position with a stop at
+     * entry would have been closed before the target printed, so this reads as
+     * the scratch — the same "flatters least" rule the levels have always used.
+     */
+    script = { BEDUSDT: [[105, 111], [99, 99]] };
+
+    await trades.openTrade(signal('BED', 'buy', 100, 95, 110));
+    const { closed } = await trades.evaluateTrades();
+
+    assert.equal(closed[0]?.outcome, 'breakeven');
+  });
+
+  it('reads the halfway mark in the trade direction for a short', async () => {
+    // Short from 100 to 90: halfway is 95.
+    script = { BEEUSDT: [[99], [94]] };
+
+    await trades.openTrade(signal('BEE', 'sell', 100, 105, 90));
+    const { movedToBreakeven } = await trades.evaluateTrades();
+
+    assert.equal(movedToBreakeven.length, 1);
+    assert.equal(movedToBreakeven[0]?.stopLoss, 100);
   });
 
   it('settles a long that tagged its stop as a loss', async () => {
@@ -196,7 +279,8 @@ describe('trade ledger', () => {
   });
 
   it('does not settle the same trade twice', async () => {
-    script = { AVAXUSDT: [[105, 111], [99, 99]] };
+    // A clean win: never dips back through entry once the stop has moved.
+    script = { AVAXUSDT: [[105, 111], [102, 106]] };
 
     await trades.openTrade(signal('AVAX', 'buy', 100, 95, 110));
     await trades.evaluateTrades();
@@ -249,9 +333,9 @@ describe('trade ledger', () => {
   });
 
   it('reports a win rate over decided trades only', async () => {
-    assert.equal(trades.winRate({ wins: 3, losses: 1, expired: 0, superseded: 0, voided: 0, byStrategy: {}, updatedAt: '' }), 75);
+    assert.equal(trades.winRate({ wins: 3, losses: 1, expired: 0, superseded: 0, voided: 0, breakeven: 0, byStrategy: {}, updatedAt: '' }), 75);
     // Expired and superseded calls must not dilute the denominator.
-    assert.equal(trades.winRate({ wins: 3, losses: 1, expired: 9, superseded: 4, voided: 0, byStrategy: {}, updatedAt: '' }), 75);
-    assert.equal(trades.winRate({ wins: 0, losses: 0, expired: 5, superseded: 0, voided: 0, byStrategy: {}, updatedAt: '' }), 0);
+    assert.equal(trades.winRate({ wins: 3, losses: 1, expired: 9, superseded: 4, voided: 0, breakeven: 0, byStrategy: {}, updatedAt: '' }), 75);
+    assert.equal(trades.winRate({ wins: 0, losses: 0, expired: 5, superseded: 0, voided: 0, breakeven: 0, byStrategy: {}, updatedAt: '' }), 0);
   });
 });

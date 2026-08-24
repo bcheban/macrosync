@@ -1,6 +1,6 @@
 import { m } from 'framer-motion';
-import { Radio } from 'lucide-react';
-import { useMemo } from 'react';
+import { CandlestickChart, Radio, ShieldCheck, X } from 'lucide-react';
+import { Suspense, lazy, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { SectionHeader } from '@/components/ui/SectionHeader';
@@ -10,33 +10,43 @@ import { formatPrice, timeAgo } from '@/lib/format';
 import { useAssetScope } from '@/state/AssetScope';
 import type { ActiveSignal, ActiveSignalsResponse, Strategy } from '@/types/domain';
 
+/*
+ * The chart is the heaviest thing on the page and most sessions never open one,
+ * so the renderer is fetched on the first click rather than shipped in the entry
+ * bundle.
+ */
+const TradeChart = lazy(() =>
+  import('@/components/signals/TradeChart').then((module) => ({ default: module.TradeChart })),
+);
+
 interface LiveTradesProps {
   data?: ActiveSignalsResponse;
   loading: boolean;
 }
 
-/** Fixed order, so the groups do not reshuffle as counts change. */
+/** Fixed order, so the columns do not reshuffle as counts change. */
 const ORDER: Strategy[] = ['scalping', 'day', 'swing'];
+
+const COLUMN_ACCENT: Record<Strategy, string> = {
+  scalping: 'from-warn/40',
+  day: 'from-accent-soft/40',
+  swing: 'from-cyber/40',
+};
 
 /**
  * How far a trade has travelled, as a bar.
  *
- * Reads from entry: filling right is progress toward the target, filling left is
- * drift toward the stop. Clamped for display only — the number beside it is
- * unclamped, because a trade 130% of the way to its stop is worth seeing as
- * exactly that rather than as a full bar.
+ * `pct` is already signed toward the target, so the side of the trade does not
+ * come into it — a short moving down is positive progress just as a long moving
+ * up is. Clamped for display only; the number beside it is not, because a trade
+ * most of the way to its stop is exactly what somebody needs to see.
  */
 function ProgressBar({ pct }: { pct: number }) {
-  /*
-   * `pct` is already signed toward the target, so the side of the trade does not
-   * come into it — a short moving down is positive progress just as a long
-   * moving up is. Positive fills from the left, negative from the right.
-   */
   const toward = pct >= 0;
   const width = Math.min(Math.abs(pct), 100);
 
   return (
-    <div className="relative mt-1.5 h-1 w-full overflow-hidden rounded-full bg-white/8">
+    <div className="relative mt-2 h-1 w-full overflow-hidden rounded-full bg-white/8">
       <div
         className={cn(
           'absolute inset-y-0 rounded-full transition-[width] duration-500',
@@ -48,34 +58,53 @@ function ProgressBar({ pct }: { pct: number }) {
   );
 }
 
-function TradeRow({ trade, index }: { trade: ActiveSignal; index: number }) {
+function TradeCard({
+  trade,
+  index,
+  open,
+  onOpen,
+}: {
+  trade: ActiveSignal;
+  index: number;
+  open: boolean;
+  onOpen: () => void;
+}) {
   const { t } = useTranslation();
-  const { isSelected, toggle } = useAssetScope();
+  const { isSelected } = useAssetScope();
 
-  const selected = isSelected(trade.symbol);
   const long = trade.side === 'buy';
   const move = trade.unrealisedPct;
+  const selected = isSelected(trade.symbol);
 
   return (
     <m.button
       type="button"
-      onClick={() => toggle(trade.symbol)}
-      aria-pressed={selected}
-      initial={{ opacity: 0, x: -6 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: Math.min(index, 6) * 0.04, duration: 0.3 }}
+      onClick={onOpen}
+      aria-expanded={open}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: Math.min(index, 8) * 0.03, duration: 0.3 }}
       className={cn(
-        'block w-full rounded-xl px-2.5 py-2 text-left transition-colors duration-200',
-        'hover:bg-white/6 focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:outline-none',
-        selected && 'bg-white/6 ring-1 ring-inset ring-white/12',
+        'group relative block w-full overflow-hidden rounded-xl border p-3 text-left transition-colors duration-200',
+        'focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:outline-none',
+        open ? 'border-white/20 bg-white/8' : 'border-white/8 bg-white/3 hover:border-white/14 hover:bg-white/6',
       )}
     >
-      <div className="flex items-baseline justify-between gap-2">
-        <div className="flex min-w-0 items-baseline gap-2">
-          <span className="truncate text-sm font-semibold text-white">{trade.base}</span>
+      {/* A hairline in the trade's direction — the card reads before the text. */}
+      <span aria-hidden className={cn('absolute inset-y-0 left-0 w-0.5', long ? 'bg-bull/60' : 'bg-bear/60')} />
+
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-[15px] leading-none font-semibold text-white">{trade.base}</span>
+            {trade.breakevenAt && (
+              <ShieldCheck className="size-3.5 shrink-0 text-bull" aria-label={t('liveTrades.protected')} />
+            )}
+            {selected && <span className="size-1 shrink-0 rounded-full bg-accent-soft" aria-hidden />}
+          </div>
           <span
             className={cn(
-              'shrink-0 rounded px-1 py-px text-[9.5px] font-semibold tracking-wider uppercase',
+              'mt-1 inline-block rounded px-1 py-px text-[9px] font-semibold tracking-wider uppercase',
               long ? 'bg-bull/15 text-bull' : 'bg-bear/15 text-bear',
             )}
           >
@@ -83,23 +112,40 @@ function TradeRow({ trade, index }: { trade: ActiveSignal; index: number }) {
           </span>
         </div>
 
-        {move !== null && (
-          <span className={cn('tnum shrink-0 font-mono text-xs', move >= 0 ? 'text-bull' : 'text-bear')}>
-            {move >= 0 ? '+' : ''}
-            {move.toFixed(2)}%
-          </span>
-        )}
+        <div className="shrink-0 text-right">
+          {move !== null && (
+            <div className={cn('tnum font-mono text-sm leading-none', move >= 0 ? 'text-bull' : 'text-bear')}>
+              {move >= 0 ? '+' : ''}
+              {move.toFixed(2)}%
+            </div>
+          )}
+          <div className="mt-1 text-[10px] whitespace-nowrap text-white/30">{timeAgo(trade.openedAt)}</div>
+        </div>
       </div>
 
-      <div className="mt-1 flex items-baseline justify-between gap-2 text-[11px]">
-        <span className="tnum truncate font-mono text-white/45">
-          {t('liveTrades.entry')} {formatPrice(trade.entry)}
-          {trade.price !== null && <span className="text-white/30"> · {formatPrice(trade.price)}</span>}
-        </span>
-        <span className="shrink-0 text-white/30">{timeAgo(trade.openedAt)}</span>
+      <div className="mt-2 grid grid-cols-3 gap-2 text-[10.5px]">
+        <div className="min-w-0">
+          <div className="text-white/30">{t('signals.entry')}</div>
+          <div className="tnum truncate font-mono text-white/70">{formatPrice(trade.entry)}</div>
+        </div>
+        <div className="min-w-0">
+          <div className="text-white/30">{t('signals.stop')}</div>
+          <div className={cn('tnum truncate font-mono', trade.breakevenAt ? 'text-bull/80' : 'text-white/50')}>
+            {formatPrice(trade.stopLoss)}
+          </div>
+        </div>
+        <div className="min-w-0">
+          <div className="text-white/30">{t('signals.target')}</div>
+          <div className="tnum truncate font-mono text-white/50">{formatPrice(trade.takeProfit)}</div>
+        </div>
       </div>
 
       {trade.progressPct !== null && <ProgressBar pct={trade.progressPct} />}
+
+      <div className="mt-2 flex items-center gap-1 text-[10px] text-white/25 transition-colors group-hover:text-white/50">
+        <CandlestickChart className="size-3" />
+        {t(open ? 'liveTrades.hideChart' : 'liveTrades.showChart')}
+      </div>
     </m.button>
   );
 }
@@ -107,23 +153,33 @@ function TradeRow({ trade, index }: { trade: ActiveSignal; index: number }) {
 /**
  * What the bot is tracking, on the site that publishes it.
  *
- * The ledger behind the Telegram alerts was invisible here: the channel knew
- * which calls were open and the dashboard did not, so the two could describe the
- * same moment differently. Every row selects that asset, which is the point —
- * a call arrives on the phone and its chart is one tap away.
+ * Laid out as one column per strategy rather than a single list. Thirty open
+ * trades in one column is a scroll; split three ways it is a board, and the
+ * split is the one that matters — a scalp and a swing on the same asset are
+ * different positions with different horizons, and reading them interleaved
+ * hides that.
  */
 export function LiveTrades({ data, loading }: LiveTradesProps) {
   const { t } = useTranslation();
+  const { toggle, isSelected } = useAssetScope();
+  const [openId, setOpenId] = useState<string>();
 
-  const groups = useMemo(() => {
+  const columns = useMemo(() => {
     const signals = data?.signals ?? [];
     return ORDER.map((strategy) => ({
       strategy,
       trades: signals.filter((signal) => signal.strategy === strategy),
-    })).filter((group) => group.trades.length > 0);
+    }));
   }, [data]);
 
   const total = data?.signals.length ?? 0;
+  const opened = data?.signals.find((signal) => signal.id === openId);
+
+  const handleOpen = (trade: ActiveSignal) => {
+    setOpenId((current) => (current === trade.id ? undefined : trade.id));
+    // Opening a chart also brings the asset into every other panel's scope.
+    if (!isSelected(trade.symbol)) toggle(trade.symbol);
+  };
 
   return (
     <GlassCard className="p-4 sm:p-5">
@@ -142,27 +198,82 @@ export function LiveTrades({ data, loading }: LiveTradesProps) {
         }
       />
 
-      <div className="mt-4 max-h-104 space-y-3 overflow-y-auto pr-1">
-        {loading && !total ? (
-          Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-14 w-full" />)
-        ) : !total ? (
-          <p className="px-1 py-3 text-[11.5px] leading-relaxed text-white/40">{t('liveTrades.empty')}</p>
-        ) : (
-          groups.map((group) => (
-            <section key={group.strategy}>
-              <h3 className="px-1 pb-1 text-[10px] font-semibold tracking-[0.14em] text-white/30 uppercase">
-                {t(`signals.strategies.${group.strategy}`)}
-                <span className="ml-1.5 text-white/20">{group.trades.length}</span>
-              </h3>
-              <div className="space-y-0.5">
-                {group.trades.map((trade, index) => (
-                  <TradeRow key={trade.id} trade={trade} index={index} />
-                ))}
+      {loading && !total ? (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Skeleton key={index} className="h-32 w-full" />
+          ))}
+        </div>
+      ) : !total ? (
+        <p className="mt-4 px-1 py-6 text-center text-[11.5px] leading-relaxed text-white/40">
+          {t('liveTrades.empty')}
+        </p>
+      ) : (
+        <>
+          <div className="mt-4 grid gap-4 lg:grid-cols-3">
+            {columns.map((column) => (
+              <section key={column.strategy} className="min-w-0">
+                <header className="relative mb-2 flex items-baseline justify-between overflow-hidden rounded-lg px-2 py-1.5">
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'absolute inset-0 bg-gradient-to-r to-transparent opacity-15',
+                      COLUMN_ACCENT[column.strategy],
+                    )}
+                  />
+                  <h3 className="relative text-[10.5px] font-semibold tracking-[0.14em] text-white/70 uppercase">
+                    {t(`signals.strategies.${column.strategy}`)}
+                  </h3>
+                  <span className="tnum relative font-mono text-[10.5px] text-white/35">{column.trades.length}</span>
+                </header>
+
+                {column.trades.length ? (
+                  <div className="space-y-2">
+                    {column.trades.map((trade, index) => (
+                      <TradeCard
+                        key={trade.id}
+                        trade={trade}
+                        index={index}
+                        open={trade.id === openId}
+                        onOpen={() => handleOpen(trade)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="rounded-xl border border-dashed border-white/8 px-3 py-5 text-center text-[10.5px] text-white/25">
+                    {t('liveTrades.columnEmpty')}
+                  </p>
+                )}
+              </section>
+            ))}
+          </div>
+
+          {opened && (
+            <div className="mt-5 rounded-xl border border-white/10 bg-black/25 p-3 sm:p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold text-white">
+                  {opened.base}
+                  <span className="ml-2 text-[11px] font-normal text-white/40">
+                    {t(`signals.strategies.${opened.strategy}`)} · {opened.timeframe}
+                  </span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setOpenId(undefined)}
+                  aria-label={t('liveTrades.hideChart')}
+                  className="rounded-lg p-1 text-white/40 transition-colors hover:bg-white/8 hover:text-white/80"
+                >
+                  <X className="size-4" />
+                </button>
               </div>
-            </section>
-          ))
-        )}
-      </div>
+
+              <Suspense fallback={<Skeleton className="h-64 w-full sm:h-72" />}>
+                <TradeChart trade={opened} />
+              </Suspense>
+            </div>
+          )}
+        </>
+      )}
     </GlassCard>
   );
 }

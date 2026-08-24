@@ -39,6 +39,11 @@ export interface AssetMeta {
   /** Canonical project name, e.g. "Ethereum". Not translated — it is a proper noun. */
   name: string;
   group: AssetGroup;
+  /**
+   * Position in the radar's volume ranking, 1-based. Absent for a curated pair
+   * the scan does not currently reach.
+   */
+  rank?: number;
 }
 
 export interface Ticker {

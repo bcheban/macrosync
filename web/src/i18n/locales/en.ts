@@ -52,6 +52,7 @@ export const en = {
   },
 
   assets: {
+    hidden: '{{n}} more further down the volume ranking — search to reach them',
     title: 'Asset universe',
     subtitle: 'Scopes the ticker tape, watchlist and signal grid',
     trigger_one: '{{count}} asset',
@@ -87,6 +88,12 @@ export const en = {
   },
 
   liveTrades: {
+    chartError: 'Could not load the bars',
+    chartLoading: 'Loading bars…',
+    protected: 'Stop moved to entry',
+    hideChart: 'Close chart',
+    showChart: 'Chart',
+    columnEmpty: 'Nothing open',
     title: 'Live Trades',
     subtitle: 'What the alert bot is tracking right now',
     long: 'Long',

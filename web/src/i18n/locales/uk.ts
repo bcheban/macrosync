@@ -50,6 +50,7 @@ export const uk: Translation = {
   },
 
   assets: {
+    hidden: 'Ще {{n}} нижче за оборотом — знайди через пошук',
     title: 'Набір активів',
     subtitle: 'Визначає стрічку цін, список спостереження та сітку сигналів',
     trigger_one: '{{count}} актив',
@@ -92,6 +93,12 @@ export const uk: Translation = {
   },
 
   liveTrades: {
+    chartError: 'Не вдалося завантажити свічки',
+    chartLoading: 'Завантажую свічки…',
+    protected: 'Стоп перенесено на вхід',
+    hideChart: 'Закрити графік',
+    showChart: 'Графік',
+    columnEmpty: 'Порожньо',
     title: 'Активні угоди',
     subtitle: 'Те, що бот відстежує просто зараз',
     long: 'Лонг',
