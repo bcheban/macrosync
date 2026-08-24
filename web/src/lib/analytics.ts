@@ -15,6 +15,7 @@
 
 const MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID ?? '';
 
+/** What callers may pass. The stub forwards `arguments` untouched. */
 type GtagArgs =
   | ['js', Date]
   | ['config', string, Record<string, unknown>?]
@@ -58,9 +59,25 @@ export function initAnalytics(): void {
   started = true;
 
   window.dataLayer = window.dataLayer ?? [];
-  window.gtag = function gtag(...args: GtagArgs) {
-    window.dataLayer?.push(args);
+
+  /*
+   * `arguments`, not a rest array — and this is not stylistic.
+   *
+   * gtag.js decides what a `dataLayer` entry means by its type: it treats an
+   * `Arguments` object as a gtag command and anything else as a plain GTM data
+   * push. A rest parameter produces a real Array, so `['config', 'G-…']` was
+   * read as inert data. Every call queued correctly, the tag loaded, the queue
+   * was drained — and not one hit was ever sent. Nothing errored, which is what
+   * made it survive: the only symptom was an empty report in Google Analytics.
+   *
+   * That is why the canonical snippet uses a `function` rather than an arrow.
+   * Keep it.
+   */
+  window.gtag = function gtag() {
+    // eslint-disable-next-line prefer-rest-params
+    window.dataLayer?.push(arguments);
   };
+
   window.gtag('js', new Date());
   window.gtag('config', MEASUREMENT_ID, { send_page_view: false, anonymize_ip: true });
 
