@@ -88,7 +88,7 @@ slide-over. All of it collapses under `prefers-reduced-motion`.
 <br />
 
 <img src="https://img.shields.io/badge/i18next-25-26A69A?logo=i18next&logoColor=white" align="left" height="24" /> &nbsp;
-English and Ukrainian, including *generated* copy. The deterministic engines emit translation
+English, Ukrainian and German, including *generated* copy. The deterministic engines emit translation
 keys with parameters rather than sentences, so signal rationale and risk scenarios are
 translated client-side; the LLM is simply asked to answer in the active language.
 
@@ -673,7 +673,7 @@ broken.
 | --- | --- |
 | `/start` | Subscribe. Also lifts a mute — starting again reads as "talk to me" |
 | `/stats` | Win rate, record and open trades |
-| `/settings` | Choose which strategies reach you |
+| `/settings` | Strategies, notification kinds, and language |
 | `/balance 1000 1` | Size positions for a deposit and a risk appetite |
 | `/mute` · 🛑 button | Two hours of quiet for that one person |
 | `/unmute` | Lift it early |
@@ -685,6 +685,39 @@ is nothing scheduled and nothing to clean up. A muted subscriber is skipped, nev
 A call still opens a trade when every subscriber is muted. Muting a phone is a delivery preference,
 not a change to the call, and letting it stop the ledger would leave the win rate with holes wherever
 the only subscriber wanted an evening off.
+
+#### Notification filters and languages — `/settings`
+
+Three groups of switch, one keyboard. Strategies answer *which setups*; channels answer *which
+moments*: `signals` opens a position, `updates` changes it while it runs, `results` closes it.
+
+One combination is dangerous, and the panel says so whenever it is reached:
+
+> ⚠️ Results are off while new signals are on: you will be told when to enter and never told when it
+> ends.
+
+It is allowed — it is the subscriber's book, and plenty of people close on their own terms. But
+nobody chooses it on purpose by tapping one button. This reverses an earlier deliberate choice to
+make close notices ignore every filter; a warned opt-out respects both the request and the reader.
+
+The bot speaks **English, Ukrainian and German**. The dictionary shape is derived from the English
+file, so a key added there fails to compile in the other two until they carry it — without that, a
+missing translation reaches somebody's chat as `undefined`, which reads as a broken bot rather than
+as a missing string.
+
+`/start` asks which language before anything else, and asks it in the language the phone's
+`language_code` suggests, so the one message the reader cannot yet have configured is still likely
+readable. Asked exactly once: somebody sending `/start` again to lift a mute has already answered,
+and re-asking reads as the bot forgetting.
+
+Broadcasts render **per recipient**, not once. Two things vary between subscribers — their language
+and whether they have told the bot their deposit — so a body built ahead of the loop would force
+every reader onto the first one's settings.
+
+The stored preferences record changed shape when channels and locale were added, and the old flat
+`{scalping, day, swing}` is still in production. It reads both, and there is a test for it: a
+subscriber who turned swing off months ago must not have it turned back on by a deployment. Silently
+restoring a preference somebody set is worse than never having offered the setting.
 
 #### Per-person strategy settings — `/settings`
 
@@ -1017,7 +1050,7 @@ Verified by measuring element geometry before and after a language switch: at 37
 
 ### Localization — `web/src/i18n/`
 
-English and Ukrainian, switchable from the header. The hard part is not the static UI copy — it is
+English, Ukrainian and German, switchable from the header. The hard part is not the static UI copy — it is
 the *generated* copy, and each producer is handled differently:
 
 | Producer                        | Strategy                                                        |
