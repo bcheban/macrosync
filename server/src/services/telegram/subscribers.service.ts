@@ -1,6 +1,6 @@
 import { env } from '../../config/env.js';
 import type { Strategy } from '../../types/domain.js';
-import { getPrefs, STRATEGIES } from './preferences.service.js';
+import { CHANNELS, getPrefs, STRATEGIES, type Channel, type Locale, type Prefs } from './preferences.service.js';
 import {
   addToSet,
   deleteKey,
@@ -142,24 +142,37 @@ export async function mutedUntil(chatId: string): Promise<string | null> {
  * asked for an evening off or because nobody wants what the scan is finding.
  *
  * `strategy` is optional: a close notice concerns a trade the recipient was
- * already told about, so it goes to everyone unmuted regardless of what they
- * have since turned off. Being told how a call *ended* is not the same as
- * subscribing to new ones of that kind.
+ * already told about — but that is now the subscriber's call rather than the
+ * bot's. `/settings` offers the three moments separately, and turning results
+ * off while signals are on carries a warning in the panel, because nobody picks
+ * "tell me to enter and never tell me it ended" on purpose.
  */
+export interface Recipient {
+  chatId: string;
+  /** Carried through so the broadcast renders once per language, not per read. */
+  prefs: Prefs;
+}
+
 export async function activeRecipients(
   strategy?: Strategy,
-): Promise<{ send: string[]; muted: string[]; filtered: string[] }> {
+  channel?: Channel,
+): Promise<{ send: Recipient[]; muted: string[]; filtered: string[] }> {
   const roster = await listSubscribers();
 
   const states = await Promise.all(
     roster.map(async (chatId) => {
       const [until, prefs] = await Promise.all([mutedUntil(chatId), getPrefs(chatId)]);
-      return { chatId, muted: Boolean(until), wants: strategy ? prefs[strategy] : true };
+
+      // Both filters must pass: the right kind of setup, at a moment they want.
+      const wants =
+        (strategy ? prefs.strategies[strategy] : true) && (channel ? prefs.channels[channel] : true);
+
+      return { chatId, prefs, muted: Boolean(until), wants };
     }),
   );
 
   return {
-    send: states.filter((s) => !s.muted && s.wants).map((s) => s.chatId),
+    send: states.filter((s) => !s.muted && s.wants).map((s) => ({ chatId: s.chatId, prefs: s.prefs })),
     muted: states.filter((s) => s.muted).map((s) => s.chatId),
     filtered: states.filter((s) => !s.muted && !s.wants).map((s) => s.chatId),
   };
@@ -172,9 +185,14 @@ export async function subscribersStatus() {
   );
 
   const byStrategy: Record<Strategy, number> = { scalping: 0, day: 0, swing: 0 };
+  const byChannel: Record<Channel, number> = { signals: 0, updates: 0, results: 0 };
+  const byLocale: Record<string, number> = {};
+
   for (const state of states) {
     if (state.muted) continue;
-    for (const key of STRATEGIES) if (state.prefs[key]) byStrategy[key] += 1;
+    for (const key of STRATEGIES) if (state.prefs.strategies[key]) byStrategy[key] += 1;
+    for (const key of CHANNELS) if (state.prefs.channels[key]) byChannel[key] += 1;
+    byLocale[state.prefs.locale] = (byLocale[state.prefs.locale] ?? 0) + 1;
   }
 
   return {
@@ -183,5 +201,8 @@ export async function subscribersStatus() {
     muted: states.filter((s) => s.muted).length,
     /** How many unmuted subscribers each strategy actually reaches. */
     byStrategy,
+    /** And each kind of message, which is a separate opt-out. */
+    byChannel,
+    byLocale,
   };
 }

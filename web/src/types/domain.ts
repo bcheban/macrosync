@@ -9,7 +9,7 @@ export type Sentiment = 'bullish' | 'bearish' | 'neutral';
 export type VolatilityRegime = 'low' | 'elevated' | 'high' | 'extreme';
 /** Every price in the app comes from one exchange; there is no fallback feed. */
 export type DataSource = 'mexc';
-export type Locale = 'en' | 'uk';
+export type Locale = 'en' | 'uk' | 'de';
 
 /**
  * A piece of user-facing copy that survives translation.

@@ -7,7 +7,7 @@ import { cn } from '@/lib/cn';
 import type { Locale } from '@/types/domain';
 
 /**
- * EN / UA segmented control.
+ * EN / UA / DE segmented control.
  *
  * Same material and motion as the strategy tabs: the active pill is one shared
  * element animated with `layoutId`, so the switch glides rather than cuts. The
@@ -39,7 +39,7 @@ export function LanguageSwitcher({ className }: { className?: string }) {
               void i18n.changeLanguage(locale);
             }}
             className={cn(
-              // Fixed width: both labels are two characters, so the pill cannot
+              // Fixed width: every label is two characters, so the pill cannot
               // resize and nudge the header when the language changes.
               'relative w-9 rounded-lg py-1 text-center text-[11px] font-semibold tracking-wide transition-colors duration-200',
               selected ? 'text-white' : 'text-white/40 hover:text-white/75',

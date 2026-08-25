@@ -262,6 +262,51 @@ export async function answerCallbackQuery(id: string, text?: string, showAlert =
 }
 
 /**
+ * Rewrites a message's text *and* its buttons in place.
+ *
+ * The settings panel needs both: switching language has to redraw the prose, and
+ * the two warnings it can show — everything off, and results-off-while-signals-on
+ * — live in the text rather than in the keyboard, so editing only the buttons
+ * would leave a warning on screen that no longer applies.
+ */
+export async function editMessageText(
+  chatId: string,
+  messageId: number,
+  html: string,
+  keyboard?: InlineKeyboard,
+): Promise<boolean> {
+  if (!telegramConfigured()) return false;
+
+  try {
+    const response = await fetch(`${API}/bot${env.telegramBotToken}/editMessageText`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageId,
+        text: html,
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
+      }),
+    });
+
+    const body = (await response.json().catch(() => null)) as { ok?: boolean; description?: string } | null;
+
+    // A double tap edits nothing, and Telegram calls that an error. It is not.
+    if (body?.ok !== true && !body?.description?.includes('not modified')) {
+      console.warn('[telegram] message edit failed:', body?.description ?? response.status);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.warn('[telegram] message edit errored:', (error as Error).message);
+    return false;
+  }
+}
+
+/**
  * Rewrites the buttons under a message that is already in the chat.
  *
  * Used by `/settings`: a toggle should redraw the checkmarks in place. Sending

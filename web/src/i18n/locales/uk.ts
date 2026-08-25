@@ -28,8 +28,10 @@ export const uk: Translation = {
     label: 'Мова',
     en: 'English',
     uk: 'Українська',
+    de: 'Deutsch',
     enShort: 'EN',
     ukShort: 'UA',
+    deShort: 'DE',
   },
 
   topbar: {

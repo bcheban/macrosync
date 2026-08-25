@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LOCALES } from '@/i18n';
+import { INTL_LOCALE, LOCALES } from '@/i18n';
 import { BRAND } from '@/lib/brand';
 import { LANG_PARAM, SITE, absoluteUrl, localeUrl } from '@/lib/site';
 import type { Locale } from '@/types/domain';
@@ -108,7 +108,8 @@ export function useDocumentMeta(): void {
     setMeta('property', 'og:image:width', String(SITE.ogImageWidth));
     setMeta('property', 'og:image:height', String(SITE.ogImageHeight));
     setMeta('property', 'og:image:alt', title);
-    setMeta('property', 'og:locale', locale === 'uk' ? 'uk_UA' : 'en_US');
+    // Derived, not a binary choice — a third locale used to fall through to en_US.
+    setMeta('property', 'og:locale', INTL_LOCALE[locale].replace('-', '_'));
 
     setMeta('name', 'twitter:card', 'summary_large_image');
     setMeta('name', 'twitter:site', SITE.twitterHandle);

@@ -8,7 +8,9 @@ import {
   telegramConfigured,
   type InlineKeyboard,
 } from './telegram.client.js';
-import { activeRecipients, unsubscribe } from './subscribers.service.js';
+import { activeRecipients, unsubscribe, type Recipient } from './subscribers.service.js';
+import type { Channel, Locale, Prefs } from './preferences.service.js';
+import { dict } from './i18n/index.js';
 import { getAccount, planPosition } from './sizing.service.js';
 import type { ActiveTrade } from '../trades/trades.service.js';
 
@@ -51,13 +53,21 @@ export interface AlertRun {
   pruned: number;
 }
 
-/** Buttons carried under every alert. `callback_data` is capped at 64 bytes. */
-const SIGNAL_KEYBOARD: InlineKeyboard = [
-  [
-    { text: '📊 Stats', callback_data: 'stats' },
-    { text: '🛑 Mute 2h', callback_data: 'mute:2' },
-  ],
-];
+/**
+ * Buttons carried under every alert, labelled in the reader's language.
+ *
+ * `callback_data` is capped at 64 bytes and stays English — it is an identifier
+ * the bot parses, not text anybody sees.
+ */
+const signalKeyboard = (prefs: Prefs): InlineKeyboard => {
+  const t = dict(prefs.locale);
+  return [
+    [
+      { text: t.statsButton, callback_data: 'stats' },
+      { text: t.muteButton(2), callback_data: 'mute:2' },
+    ],
+  ];
+};
 
 interface BroadcastResult {
   delivered: number;
@@ -86,13 +96,25 @@ interface BroadcastResult {
  * continues past any single failure, and a recipient Telegram reports as gone is
  * dropped from the roster rather than retried on every run forever.
  */
+/**
+ * Sends one message to everyone entitled to it, in their own language.
+ *
+ * `render` is called per recipient rather than once, because two things now vary
+ * between subscribers: the language they chose, and whether they have told the
+ * bot their deposit. Building the body ahead of the loop would force every
+ * reader onto the first one's settings.
+ */
 async function broadcast(
-  render: string | ((chatId: string) => Promise<string> | string),
-  keyboard?: InlineKeyboard,
+  render: (recipient: Recipient) => Promise<string> | string,
+  keyboard?: (prefs: Prefs) => InlineKeyboard,
   strategy?: Strategy,
+  channel?: Channel,
 ): Promise<BroadcastResult> {
-  const { send, filtered } = await activeRecipients(strategy);
-  if (filtered.length) console.info(`[alerts] ${filtered.length} recipient(s) have ${strategy} turned off`);
+  const { send, filtered } = await activeRecipients(strategy, channel);
+  if (filtered.length) {
+    const why = [strategy, channel].filter(Boolean).join('/');
+    console.info(`[alerts] ${filtered.length} recipient(s) filtered out ${why}`);
+  }
 
   if (!send.length) return { delivered: 0, failed: 0, pruned: 0, silent: true, permanent: false };
 
@@ -101,16 +123,11 @@ async function broadcast(
   let pruned = 0;
   let retryable = 0;
 
-  for (const chatId of send) {
+  for (const recipient of send) {
+    const { chatId } = recipient;
     try {
-      /*
-       * Rendered per recipient rather than once. A subscriber who has told the
-       * bot their deposit gets a position size worked out for them, and one who
-       * has not gets the same message without that line — so the body is no
-       * longer a constant that can be built ahead of the loop.
-       */
-      const html = typeof render === 'string' ? render : await render(chatId);
-      const result = await sendTelegramMessage(html, { chatId, keyboard });
+      const html = await render(recipient);
+      const result = await sendTelegramMessage(html, { chatId, keyboard: keyboard?.(recipient.prefs) });
 
       if (result.delivered) {
         delivered += 1;
@@ -167,41 +184,41 @@ const usd = (value: number): string =>
  * arithmetic is theirs either way; doing it here removes the step most likely
  * to be got wrong while a setup is live.
  */
-async function sizingLine(chatId: string, signal: Signal): Promise<string | undefined> {
+async function sizingLine(chatId: string, signal: Signal, locale: Locale): Promise<string | undefined> {
   const account = await getAccount(chatId);
   if (!account) return undefined;
 
   const plan = planPosition(account, signal);
   if (!plan) return undefined;
 
-  const base = `💰 <b>Margin ${usd(plan.margin)}</b> at ${plan.leverage}x — risking <b>${usd(plan.riskAmount)}</b> of ${usd(account.balance)}`;
+  const t = dict(locale);
+  const base = t.sizingMargin(usd(plan.margin), plan.leverage, usd(plan.riskAmount), usd(account.balance));
 
-  return plan.capped
-    ? `${base}
-⚠️ <i>Capped at your balance: the full size for ${account.riskPct}% risk needs more collateral than the account holds.</i>`
-    : base;
+  return plan.capped ? `${base}
+${t.sizingCapped(account.riskPct)}` : base;
 }
 
 export function formatAlert(
   signal: Signal,
   summary: string,
   event: MacroEvent | undefined,
-  stats?: TradeStats,
+  stats: TradeStats | undefined,
+  locale: Locale = 'en',
 ): string {
+  const t = dict(locale);
   const meta = STRATEGY_META[signal.strategy];
-  const side = signal.verdict === 'buy' ? 'BUY · LONG' : 'SELL · SHORT';
-  const emoji = SIDE_EMOJI[signal.verdict === 'sell' ? 'sell' : 'buy'];
+  const long = signal.verdict === 'buy';
+  const emoji = SIDE_EMOJI[long ? 'buy' : 'sell'];
 
   const lines = [
-    `${emoji} <b>${escapeHtml(signal.base)}</b> — <b>${side}</b>`,
-    `${meta.label} · <i>${escapeHtml(signal.timeframe)} bars · confluence ${signal.confidence}/100</i>`,
+    `${emoji} <b>${escapeHtml(signal.base)}</b> — <b>${long ? t.alertLong : t.alertShort}</b>`,
+    `${meta.label} · <i>${escapeHtml(signal.timeframe)} · ${t.alertConfidence} ${signal.confidence}/100</i>`,
     '',
-    `🎯 <b>Entry</b>   <code>${money(signal.entry)}</code>`,
-    `🛑 <b>Stop</b>    <code>${money(signal.stopLoss)}</code>`,
-    `🏁 <b>Target</b>  <code>${money(signal.takeProfit)}</code>`,
-    `⚖️ R:R <b>${signal.riskReward}</b> · risk <b>${signal.suggestedRiskPct}%</b> of book`,
-    `🧮 Max safe leverage: <b>${signal.maxSafeLeverage}x</b> <i>(liquidation stays past the stop)</i>`,
-    `⏳ Expected duration: <b>${meta.duration}</b>`,
+    `🎯 <b>${t.alertEntry}</b>   <code>${money(signal.entry)}</code>`,
+    `🛑 <b>${t.alertStop}</b>    <code>${money(signal.stopLoss)}</code>`,
+    `🏁 <b>${t.alertTarget}</b>  <code>${money(signal.takeProfit)}</code>`,
+    `⚖️ ${t.alertRiskReward} <b>${signal.riskReward}</b> · ${t.alertRisk(String(signal.suggestedRiskPct))}`,
+    `🧮 ${t.alertLeverage}: <b>${signal.maxSafeLeverage}x</b> <i>(${t.alertLeverageNote})</i>`,
     '',
     `💡 ${escapeHtml(summary)}`,
   ];
@@ -209,41 +226,37 @@ export function formatAlert(
   if (event) {
     const minutes = Math.max(0, Math.round((Date.parse(event.startsAt) - Date.now()) / 60_000));
     const when = minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`;
-    lines.push('', `📅 <b>${escapeHtml(event.title)}</b> in ${when} — ${escapeHtml(event.importance)} impact`);
+    lines.push('', `📅 <b>${escapeHtml(event.title)}</b> — ${when} · ${escapeHtml(event.importance)}`);
   }
 
   if (stats && stats.wins + stats.losses > 0) {
-    const unresolved = stats.expired ? ` · ${stats.expired} expired` : '';
-    lines.push('', `📊 Win rate so far: <b>${winRate(stats)}%</b> (${stats.wins}W / ${stats.losses}L${unresolved})`);
+    const expired = stats.expired ? t.statsExpired(stats.expired) : '';
+    lines.push('', t.statsRate(winRate(stats), stats.wins, stats.losses, expired));
   }
 
-  lines.push(
-    '',
-    '<i>MEXC perpetuals. Model output over public market data — not financial advice.</i>',
-  );
+  lines.push('', t.disclaimerLong);
   return lines.join('\n');
 }
 
 /** The message sent when a tracked trade reaches its target or its stop. */
-export function formatClose(trade: ClosedTrade, stats: TradeStats): string {
+export function formatClose(trade: ClosedTrade, stats: TradeStats, locale: Locale = 'en'): string {
+  const t = dict(locale);
   const won = trade.outcome === 'win';
   const scratched = trade.outcome === 'breakeven';
   const meta = STRATEGY_META[trade.strategy];
 
-  const headline = won
-    ? '✅ <b>Target hit</b>'
-    : scratched
-      ? '🛡 <b>Closed at breakeven</b>'
-      : '❌ <b>Stopped out</b>';
+  const headline = won ? t.closeWin : scratched ? t.closeBreakeven : t.closeLoss;
+  const expired = stats.expired ? t.statsExpired(stats.expired) : '';
 
   return [
     `${headline} — <b>${escapeHtml(trade.base)}</b>`,
-    `${meta.label} · <i>${trade.side === 'buy' ? 'long' : 'short'} from ${money(trade.entry)}</i>`,
+    `${meta.label} · <i>${trade.side === 'buy' ? t.alertLong : t.alertShort}</i>`,
     '',
-    `${won ? '🏁' : scratched ? '🛡' : '🛑'} Exit    <code>${money(won ? trade.takeProfit : trade.stopLoss)}</code>`,
-    `📈 Result  <b>${trade.resultPct > 0 ? '+' : ''}${trade.resultPct}%</b>`,
+    `🎯 ${t.alertEntry}   <code>${money(trade.entry)}</code>`,
+    `${won ? '🏁' : scratched ? '🛡' : '🛑'} ${t.closeExit}    <code>${money(won ? trade.takeProfit : trade.stopLoss)}</code>`,
+    `📈 ${t.closeResult}  <b>${trade.resultPct > 0 ? '+' : ''}${trade.resultPct}%</b>`,
     '',
-    `📊 Win rate: <b>${winRate(stats)}%</b> (${stats.wins}W / ${stats.losses}L)`,
+    t.statsRate(winRate(stats), stats.wins, stats.losses, expired),
   ].join('\n');
 }
 
@@ -312,17 +325,17 @@ export async function notifySignals(signals: Signal[], event: MacroEvent | undef
     const key = keyFor(signal);
     const previous = state[key];
 
-    const body = formatAlert(signal, signal.summary.text, event, stats);
-
     const result = await broadcast(
-      async (chatId) => {
-        const sizing = await sizingLine(chatId, signal);
+      async ({ chatId, prefs }) => {
+        const body = formatAlert(signal, signal.summary.text, event, stats, prefs.locale);
+        const sizing = await sizingLine(chatId, signal, prefs.locale);
         return sizing ? `${body}
 
 ${sizing}` : body;
       },
-      SIGNAL_KEYBOARD,
+      signalKeyboard,
       signal.strategy,
+      'signals',
     );
     deliveries += result.delivered;
     pruned += result.pruned;
@@ -387,16 +400,24 @@ export async function notifyBreakeven(moved: ActiveTrade[]): Promise<number> {
 
   let sent = 0;
   for (const trade of moved) {
-    const meta = STRATEGY_META[trade.strategy];
-    const html = [
-      `🛡 <b>${escapeHtml(trade.base)}</b> — halfway to target`,
-      `${meta.label} · <i>${trade.side === 'buy' ? 'long' : 'short'} from ${money(trade.entry)}</i>`,
-      '',
-      `Stop moved to entry: <code>${money(trade.entry)}</code>`,
-      `<i>Was ${money(trade.initialStopLoss)}. From here the trade cannot cost you anything.</i>`,
-    ].join('\n');
+    const result = await broadcast(
+      ({ prefs }) => {
+        const t = dict(prefs.locale);
+        const side = trade.side === 'buy' ? t.alertLong : t.alertShort;
 
-    const result = await broadcast(html);
+        return [
+          t.breakevenTitle(escapeHtml(trade.base)),
+          `${STRATEGY_META[trade.strategy].label} · ${t.breakevenFrom(side, money(trade.entry))}`,
+          '',
+          t.breakevenMoved(money(trade.entry)),
+          t.breakevenWas(money(trade.initialStopLoss)),
+        ].join('\n');
+      },
+      undefined,
+      trade.strategy,
+      'updates',
+    );
+
     if (result.delivered > 0) sent += 1;
   }
 
@@ -416,8 +437,13 @@ export async function notifyClosed(closed: ClosedTrade[], stats: TradeStats): Pr
      */
     if (trade.outcome !== 'win' && trade.outcome !== 'loss' && trade.outcome !== 'breakeven') continue;
 
-    // No strategy filter: how a call *ended* is owed to whoever was told of it.
-    const result = await broadcast(formatClose(trade, stats));
+    /*
+     * Filtered on `results` but not on strategy. How a call ended is owed to
+     * whoever was told of it, so the strategy they have since turned off is not
+     * grounds to withhold it — but somebody who explicitly switched results off
+     * has asked not to hear this, and the panel warned them what that means.
+     */
+    const result = await broadcast(({ prefs }) => formatClose(trade, stats, prefs.locale), undefined, undefined, 'results');
     if (result.delivered > 0) sent += 1;
     else if (!result.silent) console.error(`[alerts] close notice for ${trade.base} reached nobody`);
   }

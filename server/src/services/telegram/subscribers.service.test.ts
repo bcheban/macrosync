@@ -55,6 +55,19 @@ after(() => {
   globalThis.fetch = realFetch;
 });
 
+/**
+ * Subscribes a chat and answers the language question `/start` now opens with.
+ *
+ * Every test that needs a configured subscriber needs both steps: a chat that
+ * has never picked a language is still mid-onboarding.
+ */
+const start = async (id: number, locale = 'en') => {
+  await webhook.handleUpdate({ message: { chat: { id }, from: { first_name: 'Ada' }, text: '/start' } });
+  await webhook.handleUpdate({
+    callback_query: { id: `lang-${id}`, data: `lang:${locale}`, message: { message_id: 1, chat: { id } } },
+  });
+};
+
 const signal = (base: string, verdict: 'buy' | 'sell' = 'buy', strategy = 'day') =>
   ({
     id: base,
@@ -105,17 +118,21 @@ describe('subscriber roster', () => {
   });
 
   it('adds a chat on /start without duplicating it', async () => {
-    await webhook.handleUpdate({ message: { chat: { id: 500 }, from: { first_name: 'Ada' }, text: '/start' } });
-    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
+    await start(500);
+    await start(500);
 
     const roster = await subs.listSubscribers();
     assert.equal(roster.filter((id) => id === '500').length, 1);
-    // The welcome goes to the chat that asked, both times.
-    assert.deepEqual(recipients(), ['500', '500']);
+    /*
+     * Three messages, one chat: the language question, the welcome that follows
+     * answering it, and the welcome for the second /start — which skips the
+     * question, because re-asking would read as the bot forgetting.
+     */
+    assert.deepEqual(recipients(), ['500', '500', '500']);
   });
 
   it('removes a chat on /stop', async () => {
-    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
+    await start(500);
     await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/stop' } });
 
     assert.ok(!(await subs.listSubscribers()).includes('500'));
@@ -159,7 +176,7 @@ describe('subscriber roster', () => {
   });
 
   it('skips a muted subscriber without dropping them', async () => {
-    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
+    await start(500);
     await subs.mute('500', 2 * 60 * 60_000);
     posted = [];
 
@@ -171,7 +188,7 @@ describe('subscriber roster', () => {
   });
 
   it('mutes from a button press and reports how long for', async () => {
-    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
+    await start(500);
 
     await webhook.handleUpdate({
       callback_query: { id: 'cb-1', data: 'mute:2', message: { chat: { id: 500 } } },
@@ -185,13 +202,13 @@ describe('subscriber roster', () => {
 
   it('lifts a mute when the same chat starts again', async () => {
     await subs.mute('500', 2 * 60 * 60_000);
-    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
+    await start(500);
 
     assert.equal(await subs.mutedUntil('500'), null);
   });
 
   it('answers the stats button in the chat that pressed it', async () => {
-    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
+    await start(500);
     posted = [];
 
     await webhook.handleUpdate({
@@ -204,7 +221,7 @@ describe('subscriber roster', () => {
   });
 
   it('welcomes with the same glossary /help answers with', async () => {
-    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
+    await start(500);
     const welcome = posted.at(-1)?.[1] ?? '';
 
     posted = [];
@@ -231,7 +248,7 @@ describe('subscriber roster', () => {
   });
 
   it('answers an empty /balance with the shape it wants', async () => {
-    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
+    await start(500);
     posted = [];
 
     await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/balance' } });
@@ -243,20 +260,146 @@ describe('subscriber roster', () => {
     assert.match(reply, /balance 0 0/);
   });
 
-  it('defaults a new subscriber to every strategy', async () => {
+  it('asks a new subscriber for a language before anything else', async () => {
+    await webhook.handleUpdate({
+      message: { chat: { id: 600 }, from: { first_name: 'Ada', language_code: 'de-DE' }, text: '/start' },
+    });
+
+    // Asked in the language their phone suggests, so the one message they
+    // cannot yet have configured is still likely readable.
+    assert.match(posted.at(-1)?.[1] ?? '', /Sprache wählen/);
+    assert.equal(posted.length, 1, 'the welcome waits for an answer');
+  });
+
+  it('does not ask again once answered', async () => {
+    await start(500, 'uk');
+    posted = [];
+
     await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
+
+    assert.equal(posted.length, 1);
+    assert.ok(!/Обери мову/.test(posted[0]?.[1] ?? ''), 'the question must not repeat');
+  });
+
+  it('sends every later message in the language they picked', async () => {
+    await start(500, 'de');
+    posted = [];
+
+    await alerts.notifySignals([signal('INJ')], undefined);
+    const alert = posted.find(([id]) => id === '500')?.[1] ?? '';
+
+    assert.match(alert, /Einstieg/, 'entry label is German');
+    assert.match(alert, /Max\. sicherer Hebel/);
+    // And nobody else's language changed.
+    const owner = posted.find(([id]) => id === 'owner-1')?.[1] ?? '';
+    assert.match(owner, /Entry/);
+  });
+
+  it('renders the same call in three languages at once', async () => {
+    await start(500, 'uk');
+    await start(501, 'de');
+    await start(502, 'en');
+    posted = [];
+
+    await alerts.notifySignals([signal('SOL')], undefined);
+
+    const of = (id: string) => posted.find(([chat]) => chat === id)?.[1] ?? '';
+    assert.match(of('500'), /Вхід/);
+    assert.match(of('501'), /Einstieg/);
+    assert.match(of('502'), /Entry/);
+  });
+
+  it('skips a notification kind the recipient turned off', async () => {
+    await start(500);
+    await prefs.toggleChannel('500', 'signals');
+    posted = [];
+
+    await alerts.notifySignals([signal('INJ')], undefined);
+    assert.ok(!recipients().includes('500'), 'new signals were turned off');
+
+    // But results still reach them, because that filter is separate.
+    posted = [];
+    const closed = [
+      {
+        id: 'x', symbol: 'INJUSDT', base: 'INJ', strategy: 'day', side: 'buy',
+        entry: 100, stopLoss: 95, initialStopLoss: 95, takeProfit: 110, timeframe: '1h',
+        openedAt: new Date().toISOString(), closedAt: new Date().toISOString(),
+        outcome: 'win', resultPct: 10,
+      },
+    ] as never;
+    await alerts.notifyClosed(closed, {
+      wins: 1, losses: 0, expired: 0, superseded: 0, voided: 0, breakeven: 0, byStrategy: {}, updatedAt: '',
+    });
+    assert.ok(recipients().includes('500'));
+  });
+
+  it('withholds results from somebody who switched them off', async () => {
+    await start(500);
+    await prefs.toggleChannel('500', 'results');
+    posted = [];
+
+    const closed = [
+      {
+        id: 'y', symbol: 'SOLUSDT', base: 'SOL', strategy: 'day', side: 'buy',
+        entry: 100, stopLoss: 95, initialStopLoss: 95, takeProfit: 110, timeframe: '1h',
+        openedAt: new Date().toISOString(), closedAt: new Date().toISOString(),
+        outcome: 'loss', resultPct: -5,
+      },
+    ] as never;
+
+    await alerts.notifyClosed(closed, {
+      wins: 0, losses: 1, expired: 0, superseded: 0, voided: 0, breakeven: 0, byStrategy: {}, updatedAt: '',
+    });
+
+    // Their explicit choice, and the panel warns what it costs them.
+    assert.ok(!recipients().includes('500'));
+  });
+
+  it('warns about the one combination nobody picks on purpose', async () => {
+    await start(500);
+    await prefs.toggleChannel('500', 'results');
+    posted = [];
+
+    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/settings' } });
+    const panel = posted.at(-1)?.[1] ?? '';
+
+    // Told to enter, never told it ended.
+    assert.match(panel, /never told/);
+  });
+
+  it('keeps a preference set before the record changed shape', async () => {
+    const { setJson, storeKey } = await import('../store/store.js');
+    // The flat shape, as written by the version that only had strategies.
+    await setJson(storeKey('telegram:prefs:900'), { scalping: true, day: false, swing: true });
+
+    const loaded = await prefs.getPrefs('900');
+
+    /*
+     * A subscriber who turned day trading off must not have it turned back on
+     * by a deployment. Silently restoring a preference somebody set is worse
+     * than never having offered the setting.
+     */
+    assert.equal(loaded.strategies.day, false);
+    assert.equal(loaded.strategies.scalping, true);
+    // And the new fields arrive at their permissive defaults.
+    assert.deepEqual(loaded.channels, { signals: true, updates: true, results: true });
+    assert.equal(loaded.locale, 'en');
+  });
+
+  it('defaults a new subscriber to every strategy', async () => {
+    await start(500);
 
     /*
      * A chat that has never opened /settings has no stored record, and reading
      * that as "wants nothing" would silence them permanently. The default has
      * to be the permissive one.
      */
-    assert.deepEqual(await prefs.getPrefs('500'), { scalping: true, day: true, swing: true });
+    assert.deepEqual((await prefs.getPrefs('500')).strategies, { scalping: true, day: true, swing: true });
   });
 
   it('skips a strategy the recipient turned off, and only that one', async () => {
-    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
-    await prefs.togglePref('500', 'scalping');
+    await start(500);
+    await prefs.toggleStrategy('500', 'scalping');
     posted = [];
 
     await alerts.notifySignals([signal('INJ', 'buy', 'scalping')], undefined);
@@ -270,19 +413,19 @@ describe('subscriber roster', () => {
   it('toggles a strategy from the settings keyboard', async () => {
     await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/settings' } });
     const panel = posted.at(-1)?.[1] ?? '';
-    assert.match(panel, /Which calls do you want/);
+    assert.match(panel, /Settings/);
 
     await webhook.handleUpdate({
       callback_query: { id: 'cb', data: 'pref:swing', message: { message_id: 7, chat: { id: 500 } } },
     });
 
-    assert.equal((await prefs.getPrefs('500')).swing, false);
-    assert.equal((await prefs.getPrefs('500')).day, true, 'one tap must move one strategy');
+    assert.equal((await prefs.getPrefs('500')).strategies.swing, false);
+    assert.equal((await prefs.getPrefs('500')).strategies.day, true, 'one tap must move one strategy');
   });
 
   it('lets somebody turn everything off without unsubscribing', async () => {
-    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
-    for (const strategy of ['scalping', 'day', 'swing'] as const) await prefs.togglePref('500', strategy);
+    await start(500);
+    for (const strategy of ['scalping', 'day', 'swing'] as const) await prefs.toggleStrategy('500', strategy);
 
     posted = [];
     await alerts.notifySignals([signal('INJ', 'buy', 'day')], undefined);
@@ -293,8 +436,8 @@ describe('subscriber roster', () => {
   });
 
   it('still tells them how a call ended, whatever they have since turned off', async () => {
-    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
-    for (const strategy of ['scalping', 'day', 'swing'] as const) await prefs.togglePref('500', strategy);
+    await start(500);
+    for (const strategy of ['scalping', 'day', 'swing'] as const) await prefs.toggleStrategy('500', strategy);
     posted = [];
 
     const closed = [
@@ -313,7 +456,7 @@ describe('subscriber roster', () => {
   });
 
   it('clears the ledger without touching the roster', async () => {
-    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
+    await start(500);
     await alerts.notifySignals([signal('INJ')], undefined);
     assert.ok((await trades.loadActive()).length > 0);
 
@@ -327,8 +470,8 @@ describe('subscriber roster', () => {
   });
 
   it('clears the roster too when asked explicitly', async () => {
-    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/start' } });
-    await prefs.togglePref('500', 'swing');
+    await start(500);
+    await prefs.toggleStrategy('500', 'swing');
 
     await admin.resetStore('all');
 
@@ -340,7 +483,7 @@ describe('subscriber roster', () => {
     assert.deepEqual(await subs.listSubscribers(), ['owner-1']);
     assert.ok(!(await subs.listSubscribers()).includes('500'));
     // Preferences go with the subscriber, so a re-start begins clean.
-    assert.deepEqual(await prefs.getPrefs('500'), { scalping: true, day: true, swing: true });
+    assert.deepEqual((await prefs.getPrefs('500')).strategies, { scalping: true, day: true, swing: true });
   });
 
   it('publishes the call even when every subscriber is muted', async () => {

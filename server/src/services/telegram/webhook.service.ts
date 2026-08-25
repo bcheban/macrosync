@@ -5,11 +5,26 @@ import { mute, mutedUntil, subscribe, subscribersStatus, unmute, unsubscribe } f
 import {
   answerCallbackQuery,
   editMessageReplyMarkup,
+  editMessageText,
   escapeHtml,
   sendTelegramMessage,
   type InlineKeyboard,
 } from './telegram.client.js';
-import { getPrefs, STRATEGIES, togglePref, wantsNothing, type StrategyPrefs } from './preferences.service.js';
+import {
+  CHANNELS,
+  getPrefs,
+  LOCALES,
+  setLocale,
+  STRATEGIES,
+  strandedByFilters,
+  toggleChannel,
+  toggleStrategy,
+  wantsNothing,
+  type Channel,
+  type Locale,
+  type Prefs,
+} from './preferences.service.js';
+import { dict, guessLocale, LOCALE_LABEL } from './i18n/index.js';
 import { clearAccount, getAccount, parseBalanceCommand, setAccount } from './sizing.service.js';
 
 /**
@@ -29,13 +44,13 @@ import { clearAccount, getAccount, parseBalanceCommand, setAccount } from './siz
 export interface TelegramUpdate {
   message?: {
     chat?: { id?: number | string; type?: string; title?: string };
-    from?: { first_name?: string; username?: string };
+    from?: { first_name?: string; username?: string; language_code?: string };
     text?: string;
   };
   callback_query?: {
     id?: string;
     data?: string;
-    from?: { first_name?: string; username?: string };
+    from?: { first_name?: string; username?: string; language_code?: string };
     /** `message_id` is what lets a toggle redraw its own keyboard in place. */
     message?: { message_id?: number; chat?: { id?: number | string } };
   };
@@ -66,43 +81,95 @@ const STRATEGY_LABEL: Record<(typeof STRATEGIES)[number], string> = {
  * The tick is the entire status display — there is no separate line saying what
  * is on, so the button cannot disagree with the state it toggles.
  */
-const settingsKeyboard = (prefs: StrategyPrefs): InlineKeyboard =>
-  STRATEGIES.map((strategy) => [
-    {
-      text: `${prefs[strategy] ? '✅' : '❌'} ${STRATEGY_LABEL[strategy]}`,
-      callback_data: `pref:${strategy}`,
-    },
-  ]);
+const TICK = (on: boolean): string => (on ? '✅' : '❌');
 
-const SETTINGS_TEXT = [
-  '⚙️ <b>Which calls do you want?</b>',
-  '',
-  'Tap to turn a strategy on or off. Only what is ticked will reach you.',
-  '',
-  '⚡ <b>Scalping</b> — 5m bars, 15 minutes to 2 hours',
-  '📅 <b>Day trading</b> — 1h bars, 2 to 12 hours',
-  '🌊 <b>Swing</b> — 4h bars, 1 to 4 days',
-  '',
-  '<i>Turning everything off is allowed — you stay subscribed and simply hear nothing until you turn something back on.</i>',
-].join('\n');
+/**
+ * The settings panel: three groups, one button per switch.
+ *
+ * Every button carries its own state in its label, so the keyboard *is* the
+ * status display. A separate list of what is on would be a second thing to keep
+ * in sync, and the moment it drifted the panel would be lying about the very
+ * settings it exists to change.
+ */
+function settingsKeyboard(prefs: Prefs): InlineKeyboard {
+  const t = dict(prefs.locale);
+
+  const strategyLabel: Record<string, string> = {
+    scalping: t.strategyScalping,
+    day: t.strategyDay,
+    swing: t.strategySwing,
+  };
+  const channelLabel: Record<Channel, string> = {
+    signals: t.channelSignals,
+    updates: t.channelUpdates,
+    results: t.channelResults,
+  };
+
+  return [
+    ...STRATEGIES.map((strategy) => [
+      {
+        text: `${TICK(prefs.strategies[strategy])} ${strategyLabel[strategy]}`,
+        callback_data: `pref:${strategy}`,
+      },
+    ]),
+    ...CHANNELS.map((channel) => [
+      {
+        text: `${TICK(prefs.channels[channel])} ${channelLabel[channel]}`,
+        callback_data: `chan:${channel}`,
+      },
+    ]),
+    // One row: three languages fit, and a column of them would dwarf the rest.
+    LOCALES.map((locale) => ({
+      text: prefs.locale === locale ? `• ${LOCALE_LABEL[locale]}` : LOCALE_LABEL[locale],
+      callback_data: `lang:${locale}`,
+    })),
+  ];
+}
+
+/** The prose above the keyboard, which explains what the switches mean. */
+function settingsText(prefs: Prefs): string {
+  const t = dict(prefs.locale);
+
+  const lines = [
+    t.settingsTitle,
+    '',
+    t.settingsStrategies,
+    `${t.strategyScalping} — <i>${t.strategyScalpingHint}</i>`,
+    `${t.strategyDay} — <i>${t.strategyDayHint}</i>`,
+    `${t.strategySwing} — <i>${t.strategySwingHint}</i>`,
+    '',
+    t.settingsChannels,
+    `${t.channelSignals} — <i>${t.channelSignalsHint}</i>`,
+    `${t.channelUpdates} — <i>${t.channelUpdatesHint}</i>`,
+    `${t.channelResults} — <i>${t.channelResultsHint}</i>`,
+    '',
+    t.settingsHint,
+  ];
+
+  /*
+   * Two states worth saying out loud, because neither is obvious from a
+   * keyboard of ticks and neither is something anybody chooses on purpose.
+   */
+  if (wantsNothing(prefs)) lines.push('', t.settingsAllOff);
+  else if (strandedByFilters(prefs)) lines.push('', t.settingsStranded);
+
+  return lines.join('\n');
+}
 
 /** The published record, phrased the same way everywhere it appears. */
-async function statsLine(): Promise<string> {
+async function statsLine(locale: Locale): Promise<string> {
+  const t = dict(locale);
   const [stats, active] = await Promise.all([loadStats(), loadActive()]);
   const decided = stats.wins + stats.losses;
 
-  if (!decided) {
-    return active.length
-      ? `📊 No settled trades yet — ${active.length} still open. The record starts when the first one closes.`
-      : '📊 No trades on the record yet. The first confirmed call opens one.';
-  }
+  if (!decided) return active.length ? t.statsOnlyOpen(active.length) : t.statsNone;
 
-  const unresolved = stats.expired ? ` · ${stats.expired} expired` : '';
+  const expired = stats.expired ? t.statsExpired(stats.expired) : '';
   return [
-    `📊 <b>Win rate ${winRate(stats)}%</b> — ${stats.wins}W / ${stats.losses}L${unresolved}`,
-    `📈 ${active.length} trade${active.length === 1 ? '' : 's'} open right now`,
+    t.statsRate(winRate(stats), stats.wins, stats.losses, expired),
+    t.statsOpen(active.length),
     '',
-    '<i>Counts target and stop only. Expired and superseded calls stay out of the denominator.</i>',
+    t.statsFootnote,
   ].join('\n');
 }
 
@@ -130,6 +197,17 @@ const COMMANDS = COMMAND_SPECS as CommandSpec[];
 const glossaryLines = (specs: CommandSpec[]): string[] =>
   specs.map((spec) => `<code>${escapeHtml(spec.usage)}</code>${NBSP}— ${spec.help}`);
 
+/**
+ * The language picker, shown once on `/start`.
+ *
+ * Asked outright rather than inferred, because Telegram's `language_code` is the
+ * phone's setting and plenty of people run an English phone in Ukrainian. The
+ * guess only decides which language the question itself is asked in.
+ */
+const LANGUAGE_KEYBOARD: InlineKeyboard = [
+  LOCALES.map((locale) => ({ text: LOCALE_LABEL[locale], callback_data: `lang:${locale}` })),
+];
+
 /** Everything the bot answers, primary commands first. */
 function glossary(): string {
   const primary = COMMANDS.filter((spec) => spec.primary);
@@ -144,25 +222,31 @@ function glossary(): string {
   ].join('\n');
 }
 
-const WELCOME = [
-  '📡 <b>MacroSync</b> — an automated futures radar.',
-  '',
-  'It scans the liquid USDT perpetuals on MEXC around the clock, and when a setup confirms you get the call: entry, stop, target, the reasoning in one sentence, and the leverage at which liquidation still sits clear of the stop.',
-  '',
-  'You are subscribed. Nothing else is needed — but the commands below make the alerts yours rather than generic.',
-  '',
-  glossary(),
-  '',
-  '<i>MEXC perpetuals. Model output over public market data — not financial advice, and no order is ever placed for you.</i>',
-].join('\n');
+/**
+ * The welcome, in the reader's language.
+ *
+ * The command *names* stay English because that is what the reader has to type
+ * and what Telegram's menu lists; only the prose around them moves.
+ */
+const welcome = (locale: Locale): string => {
+  const t = dict(locale);
+  return [
+    t.welcomeIntro,
+    '',
+    t.welcomeBody,
+    '',
+    t.welcomeSubscribed,
+    '',
+    glossary(),
+    '',
+    t.disclaimerLong,
+  ].join('\n');
+};
 
-const HELP = [
-  '📡 <b>MacroSync</b> — an automated futures radar for MEXC perpetuals.',
-  '',
-  glossary(),
-  '',
-  '<i>Not financial advice. No order is ever placed for you.</i>',
-].join('\n');
+const help = (locale: Locale): string => {
+  const t = dict(locale);
+  return [t.helpIntro, '', glossary(), '', t.disclaimerShort].join('\n');
+};
 
 /**
  * The block to paste into @BotFather under `/setcommands`.
@@ -179,37 +263,60 @@ export const botFatherBlock = (): string =>
 export const menuCommands = (): { command: string; description: string }[] =>
   COMMANDS.map((spec) => ({ command: spec.command, description: spec.menu }));
 
-async function handleCommand(chatId: string, text: string, profile: { name?: string; username?: string }): Promise<void> {
+async function handleCommand(
+  chatId: string,
+  text: string,
+  profile: { name?: string; username?: string; languageCode?: string },
+): Promise<void> {
   // `/start@SomeBot` in a group, and any argument, both trail the command.
   const command = text.trim().split(/[\s@]/)[0]?.toLowerCase() ?? '';
 
   switch (command) {
     case '/start': {
       await subscribe(chatId, profile);
-      await sendTelegramMessage(WELCOME, { chatId, keyboard: MENU });
+      const prefs = await getPrefs(chatId);
+
+      /*
+       * A first-time subscriber is asked which language before anything else,
+       * and the question is asked in the language their phone suggests — so the
+       * one message they cannot yet have configured is still likely readable.
+       *
+       * Asked exactly once. Somebody sending /start again to lift a mute has
+       * already answered, and re-asking would read as the bot forgetting.
+       */
+      if (!prefs.localeChosen) {
+        const guessed = guessLocale(profile.languageCode);
+        await sendTelegramMessage(dict(guessed).chooseLanguage, {
+          chatId,
+          keyboard: LANGUAGE_KEYBOARD,
+        });
+        return;
+      }
+
+      await sendTelegramMessage(welcome(prefs.locale), { chatId, keyboard: MENU });
       return;
     }
 
     case '/stop': {
+      // Read before unsubscribing: the goodbye should still be in their language.
+      const locale = (await getPrefs(chatId)).locale;
       await unsubscribe(chatId);
-      await sendTelegramMessage('🔕 Unsubscribed. Send /start whenever you want them back.', { chatId });
+      await sendTelegramMessage(dict(locale).stopped, { chatId });
       return;
     }
 
     case '/stats': {
-      await sendTelegramMessage(await statsLine(), { chatId, keyboard: MENU });
+      await sendTelegramMessage(await statsLine((await getPrefs(chatId)).locale), { chatId, keyboard: MENU });
       return;
     }
 
     case '/balance': {
+      const t = dict((await getPrefs(chatId)).locale);
       const parsed = parseBalanceCommand(text);
 
       if ('reset' in parsed) {
         await clearAccount(chatId);
-        await sendTelegramMessage(
-          '💰 Cleared. Alerts will arrive without a position size until you set one again.',
-          { chatId },
-        );
+        await sendTelegramMessage(t.balanceCleared, { chatId });
         return;
       }
 
@@ -217,27 +324,27 @@ async function handleCommand(chatId: string, text: string, profile: { name?: str
         /*
          * One message for every way of getting it wrong. Distinguishing "you
          * typed nothing" from "you typed letters" adds a branch and tells the
-         * reader the same thing either way: here is the shape it wants.
+         * reader the same thing either way: here is the shape it wants. The
+         * bounds still add their own line, because "too large" is not something
+         * an example can explain.
          */
-        const detail: Record<string, string> = {
-          'balance-large': 'That deposit looks like a typo — if it is not, size that one by hand.',
-          'risk-large': 'Risking more than 20% of an account on a single trade is not something this bot will size for you.',
+        const detail: Partial<Record<string, string>> = {
+          'balance-large': t.balanceTooLarge,
+          'risk-large': t.balanceRiskTooLarge,
         };
+        const extra = detail[parsed.error];
 
         await sendTelegramMessage(
           [
-            '⚠️ <b>Invalid format.</b>',
+            t.balanceInvalid,
             '',
-            'To set up your position sizing, send your deposit and the percentage of it you are willing to risk on one trade.',
+            t.balanceHowTo,
             '',
-            '<code>/balance 1000 1</code>  — $1,000 deposit, 1% risk',
-            '<code>/balance 500</code>  — risk defaults to 1%',
-            '<code>/balance 0 0</code>  — reset',
-            detail[parsed.error] ? '' : undefined,
-            detail[parsed.error],
-          ]
-            .filter((line) => line !== undefined)
-            .join('\n'),
+            `<code>/balance 1000 1</code>  ${t.balanceExample1}`,
+            `<code>/balance 500</code>  ${t.balanceExample2}`,
+            `<code>/balance 0 0</code>  ${t.balanceExample3}`,
+            ...(extra ? ['', extra] : []),
+          ].join('\n'),
           { chatId },
         );
         return;
@@ -248,11 +355,11 @@ async function handleCommand(chatId: string, text: string, profile: { name?: str
 
       await sendTelegramMessage(
         [
-          `💰 Saved: <b>${account.balance.toLocaleString('en-US')}</b> at <b>${account.riskPct}%</b> risk.`,
+          t.balanceSaved(account.balance.toLocaleString('en-US'), account.riskPct),
           '',
-          `Every alert will now carry the margin for a position that loses <b>${perTrade.toFixed(2)}</b> if its stop fills.`,
+          t.balanceSavedBody(perTrade.toFixed(2)),
           '',
-          '<i>Sizing only. Nothing is placed for you, and nothing here is advice.</i>',
+          t.balanceSavedNote,
         ].join('\n'),
         { chatId, keyboard: MENU },
       );
@@ -261,14 +368,14 @@ async function handleCommand(chatId: string, text: string, profile: { name?: str
 
     case '/settings': {
       const prefs = await getPrefs(chatId);
-      await sendTelegramMessage(SETTINGS_TEXT, { chatId, keyboard: settingsKeyboard(prefs) });
+      await sendTelegramMessage(settingsText(prefs), { chatId, keyboard: settingsKeyboard(prefs) });
       return;
     }
 
     case '/mute': {
       const { until } = await mute(chatId, MUTE_HOURS * 60 * 60_000);
       await sendTelegramMessage(
-        `🛑 Muted until <b>${escapeHtml(new Date(until).toUTCString())}</b>. Send /unmute to lift it early.`,
+        dict((await getPrefs(chatId)).locale).muted(MUTE_HOURS),
         { chatId },
       );
       return;
@@ -276,12 +383,12 @@ async function handleCommand(chatId: string, text: string, profile: { name?: str
 
     case '/unmute': {
       await unmute(chatId);
-      await sendTelegramMessage('🔔 Alerts are back on.', { chatId, keyboard: MENU });
+      await sendTelegramMessage(dict((await getPrefs(chatId)).locale).unmuted, { chatId, keyboard: MENU });
       return;
     }
 
     case '/help': {
-      await sendTelegramMessage(HELP, { chatId, keyboard: MENU });
+      await sendTelegramMessage(help((await getPrefs(chatId)).locale), { chatId, keyboard: MENU });
       return;
     }
 
@@ -311,33 +418,77 @@ async function handleCallback(query: NonNullable<TelegramUpdate['callback_query'
   switch (action) {
     case 'settings': {
       await answerCallbackQuery(id);
-      await sendTelegramMessage(SETTINGS_TEXT, { chatId: chat, keyboard: settingsKeyboard(await getPrefs(chat)) });
+      const prefs = await getPrefs(chat);
+      await sendTelegramMessage(settingsText(prefs), { chatId: chat, keyboard: settingsKeyboard(prefs) });
       return;
     }
 
-    case 'pref': {
-      const strategy = STRATEGIES.find((entry) => entry === argument);
-      if (!strategy) {
+    case 'pref':
+    case 'chan':
+    case 'lang': {
+      /*
+       * Three kinds of switch, one shape: flip it, say what happened in the
+       * toast, redraw the keyboard in place.
+       *
+       * The toast carries the result because the keyboard edit is refused —
+       * silently — once a message is older than 48 hours, and a tap that
+       * appears to do nothing is worse than one that only says what it did.
+       */
+      let prefs: Prefs | undefined;
+      let toast = '';
+
+      if (action === 'pref') {
+        const strategy = STRATEGIES.find((entry) => entry === argument);
+        if (strategy) {
+          prefs = await toggleStrategy(chat, strategy);
+          const t = dict(prefs.locale);
+          const label = { scalping: t.strategyScalping, day: t.strategyDay, swing: t.strategySwing }[strategy];
+          toast = `${label} ${prefs.strategies[strategy] ? 'on' : 'off'}`;
+        }
+      } else if (action === 'chan') {
+        const channel = CHANNELS.find((entry) => entry === argument);
+        if (channel) {
+          prefs = await toggleChannel(chat, channel);
+          const t = dict(prefs.locale);
+          const label = { signals: t.channelSignals, updates: t.channelUpdates, results: t.channelResults }[channel];
+          toast = `${label} ${prefs.channels[channel] ? 'on' : 'off'}`;
+        }
+      } else {
+        const locale = LOCALES.find((entry) => entry === argument);
+        if (locale) {
+          const before = await getPrefs(chat);
+          prefs = await setLocale(chat, locale);
+          toast = dict(locale).languageSet;
+
+          /*
+           * First answer: this tap came from the onboarding question, not from
+           * the settings panel, so the welcome is what should follow it — and
+           * there is no panel to redraw.
+           */
+          if (!before.localeChosen) {
+            await answerCallbackQuery(id, toast);
+            await sendTelegramMessage(welcome(locale), { chatId: chat, keyboard: MENU });
+            return;
+          }
+        }
+      }
+
+      if (!prefs) {
         await answerCallbackQuery(id);
         return;
       }
 
-      const prefs = await togglePref(chat, strategy);
-      const state = prefs[strategy] ? 'on' : 'off';
+      await answerCallbackQuery(id, toast);
 
       /*
-       * The toast carries the result, so the answer is useful even if the
-       * keyboard edit is refused — which it is, silently, once a message is
-       * older than 48 hours and no longer editable.
+       * The prose is redrawn too, not just the buttons. Switching language has
+       * to change the whole panel, and the two warnings — everything off, and
+       * results-off-while-signals-on — live in the text rather than the
+       * keyboard, so a keyboard-only edit would leave them stale.
        */
-      await answerCallbackQuery(
-        id,
-        wantsNothing(prefs)
-          ? 'All strategies off — you will not receive new calls'
-          : `${STRATEGY_LABEL[strategy]} ${state}`,
-      );
-
-      if (messageId !== undefined) await editMessageReplyMarkup(chat, messageId, settingsKeyboard(prefs));
+      if (messageId !== undefined) {
+        await editMessageText(chat, messageId, settingsText(prefs), settingsKeyboard(prefs));
+      }
       return;
     }
 
@@ -345,7 +496,7 @@ async function handleCallback(query: NonNullable<TelegramUpdate['callback_query'
       // Acknowledged first: the button spins until Telegram gets an answer, and
       // reading the ledger is slower than the spinner looks patient.
       await answerCallbackQuery(id);
-      await sendTelegramMessage(await statsLine(), { chatId: chat, keyboard: MENU });
+      await sendTelegramMessage(await statsLine((await getPrefs(chat)).locale), { chatId: chat, keyboard: MENU });
       return;
     }
 
@@ -387,6 +538,8 @@ export async function handleUpdate(update: TelegramUpdate): Promise<{ handled: s
     await handleCommand(String(chatId), text, {
       name: message?.from?.first_name,
       username: message?.from?.username,
+      // The phone's language, used only to pick which language to *ask* in.
+      languageCode: message?.from?.language_code,
     });
 
     return { handled: 'message' };

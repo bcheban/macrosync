@@ -30,8 +30,10 @@ export const en = {
     label: 'Language',
     en: 'English',
     uk: 'Українська',
+    de: 'Deutsch',
     enShort: 'EN',
     ukShort: 'UA',
+    deShort: 'DE',
   },
 
   topbar: {

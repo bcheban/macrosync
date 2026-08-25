@@ -2,15 +2,17 @@ import i18n from 'i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import { initReactI18next } from 'react-i18next';
 import type { Locale } from '@/types/domain';
+import { de } from './locales/de';
 import { en } from './locales/en';
 import { uk } from './locales/uk';
 
-export const LOCALES: Locale[] = ['en', 'uk'];
+export const LOCALES: Locale[] = ['en', 'uk', 'de'];
 
 /** BCP-47 tags for `Intl` — i18next itself works with the short codes. */
 export const INTL_LOCALE: Record<Locale, string> = {
   en: 'en-US',
   uk: 'uk-UA',
+  de: 'de-DE',
 };
 
 export const STORAGE_KEY = 'macrosync.lang';
@@ -18,6 +20,7 @@ export const STORAGE_KEY = 'macrosync.lang';
 export const resources = {
   en: { translation: en },
   uk: { translation: uk },
+  de: { translation: de },
 } as const;
 
 void i18n
