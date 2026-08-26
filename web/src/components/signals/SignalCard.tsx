@@ -1,6 +1,6 @@
 import { PositionCalculator } from '@/components/signals/PositionCalculator';
 import { m } from 'framer-motion';
-import { ChevronRight, ArrowDownRight, ArrowUpRight, Hourglass, ShieldAlert } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Hourglass, ShieldAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge, LiveDot } from '@/components/ui/Badge';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -169,44 +169,30 @@ export function SignalCard({ signal, index }: { signal: Signal; index: number })
         </div>
       </div>
 
-      {/*
-        The raw reads, folded away.
-        
-        They are here to check the sentence against, which is a thing somebody
-        does occasionally and deliberately — not something six numbers should
-        charge for by sitting on every card, on every render, in a column the
-        reader has to scroll past to reach the next call.
-      */}
-      <details className="group/details mt-3">
-        <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] text-white/30 transition-colors duration-200 hover:text-white/60 [&::-webkit-details-marker]:hidden">
-          <ChevronRight className="size-3 transition-transform duration-200 group-open/details:rotate-90" />
-          {t('signals.details')}
-        </summary>
-
-        <div className="mt-2 flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[11px] text-white/35 [&>span]:whitespace-nowrap">
+      {/* The raw reads, demoted — there to check the sentence against. */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[11px] text-white/35 [&>span]:whitespace-nowrap">
+        <span className="tnum font-mono">
+          {t('signals.riskReward')} <span className="text-white/60">{signal.riskReward || '—'}</span>
+        </span>
+        <span className="tnum font-mono">
+          {t('signals.risk')} <span className="text-white/60">{signal.suggestedRiskPct}%</span>
+        </span>
+        {/* Perpetuals only: the leverage at which liquidation still clears the stop. */}
+        {signal.maxSafeLeverage > 0 && (
           <span className="tnum font-mono">
-            {t('signals.riskReward')} <span className="text-white/60">{signal.riskReward || '—'}</span>
+            {t('signals.leverage')} <span className="text-white/60">{signal.maxSafeLeverage}x</span>
           </span>
-          <span className="tnum font-mono">
-            {t('signals.risk')} <span className="text-white/60">{signal.suggestedRiskPct}%</span>
-          </span>
-          {/* Perpetuals only: the leverage at which liquidation still clears the stop. */}
-          {signal.maxSafeLeverage > 0 && (
-            <span className="tnum font-mono">
-              {t('signals.leverage')} <span className="text-white/60">{signal.maxSafeLeverage}x</span>
-            </span>
-          )}
-          <span className="tnum font-mono">
-            {t('signals.rsi')} <span className="text-white/60">{signal.indicators.rsi}</span>
-          </span>
-          <span className="tnum font-mono">
-            {t('signals.atr')} <span className="text-white/60">{signal.indicators.atrPct}%</span>
-          </span>
-          <span className="tnum font-mono">
-            {t('signals.volume')} <span className="text-white/60">{signal.indicators.volumeRatio}×</span>
-          </span>
-        </div>
-      </details>
+        )}
+        <span className="tnum font-mono">
+          {t('signals.rsi')} <span className="text-white/60">{signal.indicators.rsi}</span>
+        </span>
+        <span className="tnum font-mono">
+          {t('signals.atr')} <span className="text-white/60">{signal.indicators.atrPct}%</span>
+        </span>
+        <span className="tnum font-mono">
+          {t('signals.volume')} <span className="text-white/60">{signal.indicators.volumeRatio}×</span>
+        </span>
+      </div>
 
       {/*
         Sizing sits last and visibly apart. The levels above are what the engine

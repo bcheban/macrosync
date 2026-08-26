@@ -24,7 +24,7 @@ interface LiveTradesProps {
   loading: boolean;
 }
 
-/** Fixed order, so the columns do not reshuffle as counts change. */
+/** Fixed order, so the sections do not reshuffle as counts change. */
 const ORDER: Strategy[] = ['scalping', 'day', 'swing'];
 
 const COLUMN_ACCENT: Record<Strategy, string> = {
@@ -85,7 +85,7 @@ function TradeCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index, 8) * 0.03, duration: 0.3 }}
       className={cn(
-        'group relative block w-full overflow-hidden rounded-xl border p-3 text-left transition-colors duration-200',
+        'group relative block w-full overflow-hidden rounded-xl border p-2.5 text-left transition-colors duration-200',
         'focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:outline-none',
         open ? 'border-white/20 bg-white/8' : 'border-white/8 bg-white/3 hover:border-white/14 hover:bg-white/6',
       )}
@@ -96,7 +96,7 @@ function TradeCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
-            <span className="truncate text-[15px] leading-none font-semibold text-white">{trade.base}</span>
+            <span className="truncate text-[14px] leading-none font-semibold text-white">{trade.base}</span>
             {trade.breakevenAt && (
               <ShieldCheck className="size-3.5 shrink-0 text-bull" aria-label={t('liveTrades.protected')} />
             )}
@@ -123,7 +123,7 @@ function TradeCard({
         </div>
       </div>
 
-      <div className="mt-2 grid grid-cols-3 gap-2 text-[10.5px]">
+      <div className="mt-2 grid grid-cols-3 gap-1.5 text-[10px]">
         <div className="min-w-0">
           <div className="text-white/30">{t('signals.entry')}</div>
           <div className="tnum truncate font-mono text-white/70">{formatPrice(trade.entry)}</div>
@@ -142,7 +142,7 @@ function TradeCard({
 
       {trade.progressPct !== null && <ProgressBar pct={trade.progressPct} />}
 
-      <div className="mt-2 flex items-center gap-1 text-[10px] text-white/25 transition-colors group-hover:text-white/50">
+      <div className="mt-1.5 flex items-center gap-1 text-[10px] text-white/25 transition-colors group-hover:text-white/50">
         <CandlestickChart className="size-3" />
         {t(open ? 'liveTrades.hideChart' : 'liveTrades.showChart')}
       </div>
@@ -153,11 +153,12 @@ function TradeCard({
 /**
  * What the bot is tracking, on the site that publishes it.
  *
- * Laid out as one column per strategy rather than a single list. Thirty open
- * trades in one column is a scroll; split three ways it is a board, and the
- * split is the one that matters — a scalp and a swing on the same asset are
- * different positions with different horizons, and reading them interleaved
- * hides that.
+ * Grouped by strategy, because a scalp and a swing on the same asset are
+ * different positions with different horizons and reading them interleaved
+ * hides that — but grouped down the page rather than across it. Three
+ * side-by-side columns cost two thirds of the width to say three words, and
+ * with thirty trades in one of them the board ran to fourteen thousand pixels.
+ * A heading on its own row costs one line and leaves the full width for cards.
  */
 export function LiveTrades({ data, loading }: LiveTradesProps) {
   const { t } = useTranslation();
@@ -210,25 +211,40 @@ export function LiveTrades({ data, loading }: LiveTradesProps) {
         </p>
       ) : (
         <>
-          <div className="mt-4 grid gap-4 lg:grid-cols-3">
-            {columns.map((column) => (
-              <section key={column.strategy} className="min-w-0">
-                <header className="relative mb-2 flex items-baseline justify-between overflow-hidden rounded-lg px-2 py-1.5">
-                  <span
-                    aria-hidden
-                    className={cn(
-                      'absolute inset-0 bg-gradient-to-r to-transparent opacity-15',
-                      COLUMN_ACCENT[column.strategy],
-                    )}
-                  />
-                  <h3 className="relative text-[10.5px] font-semibold tracking-[0.14em] text-white/70 uppercase">
-                    {t(`signals.strategies.${column.strategy}`)}
-                  </h3>
-                  <span className="tnum relative font-mono text-[10.5px] text-white/35">{column.trades.length}</span>
-                </header>
+          {/*
+            Sections stacked, cards flowing across the full width inside each.
+            
+            This used to be one column per strategy, which read well with three
+            trades apiece and fell apart at thirty: a third-width column stacking
+            thirty cards is thirty card-heights of page, and the board measured
+            fourteen thousand pixels tall. The grouping is worth keeping — a
+            scalp and a swing on the same asset are different positions — but it
+            belongs on the vertical axis, where a heading costs one row, rather
+            than on the horizontal one, where it costs two thirds of the width.
+          */}
+          <div className="mt-4 space-y-5">
+            {columns
+              // An empty strategy is not information worth a heading and a box.
+              .filter((column) => column.trades.length > 0)
+              .map((column) => (
+                <section key={column.strategy} className="min-w-0">
+                  <header className="relative mb-2 flex items-baseline justify-between overflow-hidden rounded-lg px-2 py-1.5">
+                    <span
+                      aria-hidden
+                      className={cn(
+                        'absolute inset-0 bg-gradient-to-r to-transparent opacity-15',
+                        COLUMN_ACCENT[column.strategy],
+                      )}
+                    />
+                    <h3 className="relative text-[10.5px] font-semibold tracking-[0.14em] text-white/70 uppercase">
+                      {t(`signals.strategies.${column.strategy}`)}
+                    </h3>
+                    <span className="tnum relative font-mono text-[10.5px] text-white/35">
+                      {column.trades.length}
+                    </span>
+                  </header>
 
-                {column.trades.length ? (
-                  <div className="space-y-2">
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                     {column.trades.map((trade, index) => (
                       <TradeCard
                         key={trade.id}
@@ -239,13 +255,8 @@ export function LiveTrades({ data, loading }: LiveTradesProps) {
                       />
                     ))}
                   </div>
-                ) : (
-                  <p className="rounded-xl border border-dashed border-white/8 px-3 py-5 text-center text-[10.5px] text-white/25">
-                    {t('liveTrades.columnEmpty')}
-                  </p>
-                )}
-              </section>
-            ))}
+                </section>
+              ))}
           </div>
 
           {opened && (
