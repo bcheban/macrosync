@@ -12,6 +12,13 @@ import { readFile } from 'node:fs/promises';
  * The URL argument is optional; `PUBLIC_BASE_URL` is used when it is omitted.
  * Registration is the whole configuration — Telegram stops polling and starts
  * POSTing, so nothing else needs to run for the bot to respond.
+ *
+ * Note `drop_pending_updates` below: anything sent to the bot before this runs
+ * is discarded, not delivered. On a brand-new bot that is a stale queue worth
+ * losing — but it also means a /start pressed while the webhook was still
+ * unregistered never reaches the handler, and the person is left with a bot
+ * that pushes alerts and answers nothing. Tell early testers to send /start
+ * again after this, or they will report the bot as half-broken.
  */
 
 const API = 'https://api.telegram.org';
