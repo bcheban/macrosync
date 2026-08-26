@@ -278,6 +278,22 @@ export function formatClose(trade: ClosedTrade, stats: TradeStats, locale: Local
  * strategy turned the per-run cap into a per-strategy one — three times the
  * messages intended — and let each strategy rank its calls in isolation.
  */
+/**
+ * The setups allowed to become alerts, and therefore trades.
+ *
+ * Scalping is not among them. Across 40 symbols it lost money in every level
+ * geometry tried, in both the liquid and the illiquid half of the board: 30% at
+ * best on majors and 35% on microcaps, against reward ratios that need well
+ * north of 40%. Widening the stop, narrowing the target and moving the reward
+ * ratio in either direction all left it negative, so there was no setting to
+ * pick — the 5m read is simply not carrying an edge past fees and the spread.
+ *
+ * Its cards still render on the dashboard, levels and all. What stops here is
+ * publishing it as a call and opening a trade against the record, which is the
+ * part that costs money and drags the published win rate down.
+ */
+const TRADED: ReadonlySet<Strategy> = new Set<Strategy>(['day', 'swing']);
+
 export async function notifySignals(signals: Signal[], event: MacroEvent | undefined): Promise<AlertRun> {
   const empty: AlertRun = { sent: 0, failed: 0, dropped: 0, deliveries: 0, pruned: 0 };
   if (!telegramConfigured()) return empty;
@@ -292,6 +308,8 @@ export async function notifySignals(signals: Signal[], event: MacroEvent | undef
   const candidates: Signal[] = [];
 
   for (const signal of signals) {
+    if (!TRADED.has(signal.strategy)) continue;
+
     const key = keyFor(signal);
     const previous = state[key];
 

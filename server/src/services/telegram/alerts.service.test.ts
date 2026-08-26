@@ -163,12 +163,12 @@ describe('alert dispatch', () => {
   it('spends one budget across every strategy in the run', async () => {
     /*
      * The cap is a per-run budget, not a per-strategy one. Alerting once per
-     * strategy tripled it, and let a marginal scalp go out ahead of a far
-     * stronger swing because each strategy ranked its calls in isolation.
+     * strategy tripled it, and let a marginal call go out ahead of a far
+     * stronger one because each strategy ranked its own in isolation.
      */
     const run = await alerts.notifySignals(
       [
-        signal('AAA', 'buy', 66, 'scalping'),
+        signal('AAA', 'buy', 66, 'day'),
         signal('BBB', 'buy', 95, 'swing'),
         signal('CCC', 'buy', 71, 'day'),
       ],
@@ -180,6 +180,24 @@ describe('alert dispatch', () => {
     // Conviction decides, whichever strategy produced it.
     assert.match(posted[0] ?? '', /BBB/);
     assert.match(posted[1] ?? '', /CCC/);
+  });
+
+  it('never publishes a scalp, however convinced it is', async () => {
+    /*
+     * Scalping lost money in every level geometry measured, on both halves of
+     * the board. It still renders on the dashboard; what must not happen is it
+     * reaching a subscriber or opening a trade against the record — so the
+     * strongest possible scalp is the case worth pinning.
+     */
+    const run = await alerts.notifySignals(
+      [signal('AAA', 'buy', 99, 'scalping'), signal('BBB', 'buy', 70, 'day')],
+      undefined,
+    );
+
+    assert.equal(run.sent, 1);
+    assert.equal(run.dropped, 0);
+    assert.match(posted[0] ?? '', /BBB/);
+    assert.ok(!posted.some((text) => text.includes('AAA')));
   });
 
   it('retries a rate-limited send rather than dropping the call', async () => {

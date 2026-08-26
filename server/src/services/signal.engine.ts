@@ -21,9 +21,25 @@ interface StrategyProfile {
   emaFast: number;
   emaSlow: number;
   rsiPeriod: number;
-  /** ATR multiple for the protective stop. */
+  /**
+   * ATR multiple for the protective stop.
+   *
+   * Widened on the day book after measurement: a 1.6 ATR stop on the 1h was
+   * inside the noise it was meant to sit outside, and the trades it cut were
+   * disproportionately ones that went on to reach target.
+   */
   stopAtr: number;
-  /** Target as a multiple of the risk taken. */
+  /**
+   * Target as a multiple of the risk taken.
+   *
+   * The number that was costing the most, and not the one anybody would have
+   * guessed. Swing published a 3R target — 7.2 ATR away on the 4h — and reached
+   * it 29% of the time on majors and 20% on microcaps, which at 3R is a losing
+   * book. Backtested over 40 symbols and roughly 1,800 resolved trades per
+   * setting, dropping it to 1.5R took the win rate to 50% and 44% and turned
+   * both universes positive. Reaching a nearer target more often beats reaching
+   * a distant one rarely, and it is the same entries either way.
+   */
   rewardRatio: number;
   baseRiskPct: number;
   /** Minimum absolute score before the setup is called rather than left neutral. */
@@ -125,8 +141,9 @@ export const STRATEGY_PROFILES: Record<Strategy, StrategyProfile> = {
     emaFast: 21,
     emaSlow: 55,
     rsiPeriod: 14,
-    stopAtr: 1.6,
-    rewardRatio: 2.2,
+    // 1.35x the old 1.6, which measured best of the widths tried.
+    stopAtr: 2.16,
+    rewardRatio: 1.5,
     baseRiskPct: 0.75,
     threshold: 22,
   },
@@ -140,7 +157,7 @@ export const STRATEGY_PROFILES: Record<Strategy, StrategyProfile> = {
     emaSlow: 89,
     rsiPeriod: 14,
     stopAtr: 2.4,
-    rewardRatio: 3,
+    rewardRatio: 1.5,
     baseRiskPct: 1.25,
     threshold: 26,
   },
