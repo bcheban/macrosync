@@ -107,4 +107,90 @@ export const de: Dictionary = {
   stopped: '👋 Abgemeldet. Schick /start, wann immer du sie zurück willst.',
   muteButton: (hours) => `🔕 ${hours}h stumm`,
   statsButton: '📊 Statistik',
+
+  // --- guide ----------------------------------------------------------------
+  guideTitle: '\u{1F4DA} <b>Leitfaden</b>',
+  guideIntro: 'Wähle ein Thema. Jedes ist kurz und beantwortet eine einzige Frage.',
+  guideBack: '\u2190 Zurück',
+  guideStrategies: '\u{1F4D6} Strategien',
+  guideRisk: '\u{1F6E1} Risiko & CRV',
+  guideLeverage: '\u{1F9EE} Hebel & Stops',
+
+  guideStrategiesBody: [
+    '\u{1F4D6} <b>Welche Strategie was bedeutet</b>',
+    '',
+    '\u26A1 <b>Scalping</b> — 5-Minuten-Kerzen, 15 Minuten bis 2 Stunden.',
+    'Schnell, häufig, und es will deine Aufmerksamkeit. Falsch für jeden, der nicht auf den Bildschirm schauen kann.',
+    '',
+    '\u{1F4C5} <b>Daytrading</b> — Stundenkerzen, 2 bis 12 Stunden.',
+    'Die mittlere Einstellung: eine Handvoll Signale am Tag, jedes mit Luft zum Atmen.',
+    '',
+    '\u{1F30A} <b>Swing</b> — 4-Stunden-Kerzen, 1 bis 4 Tage.',
+    'Wenige Signale, weite Stops, langes Warten. Das, was sich mit einem Job verträgt.',
+    '',
+    '<i>Schalte aus, was du nicht handeln kannst. Ein Scalp, den du drei Stunden später siehst, ist kein Scalp mehr.</i>',
+  ].join('\n'),
+
+  guideRiskBody: [
+    '\u{1F6E1} <b>Warum eine Trefferquote von 35% Geld verdient</b>',
+    '',
+    'Jedes Signal riskiert 1, um 2,2 zu verdienen. Dieses Verhältnis entscheidet über die Profitabilität — nicht, wie oft du richtig liegst.',
+    '',
+    'Auf 100 Trades bei 35%:',
+    '  35 Gewinne \u00D7 2,2 = <b>+77</b>',
+    '  65 Verluste \u00D7 1 = <b>\u221265</b>',
+    '  unterm Strich <b>+12</b> Einheiten',
+    '',
+    'Die Break-even-Trefferquote bei einem CRV von 2,2 liegt bei <b>31%</b>. Darunter verlierst du, wie clever die Einstiege auch aussehen; darüber verdienst du, obwohl du meistens falsch liegst.',
+    '',
+    '<i>Das ist Arithmetik, kein Versprechen. Sie setzt voraus, dass du jedes Signal in der angegebenen Größe nimmst und den Stop hältst — die Verlierer auszulassen, die dir nicht gefallen, ist genau das, was die Rechnung kippen lässt.</i>',
+  ].join('\n'),
+
+  guideLeverageBody: [
+    '\u{1F9EE} <b>Hebel und Stops</b>',
+    '',
+    'Jede Meldung trägt einen <b>maximal sicheren Hebel</b>. Er beantwortet genau eine Frage: bei welchem Hebel bleibt die Liquidation hinter dem Stop?',
+    '',
+    'Der Stop ist ein Vielfaches der ATR, damit eine volatile Münze einen weiteren Stop bekommt statt eines festen Prozentsatzes. Die Liquidation liegt etwa <code>1/Hebel</code> vom Einstieg entfernt, abzüglich der Erhaltungsmarge des Kontrakts — die auf der Börse zwischen 0,04% und 5% schwankt und deshalb je Kontrakt gelesen und nicht angenommen wird.',
+    '',
+    'Die Zahl hält die Liquidation <b>1,5\u00D7</b> weiter draußen als den Stop. Bei 1\u00D7 fallen sie zusammen, und die Liquidation gewinnt: Dein Stop wird zu deinem Preis ausgeführt, die Liquidation löst am Mark-Preis aus, der sich unabhängig bewegt und springen kann.',
+    '',
+    '\u26A0\uFE0F <i>Er sagt, dass die Liquidation den Trade nicht schließt. Über eine sinnvolle Größe sagt er nichts. Schick /balance, dann rechnet der Bot die Größe für dich aus.</i>',
+  ].join('\n'),
+
+  // --- deep stats -----------------------------------------------------------
+  deepTitle: '\u{1F4D0} <b>Tiefenstatistik</b>',
+  deepThreshold: (pct) => `<i>Der Stop wandert bei ${pct}% des Wegs zum Ziel auf den Einstieg</i>`,
+  deepRateHeading: '<b>Trefferquote</b>',
+  deepRateNone: '  Noch nichts abgeschlossen.',
+  deepRateExcl: (rate, wins, losses) => `  Ohne Break-even: <b>${rate}%</b>  (${wins}G / ${losses}V)`,
+  deepRateIncl: (rate, breakeven) =>
+    `  Break-even als Nicht-Gewinn gezählt: <b>${rate}%</b>  (+${breakeven} glattgestellt)`,
+  deepRateThin: (sample) => `  <i>${sample} abgeschlossene Trades — zu wenige für einen Schluss.</i>`,
+  deepConfidenceHeading: '<b>Konfidenz gegen Ergebnis</b>',
+  deepConfidence: (r, sample, won, lost) =>
+    `  r = <b>${r}</b> über ${sample} Trades  (Gewinner im Schnitt ${won}, Verlierer ${lost})`,
+  deepConfidenceNone: 'Noch kein abgeschlossener Trade trägt einen Konfluenz-Wert.',
+  deepConfidenceThin: (sample) => `Zu wenige Trades (${sample}), um danach zu handeln — als Platzhalter lesen.`,
+  deepWhatIfHeading: '<b>Was die glattgestellten Trades danach taten</b>',
+  deepWhatIfTarget: (n) => `  Erreichten das Ziel doch: <b>${n}</b>`,
+  deepWhatIfStop: (n) => `  Trafen den ursprünglichen Stop: <b>${n}</b>`,
+  deepWhatIfNeither: (n) => `  Weder noch, vor Ablauf: <b>${n}</b>`,
+  deepWhatIfProjected: (projected, now) =>
+    `  Quote ohne Glattstellungen: <b>${projected}%</b>  (gegen ${now}% jetzt)`,
+  deepWhatIfNone: 'Noch lässt sich kein glattgestellter Trade nachspielen.',
+  deepWhatIfNoisy: (won, lost, neither) =>
+    `${won} erreichten das Ziel gegen ${lost}, die den ursprünglichen Stop trafen — innerhalb einer Standardabweichung eines Münzwurfs, also eine Richtung ohne Beweis. Weitere ${neither} gingen nirgendwohin und wären schlicht verfallen.`,
+  deepWhatIfClear: (won, lost) =>
+    `${won} erreichten das Ziel gegen ${lost}, die den ursprünglichen Stop trafen — außerhalb der Zufallsspanne, die Schwelle ist es wert, bewegt zu werden.`,
+  deepStale: (minutes) => `<i>Momentaufnahme von vor ${minutes} Min.</i>`,
+
+  // --- shareable result card ------------------------------------------------
+  cardWin: 'ZIEL ERREICHT',
+  cardLoss: 'AUSGESTOPPT',
+  cardScratch: 'BREAK-EVEN',
+  cardRoi: 'ROI',
+  cardRR: 'CRV',
+  cardHeld: 'Gehalten',
+  cardFooter: 'via @MacroSyncBot',
 };

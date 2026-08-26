@@ -45,6 +45,20 @@ export class TtlCache {
       if (key.startsWith(prefix)) this.store.delete(key);
     }
   }
+
+  /**
+   * Empties the cache.
+   *
+   * Exists for tests, and it has earned its keep three times over: candles,
+   * contract specs and the radar universe are all cached by key, and
+   * `resetMemoryStore` clears the store rather than this. Two cases sharing a
+   * symbol silently replayed the first one's data, which reads as a passing
+   * test asserting the wrong thing.
+   */
+  clear(): void {
+    this.store.clear();
+    this.inflight.clear();
+  }
 }
 
 export const cache = new TtlCache();

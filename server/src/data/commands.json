@@ -21,6 +21,20 @@
     "primary": true
   },
   {
+    "command": "guide",
+    "usage": "/guide",
+    "menu": "Strategies, risk and leverage explained",
+    "help": "Short explainers you can browse: which strategy is which, why a 35% win rate makes money, and how the leverage figure is worked out.",
+    "primary": true
+  },
+  {
+    "command": "stats_deep",
+    "usage": "/stats_deep",
+    "menu": "The record in depth",
+    "help": "Win rate with and without break-even trades, whether confidence predicts outcome, and what the scratched trades did next.",
+    "primary": false
+  },
+  {
     "command": "help",
     "usage": "/help",
     "menu": "Show this instruction menu",

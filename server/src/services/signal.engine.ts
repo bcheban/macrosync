@@ -1,6 +1,13 @@
 import { env } from '../config/env.js';
 import { getHeadlineEvent } from './calendar.service.js';
-import { getContractSpecs, getKlines, splitSymbol, type ContractSpec, type Interval } from './market.service.js';
+import {
+  getContractSpecs,
+  getKlines,
+  isTradableContract,
+  splitSymbol,
+  type ContractSpec,
+  type Interval,
+} from './market.service.js';
 import type { Direction, I18nText, MacroEvent, Signal, Strategy, Verdict } from '../types/domain.js';
 import { atr, clamp, ema, macd, round, roundPrice, rsi, sma } from '../utils/indicators.js';
 
@@ -300,10 +307,23 @@ function buildSignal(
    */
   const tradable = risk * profile.rewardRatio <= entry * MAX_TARGET_FRACTION;
 
+  /*
+   * Whether the exchange will let anyone act on this at all.
+   *
+   * The last line of defence, and it catches what the radar's filter cannot: a
+   * universe cached six hours ago, or a symbol somebody selected by hand. A
+   * contract the API refuses is one where the alert names an entry nobody can
+   * take — worse than silence, because it looks actionable.
+   *
+   * An unknown symbol passes. A spec outage should narrow the board, not empty
+   * it, and the levels stay drawn either way.
+   */
+  const contractOk = spec === undefined || isTradableContract(spec);
+
   const bias: Direction =
     read.total >= profile.threshold ? 'long' : read.total <= -profile.threshold ? 'short' : 'neutral';
   // No expressible trade is no trade, whatever the indicators agree on.
-  const direction: Direction = tradable ? bias : 'neutral';
+  const direction: Direction = tradable && contractOk ? bias : 'neutral';
 
   const confidence = Math.round(clamp(Math.abs(read.total) * 1.15, 4, 97));
   const status: Signal['status'] =

@@ -25,7 +25,7 @@ import {
   type Prefs,
 } from './preferences.service.js';
 import { dict, guessLocale, LOCALE_LABEL } from './i18n/index.js';
-import { buildAnalytics, formatAnalytics } from '../admin/analytics.service.js';
+import { analyticsForReader, formatAnalyticsFor } from '../admin/analytics.service.js';
 import { clearAccount, getAccount, parseBalanceCommand, setAccount } from './sizing.service.js';
 
 /**
@@ -205,6 +205,35 @@ const glossaryLines = (specs: CommandSpec[]): string[] =>
  * phone's setting and plenty of people run an English phone in Ukrainian. The
  * guess only decides which language the question itself is asked in.
  */
+/**
+ * The guide's three topics.
+ *
+ * Separate messages rather than one long one. A beginner reading about leverage
+ * does not need the strategy comparison in the same breath, and a wall of text
+ * is where people stop reading — which costs more than the extra tap.
+ */
+const GUIDE_TOPICS = ['strategies', 'risk', 'leverage'] as const;
+type GuideTopic = (typeof GUIDE_TOPICS)[number];
+
+const guideKeyboard = (locale: Locale): InlineKeyboard => {
+  const t = dict(locale);
+  return [
+    [{ text: t.guideStrategies, callback_data: 'guide:strategies' }],
+    [{ text: t.guideRisk, callback_data: 'guide:risk' }],
+    [{ text: t.guideLeverage, callback_data: 'guide:leverage' }],
+  ];
+};
+
+const guideMenu = (locale: Locale): string => {
+  const t = dict(locale);
+  return [t.guideTitle, '', t.guideIntro].join('\n');
+};
+
+const guideBody = (locale: Locale, topic: GuideTopic): string => {
+  const t = dict(locale);
+  return { strategies: t.guideStrategiesBody, risk: t.guideRiskBody, leverage: t.guideLeverageBody }[topic];
+};
+
 const LANGUAGE_KEYBOARD: InlineKeyboard = [
   LOCALES.map((locale) => ({ text: LOCALE_LABEL[locale], callback_data: `lang:${locale}` })),
 ];
@@ -367,20 +396,22 @@ async function handleCommand(
       return;
     }
 
+    case '/guide': {
+      const locale = (await getPrefs(chatId)).locale;
+      await sendTelegramMessage(guideMenu(locale), { chatId, keyboard: guideKeyboard(locale) });
+      return;
+    }
+
     case '/stats_deep': {
       /*
-       * Owner only. Not because the numbers are secret — the dashboard shows
-       * the win rate to anyone — but because it replays candles for every
-       * scratched trade, and an open command would let any chat make the server
-       * do unbounded upstream work.
-       *
-       * Deliberately not in the command menu: it answers a question about the
-       * strategy's own parameters, which is an operator's question.
+       * Open to everyone. It used to be owner-only because it replayed candles
+       * for every scratched trade on each call; it now reads a snapshot the
+       * cron refreshes, so the cost of a tap is one store read.
        */
-      if (chatId !== env.telegramChatId) return;
+      const locale = (await getPrefs(chatId)).locale;
+      const analytics = await analyticsForReader(env.breakevenThreshold);
 
-      const analytics = await buildAnalytics(env.breakevenThreshold);
-      await sendTelegramMessage(formatAnalytics(analytics), { chatId });
+      await sendTelegramMessage(formatAnalyticsFor(analytics, locale), { chatId, keyboard: MENU });
       return;
     }
 
@@ -506,6 +537,33 @@ async function handleCallback(query: NonNullable<TelegramUpdate['callback_query'
        */
       if (messageId !== undefined) {
         await editMessageText(chat, messageId, settingsText(prefs), settingsKeyboard(prefs));
+      }
+      return;
+    }
+
+    case 'guide': {
+      const locale = (await getPrefs(chat)).locale;
+      await answerCallbackQuery(id);
+
+      if (argument === 'menu') {
+        if (messageId !== undefined) {
+          await editMessageText(chat, messageId, guideMenu(locale), guideKeyboard(locale));
+        }
+        return;
+      }
+
+      const topic = GUIDE_TOPICS.find((entry) => entry === argument);
+      if (!topic) return;
+
+      /*
+       * Edited in place with a way back, so browsing topics leaves one message
+       * rather than a column of them — and the older copies cannot sit there
+       * showing a topic the reader has moved on from.
+       */
+      if (messageId !== undefined) {
+        await editMessageText(chat, messageId, guideBody(locale, topic), [
+          [{ text: dict(locale).guideBack, callback_data: 'guide:menu' }],
+        ]);
       }
       return;
     }

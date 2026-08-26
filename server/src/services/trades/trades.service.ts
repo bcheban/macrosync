@@ -300,6 +300,14 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
   let atBreakeven = Boolean(trade.breakevenAt);
   let moved = false;
 
+  /*
+   * The best the trade ever managed, as a fraction of the distance to target.
+   * Measured across the whole walk rather than from the last price, because a
+   * trade that ran most of the way and came back is not stagnant — it is a
+   * trade that was working and stopped working, which is a different thing.
+   */
+  let bestProgress = 0;
+
   if (set) {
     const openedAt = Date.parse(trade.openedAt);
 
@@ -332,6 +340,10 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
         };
       }
 
+      const reach = long ? candle.high : candle.low;
+      const span = trade.takeProfit - trade.entry;
+      if (span !== 0) bestProgress = Math.max(bestProgress, (reach - trade.entry) / span);
+
       // Checked after the levels, so a bar cannot both save and settle itself.
       if (!atBreakeven && (long ? candle.high >= trigger : candle.low <= trigger)) {
         stop = trade.entry;
@@ -348,11 +360,22 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
   };
 
   /*
-   * Timed out. Closed at the last price we can see rather than at a level,
-   * because neither was reached — and kept out of the win rate for the same
-   * reason.
+   * Timed out, or going nowhere.
+   *
+   * The second is the newer of the two: a call that has spent `stagnantAfter` of
+   * its horizon without covering `stagnantProgress` of the distance to target is
+   * holding a slot it is not using. Closing it early frees the slot and stops
+   * the board showing a position the reader abandoned hours ago.
+   *
+   * Both close at the last price we can see rather than at a level, because
+   * neither level was reached — and both stay out of the win rate for the same
+   * reason, so this cannot flatter the record.
    */
-  if (age > MAX_LIFETIME_MS[trade.strategy]) {
+  const lifetime = MAX_LIFETIME_MS[trade.strategy];
+  const stagnant =
+    !atBreakeven && age > lifetime * env.stagnantAfterFraction && bestProgress < env.stagnantProgress;
+
+  if (age > lifetime || stagnant) {
     const last = set?.candles[set.candles.length - 1]?.close ?? trade.entry;
     return { trade: updated, closed: close(updated, 'expired', last), ...(moved ? { movedToBreakeven: true } : {}) };
   }

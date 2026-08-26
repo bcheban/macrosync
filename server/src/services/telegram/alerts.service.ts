@@ -424,6 +424,58 @@ export async function notifyBreakeven(moved: ActiveTrade[]): Promise<number> {
   return sent;
 }
 
+/**
+ * A result somebody would actually paste into a chat.
+ *
+ * A rendered PNG was the obvious reading of "shareable card", and the wrong one
+ * here: this runs on a serverless function with no fonts and no canvas, and
+ * shipping a headless renderer to draw six numbers would cost more cold-start
+ * than the whole scan. A monospace block forwards natively in Telegram, survives
+ * a screenshot, and can be copied as text — which a picture cannot.
+ *
+ * Kept deliberately narrow so it does not wrap on a phone.
+ */
+export function resultCard(trade: ClosedTrade, locale: Locale): string {
+  const t = dict(locale);
+  const long = trade.side === 'buy';
+
+  const headline =
+    trade.outcome === 'win' ? t.cardWin : trade.outcome === 'breakeven' ? t.cardScratch : t.cardLoss;
+
+  const roi = `${trade.resultPct > 0 ? '+' : ''}${trade.resultPct}%`;
+  const risk = Math.abs(trade.entry - (trade.initialStopLoss ?? trade.stopLoss));
+  const rr = risk > 0 ? (Math.abs(trade.takeProfit - trade.entry) / risk).toFixed(1) : '—';
+
+  const heldMinutes = Math.max(1, Math.round((Date.parse(trade.closedAt) - Date.parse(trade.openedAt)) / 60_000));
+  const hours = Math.floor(heldMinutes / 60);
+  const minutes = heldMinutes % 60;
+  // "3h 0m" is noise; a whole number of hours should read as one.
+  const held = hours ? (minutes ? `${hours}h ${minutes}m` : `${hours}h`) : `${minutes}m`;
+
+  /*
+   * The column is measured, not guessed. A fixed width fit "Held" and "ROI" and
+   * broke the moment German wanted "Gehalten" — the labels are translated, so
+   * the alignment has to be computed from whichever ones this locale uses.
+   */
+  const labels = [t.cardRoi, t.cardRR, t.cardHeld];
+  const width = Math.max(...labels.map((label) => label.length));
+  const pad = (label: string, value: string): string => `${label.padEnd(width)}  ${value}`;
+
+  return [
+    '<pre>',
+    `┌─ ${headline}`,
+    `│`,
+    `│ ${trade.base}  ${long ? t.alertLong : t.alertShort}`,
+    `│`,
+    `│ ${pad(t.cardRoi, roi)}`,
+    `│ ${pad(t.cardRR, rr)}`,
+    `│ ${pad(t.cardHeld, held)}`,
+    `│`,
+    `└─ ${t.cardFooter}`,
+    '</pre>',
+  ].join('\n');
+}
+
 /** Announces trades that reached their target or stop. */
 export async function notifyClosed(closed: ClosedTrade[], stats: TradeStats): Promise<number> {
   if (!telegramConfigured() || !closed.length) return 0;
@@ -443,7 +495,22 @@ export async function notifyClosed(closed: ClosedTrade[], stats: TradeStats): Pr
      * grounds to withhold it — but somebody who explicitly switched results off
      * has asked not to hear this, and the panel warned them what that means.
      */
-    const result = await broadcast(({ prefs }) => formatClose(trade, stats, prefs.locale), undefined, undefined, 'results');
+    const result = await broadcast(
+      ({ prefs }) => {
+        const body = formatClose(trade, stats, prefs.locale);
+        /*
+         * The card rides along with a win only. Nobody forwards a stop-out, and
+         * attaching one would read as the bot asking to be shared at the reader's
+         * expense.
+         */
+        return trade.outcome === 'win' ? `${body}
+
+${resultCard(trade, prefs.locale)}` : body;
+      },
+      undefined,
+      undefined,
+      'results',
+    );
     if (result.delivered > 0) sent += 1;
     else if (!result.silent) console.error(`[alerts] close notice for ${trade.base} reached nobody`);
   }

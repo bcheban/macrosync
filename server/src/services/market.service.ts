@@ -343,8 +343,65 @@ export interface ContractSpec {
   maxLeverage: number;
   maintenanceMarginRate: number;
   contractSize: number;
-  /** MEXC documents 0 as tradable; anything else is halted or delisted. */
+  /**
+   * MEXC documents 0 as tradable; anything else is halted or delisted.
+   *
+   * In practice `/contract/detail` only returns live contracts — all 1,147 come
+   * back as 0 — so this filter has never excluded anything. Kept because it
+   * costs a comparison and the day the endpoint starts returning halted
+   * contracts is not a day anyone will notice in advance.
+   */
   state: number;
+  /**
+   * The margin asset. `USDT` for the linear board; `USD` is coin-margined.
+   *
+   * Optional, and absence never disqualifies. If MEXC reshapes the response and
+   * these stop arriving, treating that as "not USDT" would filter out the entire
+   * board at once — a total outage dressed up as a quiet day with no setups.
+   */
+  quoteCoin?: string;
+  settleCoin?: string;
+  /** 1 is a perpetual. Delivery futures would need different handling entirely. */
+  futureType?: number;
+  /**
+   * Whether the contract can be traded through the API at all.
+   *
+   * The one that actually matters, and the reason symbols were "not found or
+   * throwing errors": twenty-five USDT perpetuals carry `false` here and every
+   * one of them is in the public ticker feed. The radar could rank them, the
+   * engine could price them, and the alert named a contract the reader could
+   * not act on.
+   */
+  apiAllowed: boolean;
+}
+
+/**
+ * Whether this is a contract the bot should ever emit a signal for.
+ *
+ * Four conditions, and only the last is doing real work today — but a signal on
+ * an untradable market is worse than no signal, so each is checked rather than
+ * assumed to stay true.
+ */
+export function isTradableContract(spec: ContractSpec | undefined): boolean {
+  if (!spec) return false;
+
+  /*
+   * Only a value that contradicts disqualifies; a missing field does not. The
+   * two failure modes are not symmetric — over-filtering empties the board and
+   * looks like a quiet market, while under-filtering lets through a handful of
+   * contracts the next check catches.
+   */
+  const wrong = (value: string | number | undefined, expected: string | number): boolean =>
+    value !== undefined && value !== expected;
+
+  if (spec.state !== 0) return false;
+  if (wrong(spec.futureType, 1)) return false;
+  // Strictly USDT-margined: the board also carries USDC, USD1 and ten
+  // coin-margined contracts settled in the base asset.
+  if (wrong(spec.quoteCoin, 'USDT')) return false;
+  if (wrong(spec.settleCoin, 'USDT')) return false;
+
+  return spec.apiAllowed;
 }
 
 interface RawContractDetail {
@@ -354,6 +411,9 @@ interface RawContractDetail {
   contractSize?: number;
   state?: number;
   quoteCoin?: string;
+  settleCoin?: string;
+  futureType?: number;
+  apiAllowed?: boolean;
 }
 
 /** Specs for every contract, keyed by the internal symbol form. */
@@ -372,6 +432,15 @@ export async function getContractSpecs(): Promise<Map<string, ContractSpec>> {
           maintenanceMarginRate: entry.maintenanceMarginRate ?? 0.02,
           contractSize: entry.contractSize ?? 1,
           state: entry.state ?? 0,
+          quoteCoin: entry.quoteCoin,
+          settleCoin: entry.settleCoin,
+          futureType: entry.futureType,
+          /*
+           * Absent reads as allowed. A spec response that drops the field must
+           * not empty the board — the failure mode of over-filtering here is a
+           * scanner that finds nothing at all.
+           */
+          apiAllowed: entry.apiAllowed !== false,
         } satisfies ContractSpec,
       ]),
     );

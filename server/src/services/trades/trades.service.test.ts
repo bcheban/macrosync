@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it } from 'node:test';
+import { cache } from '../../utils/cache.js';
 import { resetMemoryStore } from '../store/store.js';
 import * as trades from './trades.service.js';
 
@@ -90,6 +91,8 @@ describe('trade ledger', () => {
      * ledger would carry over. Clearing the backend is what actually isolates.
      */
     resetMemoryStore();
+    // Candles and specs are cached by key, and the store reset does not touch them.
+    cache.clear();
   });
 
   it('settles a long that tagged its target as a win', async () => {
@@ -192,6 +195,70 @@ describe('trade ledger', () => {
     } finally {
       mutable.breakevenThreshold = original;
     }
+  });
+
+  it('closes a trade that has gone nowhere for half its horizon', async () => {
+    /*
+     * A day trade lives 36 hours, so the check bites after 18. Forty bars that
+     * barely move means the call is holding a slot it is not using.
+     */
+    const highs = Array.from({ length: 40 }, () => 101);
+    script = { STAUSDT: [highs, highs.map(() => 99)] };
+
+    await trades.openTrade(signal('STA', 'buy', 100, 95, 110));
+    const active = await trades.loadActive();
+    const aged = active.map((t) => ({ ...t, openedAt: new Date(Date.now() - 20 * 60 * 60_000).toISOString() }));
+    const { setJson, storeKey } = await import('../store/store.js');
+    await setJson(storeKey('trades:active'), aged);
+
+    const { closed } = await trades.evaluateTrades();
+
+    assert.equal(closed[0]?.outcome, 'expired');
+    // Expired stays out of the rate, so an early close cannot flatter it.
+    assert.equal((await trades.loadStats()).wins + (await trades.loadStats()).losses, 0);
+  });
+
+  it('spares a trade that travelled, even if it came back', async () => {
+    /*
+     * Progress is the best the trade ever managed, not where it sits now. One
+     * that ran 40% of the way and returned is a trade that was working and
+     * stopped — a different thing from one that never moved.
+     */
+    const highs = Array.from({ length: 40 }, (_, i) => (i === 5 ? 105 : 101));
+    script = { STBUSDT: [highs, highs.map(() => 99)] };
+
+    await trades.openTrade(signal('STB', 'buy', 100, 95, 110));
+    const active = await trades.loadActive();
+    const { setJson, storeKey } = await import('../store/store.js');
+    await setJson(
+      storeKey('trades:active'),
+      active.map((t) => ({ ...t, openedAt: new Date(Date.now() - 20 * 60 * 60_000).toISOString() })),
+    );
+
+    const { closed } = await trades.evaluateTrades();
+
+    assert.equal(closed.length, 0, '50% of the way at its best is not stagnant');
+  });
+
+  it('never calls a protected trade stagnant', async () => {
+    /*
+     * Past 75% by definition, so the progress test cannot apply to it. Lows stay
+     * above entry throughout — a dip to 99 would fill the moved stop and close
+     * this as a scratch before the stagnation check ever ran.
+     */
+    const highs = Array.from({ length: 40 }, (_, i) => (i === 2 ? 108 : 101));
+    script = { STCUSDT: [highs, highs.map(() => 101)] };
+
+    await trades.openTrade(signal('STC', 'buy', 100, 95, 110));
+    const active = await trades.loadActive();
+    const { setJson, storeKey } = await import('../store/store.js');
+    await setJson(
+      storeKey('trades:active'),
+      active.map((t) => ({ ...t, openedAt: new Date(Date.now() - 20 * 60 * 60_000).toISOString() })),
+    );
+
+    const { closed } = await trades.evaluateTrades();
+    assert.equal(closed.length, 0);
   });
 
   it('costs a win when one bar both scratches and targets', async () => {

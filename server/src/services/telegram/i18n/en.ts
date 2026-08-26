@@ -115,6 +115,93 @@ export const en = {
   stopped: '👋 Unsubscribed. Send /start whenever you want them back.',
   muteButton: (hours: number) => `🔕 Mute ${hours}h`,
   statsButton: '📊 Stats',
+
+  // --- guide ----------------------------------------------------------------
+  guideTitle: '📚 <b>Guide</b>',
+  guideIntro: 'Pick a topic. Each one is short and answers a single question.',
+  guideBack: '← Back',
+  guideStrategies: '📖 Strategies',
+  guideRisk: '🛡 Risk & R:R',
+  guideLeverage: '🧮 Leverage & stops',
+
+  guideStrategiesBody: [
+    '📖 <b>Which strategy is which</b>',
+    '',
+    '⚡ <b>Scalping</b> — 5-minute bars, 15 minutes to 2 hours.',
+    'Fast, frequent, and it wants your attention. Wrong for anyone who cannot watch a screen.',
+    '',
+    '📅 <b>Day trading</b> — hourly bars, 2 to 12 hours.',
+    'The middle setting: a handful of calls a day, each with room to breathe.',
+    '',
+    '🌊 <b>Swing</b> — 4-hour bars, 1 to 4 days.',
+    'Few calls, wide stops, and long waits. The one that suits a job.',
+    '',
+    '<i>Turn off what you cannot trade. A scalp you see three hours late is not a scalp.</i>',
+  ].join('\n'),
+
+  guideRiskBody: [
+    '🛡 <b>Why a 35% win rate makes money</b>',
+    '',
+    'Every call risks 1 to make 2.2. That ratio is what decides profitability — not how often you are right.',
+    '',
+    'Over 100 trades at 35%:',
+    '  35 wins × 2.2 = <b>+77</b>',
+    '  65 losses × 1 = <b>−65</b>',
+    '  net <b>+12</b> units',
+    '',
+    'The break-even win rate at 2.2 R:R is <b>31%</b>. Below it you lose however clever the entries look; above it you make money being wrong most of the time.',
+    '',
+    '<i>This is arithmetic, not a promise. It assumes you take every call at the stated size and hold the stop — skipping the losers you dislike is what turns the maths against you.</i>',
+  ].join('\n'),
+
+  guideLeverageBody: [
+    '🧮 <b>Leverage and stops</b>',
+    '',
+    'Every alert carries a <b>max safe leverage</b>. It answers exactly one question: at what leverage does liquidation stay clear of the stop?',
+    '',
+    'The stop is a multiple of ATR, so a volatile coin gets a wider stop rather than a fixed percentage. Liquidation sits roughly <code>1/leverage</code> from entry, minus the contract maintenance margin — which runs from 0.04% to 5% across the board, so it is read per contract rather than assumed.',
+    '',
+    'The figure keeps liquidation <b>1.5×</b> further out than the stop. At 1× they coincide, and liquidation wins: your stop fills at your price, liquidation triggers off the mark price, which moves independently and can gap.',
+    '',
+    '⚠️ <i>It says liquidation will not close the trade. It says nothing about whether the size is sensible. Send /balance and the bot will work the size out for you.</i>',
+  ].join('\n'),
+
+  // --- deep stats -----------------------------------------------------------
+  deepTitle: '📐 <b>Deep stats</b>',
+  deepThreshold: (pct: number) => `<i>Break-even moves the stop at ${pct}% of the way to target</i>`,
+  deepRateHeading: '<b>Win rate</b>',
+  deepRateNone: '  Nothing settled yet.',
+  deepRateExcl: (rate: number, wins: number, losses: number) =>
+    `  Excluding break-even: <b>${rate}%</b>  (${wins}W / ${losses}L)`,
+  deepRateIncl: (rate: number, breakeven: number) =>
+    `  Counting break-even as a non-win: <b>${rate}%</b>  (+${breakeven} scratched)`,
+  deepRateThin: (sample: number) => `  <i>${sample} settled trades — too few to draw a conclusion from.</i>`,
+  deepConfidenceHeading: '<b>Confidence vs outcome</b>',
+  deepConfidence: (r: number, sample: number, won: number, lost: number) =>
+    `  r = <b>${r}</b> over ${sample} trades  (winners averaged ${won}, losers ${lost})`,
+  deepConfidenceNone: 'No settled trade carries a confluence score yet.',
+  deepConfidenceThin: (sample: number) => `Too few trades (${sample}) to act on — treat it as a placeholder.`,
+  deepWhatIfHeading: '<b>What the scratched trades did next</b>',
+  deepWhatIfTarget: (n: number) => `  Reached the target anyway: <b>${n}</b>`,
+  deepWhatIfStop: (n: number) => `  Hit the original stop:     <b>${n}</b>`,
+  deepWhatIfNeither: (n: number) => `  Neither, before expiry:    <b>${n}</b>`,
+  deepWhatIfProjected: (projected: number, now: number) =>
+    `  Rate had none been scratched: <b>${projected}%</b>  (against ${now}% now)`,
+  deepWhatIfNone: 'No scratched trade can be replayed yet.',
+  deepWhatIfNoisy: (won: number, lost: number, neither: number) =>
+    `${won} went on to reach the target against ${lost} that hit the original stop — inside one standard error of a coin flip, so it points a direction without proving one. ${neither} more went nowhere and would simply have expired.`,
+  deepWhatIfClear: (won: number, lost: number) =>
+    `${won} reached the target against ${lost} that hit the original stop — outside coin-flip range, so the threshold is worth moving.`,
+  deepStale: (minutes: number) => `<i>Snapshot from ${minutes} min ago.</i>`,
+
+  // --- shareable result card ------------------------------------------------
+  cardWin: 'TARGET HIT',
+  cardLoss: 'STOPPED OUT',
+  cardScratch: 'BREAK-EVEN',
+  cardRoi: 'ROI',
+  cardRR: 'R:R',
+  cardHeld: 'Held',
+  cardFooter: 'via @MacroSyncBot',
 } as const;
 
 export type Dictionary = {

@@ -16,7 +16,7 @@ import {
 import { botStatus, handleUpdate, type TelegramUpdate } from '../services/telegram/webhook.service.js';
 import { getActiveSignals } from '../services/trades/active.service.js';
 import { resetStore, type ResetScope } from '../services/admin/reset.service.js';
-import { buildAnalytics, formatAnalytics } from '../services/admin/analytics.service.js';
+import { analyticsForReader, formatAnalytics, refreshSnapshot } from '../services/admin/analytics.service.js';
 import {
   isSelectableSymbol,
   nextBatch,
@@ -266,6 +266,13 @@ api.all(
     const protectedCount = await notifyBreakeven(movedToBreakeven);
     const announced = await notifyClosed(closed, stats);
 
+    /*
+     * Recomputed when something settled, and only then. `/stats_deep` is open to
+     * every subscriber now, so the replay cost belongs on the schedule rather
+     * than on whoever taps the button.
+     */
+    if (closed.length) await refreshSnapshot(env.breakevenThreshold).catch(() => undefined);
+
     // Recorded so `/health` can answer "is my scheduler actually running?".
     const history = await getJson<{ runs: number }>(CRON_KEY, { runs: 0 });
     await setJson(CRON_KEY, { runs: history.runs + 1, lastRunAt: new Date().toISOString() });
@@ -447,7 +454,7 @@ api.get(
       return;
     }
 
-    const analytics = await buildAnalytics(env.breakevenThreshold);
+    const analytics = await analyticsForReader(env.breakevenThreshold);
 
     if (req.query.format === 'text') {
       res.type('text/plain').send(formatAnalytics(analytics).replace(/<[^>]+>/g, ''));

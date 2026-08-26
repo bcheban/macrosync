@@ -12,6 +12,7 @@ process.env.RADAR_MIN_VOLUME_USD = '1000';
 process.env.RADAR_ALWAYS_INCLUDE = 'BTCUSDT';
 process.env.RADAR_UNIVERSE_TTL_MS = '3600000';
 
+const { cache } = await import('../../utils/cache.js');
 const { resetMemoryStore } = await import('../store/store.js');
 const radar = await import('./universe.service.js');
 
@@ -19,6 +20,10 @@ const radar = await import('./universe.service.js');
 let feed: Record<string, number> = {};
 /** Symbols the feed should quote as sitting flat on a dollar. */
 let pegged = new Set<string>();
+/** Symbols the exchange lists and prices but refuses through the API. */
+let untradable = new Set<string>();
+/** Simulates MEXC reshaping `/contract/detail` and dropping the margin fields. */
+let partialSpecs = false;
 let feedCalls = 0;
 
 const realFetch = globalThis.fetch;
@@ -39,6 +44,11 @@ before(() => {
             maintenanceMarginRate: 0.005,
             contractSize: 1,
             state: 0,
+            // The full shape, so the tradability filter is actually exercised.
+            ...(partialSpecs
+              ? {}
+              : { quoteCoin: 'USDT', settleCoin: 'USDT', futureType: 1 }),
+            apiAllowed: !untradable.has(symbol),
           })),
         }),
         text: async () => '',
@@ -78,7 +88,11 @@ describe('radar universe', () => {
   beforeEach(() => {
     feedCalls = 0;
     pegged = new Set();
+    untradable = new Set();
+    partialSpecs = false;
     resetMemoryStore();
+    // Candles and specs are cached by key, and the store reset does not touch them.
+    cache.clear();
     feed = {
       BTCUSDT: 900_000_000,
       ETHUSDT: 500_000_000,
@@ -107,6 +121,36 @@ describe('radar universe', () => {
     // An altcoin well down the board is still covered — that is the whole point.
     assert.ok(symbols.includes('INJUSDT'));
     assert.ok(!symbols.includes('DEADUSDT'));
+  });
+
+  it('drops a contract the exchange will not trade through the API', async () => {
+    /*
+     * Twenty-five USDT perpetuals carry `apiAllowed: false` on the live board,
+     * and every one is in the public ticker feed — so nothing upstream of this
+     * can tell them apart from a contract somebody could act on. This is what
+     * "symbol not found" looked like from the outside.
+     */
+    feed = { BTCUSDT: 900_000_000, GHOSTUSDT: 800_000_000, ETHUSDT: 700_000_000 };
+    untradable.add('GHOSTUSDT');
+
+    const { symbols } = await radar.buildUniverse();
+
+    assert.ok(!symbols.includes('GHOSTUSDT'), 'priced, ranked, and untradable');
+    assert.deepEqual(symbols, ['BTCUSDT', 'ETHUSDT']);
+  });
+
+  it('keeps the board when the spec response drops its fields', async () => {
+    /*
+     * The asymmetry that matters: over-filtering empties the board and reads as
+     * a quiet market with no setups, which is indistinguishable from working.
+     * Only a value that contradicts disqualifies — absence never does.
+     */
+    feed = { BTCUSDT: 900_000_000, ETHUSDT: 700_000_000 };
+    partialSpecs = true;
+
+    const { symbols } = await radar.buildUniverse();
+
+    assert.deepEqual(symbols, ['BTCUSDT', 'ETHUSDT']);
   });
 
   it('drops a dollar token that no list of names would catch', async () => {

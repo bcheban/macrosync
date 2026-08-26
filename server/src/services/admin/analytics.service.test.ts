@@ -8,6 +8,7 @@ import { after, before, beforeEach, describe, it } from 'node:test';
  */
 process.env.TELEGRAM_BOT_TOKEN = '';
 
+const { cache } = await import('../../utils/cache.js');
 const { resetMemoryStore, setJson, storeKey } = await import('../store/store.js');
 const analytics = await import('./analytics.service.js');
 
@@ -80,6 +81,8 @@ const seed = async (history: unknown[], stats: Record<string, number>) => {
 describe('analytics', () => {
   beforeEach(() => {
     resetMemoryStore();
+    // Candles and specs are cached by key, and the store reset does not touch them.
+    cache.clear();
     script = {};
     tapeStart = Math.floor((Date.now() - 10 * 60 * 60_000) / 1000) * 1000;
   });

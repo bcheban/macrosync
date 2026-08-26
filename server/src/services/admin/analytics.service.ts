@@ -1,4 +1,7 @@
 import { getKlines } from '../market.service.js';
+import { getJson, setJson, storeKey } from '../store/store.js';
+import { dict } from '../telegram/i18n/index.js';
+import type { Locale } from '../telegram/preferences.service.js';
 import {
   INTERVAL,
   LOOKBACK,
@@ -310,6 +313,86 @@ export async function buildAnalytics(threshold: number): Promise<Analytics> {
     confidence: correlateConfidence(decided),
     whatIf,
   };
+}
+
+const SNAPSHOT_KEY = storeKey('analytics:snapshot');
+
+/**
+ * The snapshot every reader is served.
+ *
+ * `/stats_deep` is open to everyone now, and computing it per command would mean
+ * replaying candles for every scratched trade on every tap — dozens of upstream
+ * requests triggered by anyone with a keyboard. It is computed once when trades
+ * close and read from the store thereafter.
+ *
+ * A stale snapshot is served rather than withheld, with its age printed. These
+ * are figures about weeks of trading; twenty minutes old changes nothing about
+ * how they should be read, and an empty panel would.
+ */
+export async function readSnapshot(): Promise<Analytics | null> {
+  return getJson<Analytics | null>(SNAPSHOT_KEY, null);
+}
+
+/** Recomputes and stores it. Called from the cron, after trades settle. */
+export async function refreshSnapshot(threshold: number): Promise<Analytics> {
+  const analytics = await buildAnalytics(threshold);
+  await setJson(SNAPSHOT_KEY, analytics);
+  return analytics;
+}
+
+/**
+ * Serves the snapshot, building one only if none exists.
+ *
+ * The first reader after a deploy pays for it; everyone after that does not.
+ */
+export async function analyticsForReader(threshold: number): Promise<Analytics> {
+  return (await readSnapshot()) ?? refreshSnapshot(threshold);
+}
+
+/** The same figures, in the reader's language. */
+export function formatAnalyticsFor(analytics: Analytics, locale: Locale): string {
+  const t = dict(locale);
+  const { rate, confidence, whatIf } = analytics;
+
+  const ageMinutes = Math.max(0, Math.round((Date.now() - Date.parse(analytics.generatedAt)) / 60_000));
+
+  const lines = [
+    t.deepTitle,
+    t.deepThreshold(Math.round(analytics.breakevenThreshold * 100)),
+    '',
+    t.deepRateHeading,
+    rate.excludingBreakeven === null
+      ? t.deepRateNone
+      : t.deepRateExcl(rate.excludingBreakeven, rate.wins, rate.losses),
+    rate.includingBreakeven === null ? '' : t.deepRateIncl(rate.includingBreakeven, rate.breakeven),
+    rate.reliable ? '' : t.deepRateThin(rate.sample),
+    '',
+    t.deepConfidenceHeading,
+    confidence.r === null
+      ? `  <i>${t.deepConfidenceNone}</i>`
+      : t.deepConfidence(confidence.r, confidence.sample, confidence.meanWinning ?? 0, confidence.meanLosing ?? 0),
+    confidence.r !== null && !confidence.reliable ? `  <i>${t.deepConfidenceThin(confidence.sample)}</i>` : '',
+    '',
+    t.deepWhatIfHeading,
+    t.deepWhatIfTarget(whatIf.wouldHaveWon),
+    t.deepWhatIfStop(whatIf.wouldHaveLost),
+    t.deepWhatIfNeither(whatIf.neither),
+    whatIf.projectedRate === null || rate.excludingBreakeven === null
+      ? ''
+      : t.deepWhatIfProjected(whatIf.projectedRate, rate.excludingBreakeven),
+    '',
+    `  <i>${
+      whatIf.wouldHaveWon + whatIf.wouldHaveLost === 0
+        ? t.deepWhatIfNone
+        : whatIf.reliable
+          ? t.deepWhatIfClear(whatIf.wouldHaveWon, whatIf.wouldHaveLost)
+          : t.deepWhatIfNoisy(whatIf.wouldHaveWon, whatIf.wouldHaveLost, whatIf.neither)
+    }</i>`,
+    // Printed only when it could matter — a fresh snapshot needs no apology.
+    ageMinutes >= 5 ? `\n${t.deepStale(ageMinutes)}` : '',
+  ];
+
+  return lines.filter((line) => line !== '').join('\n');
 }
 
 /** The same figures as a message somebody can read on a phone. */

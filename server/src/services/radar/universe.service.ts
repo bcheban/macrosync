@@ -1,5 +1,11 @@
 import { env } from '../../config/env.js';
-import { getAllTickers24h, getContractSpecs, splitSymbol, type MarketSummary } from '../market.service.js';
+import {
+  getAllTickers24h,
+  getContractSpecs,
+  isTradableContract,
+  splitSymbol,
+  type MarketSummary,
+} from '../market.service.js';
 import { assetCatalog, isKnownSymbol } from '../../data/assets.js';
 import type { AssetMeta } from '../../types/domain.js';
 import { getJson, setJson, storeKey } from '../store/store.js';
@@ -101,19 +107,23 @@ export function isTradablePair(symbol: string): boolean {
 export async function buildUniverse(): Promise<CachedUniverse> {
   const [all, specs] = await Promise.all([
     getAllTickers24h(),
-    // A spec failure must not empty the radar; it only costs the state check.
+    // A spec failure must not empty the radar; it only costs the tradability check.
     getContractSpecs().catch(() => new Map()),
   ]);
 
   /*
-   * A contract can be listed in the ticker feed while halted or on its way to
-   * delisting. `state` 0 is the tradable one; anything else would produce
-   * signals on a market nobody can act in. An unknown symbol is allowed through
-   * rather than dropped, so a spec outage narrows nothing.
+   * The ticker feed carries more than the linear board: USDC and USD1 quotes,
+   * ten coin-margined contracts, and — the one that caused real complaints —
+   * twenty-five USDT perpetuals with `apiAllowed: false`. All twenty-five are
+   * priced in the feed, so nothing upstream of this filter can tell them apart
+   * from a contract somebody could actually trade.
+   *
+   * An unknown symbol is allowed through rather than dropped, so a spec outage
+   * narrows the board instead of emptying it.
    */
-  const tradableState = (symbol: string): boolean => {
+  const tradable = (symbol: string): boolean => {
     const spec = specs.get(symbol);
-    return spec === undefined || spec.state === 0;
+    return spec === undefined || isTradableContract(spec);
   };
 
   const ranked = all
@@ -121,7 +131,7 @@ export async function buildUniverse(): Promise<CachedUniverse> {
       (entry) =>
         isTradablePair(entry.symbol) &&
         !looksPegged(entry) &&
-        tradableState(entry.symbol) &&
+        tradable(entry.symbol) &&
         entry.quoteVolume >= env.radarMinVolumeUsd,
     )
     .sort((a, b) => b.quoteVolume - a.quoteVolume)

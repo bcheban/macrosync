@@ -162,6 +162,20 @@ export const env = {
    */
   breakevenThreshold: fraction(process.env.BREAKEVEN_THRESHOLD, 0.75),
 
+  /*
+   * When a trade that is going nowhere gets closed, and how far it has to have
+   * travelled to be spared.
+   *
+   * A call that has spent half its horizon without covering a third of the
+   * distance to target is not working — it is holding a slot and it will most
+   * likely expire anyway. Closing it early frees the slot and, more honestly,
+   * stops the ledger carrying a position the reader has long since abandoned.
+   *
+   * Expired trades stay out of the win rate, so this cannot flatter the record.
+   */
+  stagnantAfterFraction: fraction(process.env.STAGNANT_AFTER, 0.5),
+  stagnantProgress: fraction(process.env.STAGNANT_PROGRESS, 0.3),
+
   /* --- persistence -------------------------------------------------------- */
 
   /*
