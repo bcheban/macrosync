@@ -187,4 +187,45 @@ export const uk: Dictionary = {
   cardRR: 'R:R',
   cardHeld: 'Тривало',
   cardFooter: 'через @MacroSyncBot',
+
+  // --- settings sub-menus ---------------------------------------------------
+  settingsBack: '\u00AB До налаштувань',
+  settingsRootHint: 'Два розділи й мова. Обери один.',
+  settingsStrategiesButton: 'Стратегії',
+  settingsChannelsButton: 'Типи сповіщень',
+  settingsStrategiesTitle: '\u{1F4CA} <b>Стратегії</b> \u2014 які сетапи до тебе доходять',
+  settingsChannelsTitle: '\u{1F514} <b>Типи сповіщень</b> \u2014 про які моменти повідомляти',
+  settingsPickOne: '\u26A0\uFE0F <i>Нічого не увімкнено, тож сигнали не надходитимуть. Натисни стратегію, щоб почати.</i>',
+
+  // --- deep link ------------------------------------------------------------
+  tradeOnMexc: '\u{1F680} Торгувати на MEXC',
+
+  // --- calculator -----------------------------------------------------------
+  calcUsage: [
+    '\u{1F9EE} <b>Калькулятор позиції</b>',
+    '',
+    'Надішли депозит, відсоток ризику й рівні:',
+    '',
+    '<code>/calc 1000 2 5.60 5.32</code>',
+    '<i>депозит \u2014 ризик% \u2014 вхід \u2014 стоп</i>',
+    '',
+    'Без рівнів він візьме рахунок, збережений через /balance, і найсвіжіший сигнал:',
+    '',
+    '<code>/calc</code>  \u2014 збережений депозит, останній сигнал',
+    '<code>/calc 500 1</code>  \u2014 ці числа, останній сигнал',
+  ].join('\n'),
+  calcNoLevels: '\u26A0\uFE0F Немає відкритого сигналу для розрахунку. Надішли вхід і стоп сам: <code>/calc 1000 2 5.60 5.32</code>',
+  calcNoAccount: '\u26A0\uFE0F Депозит не збережено. Надішли <code>/calc 1000 2</code> або задай його через /balance.',
+  calcBadLevels: '\u26A0\uFE0F Вхід і стоп не можуть збігатися, і жоден не може бути нулем.',
+  calcTitleCustom: '\u{1F9EE} <b>Позиція</b>',
+  calcTitle: (base) => `\u{1F9EE} <b>${base}</b> \u2014 позиція`,
+  calcFromSignal: (base) => `<i>Рівні з відкритого сигналу по ${base}.</i>`,
+  calcAccount: (deposit, riskPct, risk) =>
+    `Депозит <b>${deposit}</b> \u00B7 ризик <b>${riskPct}%</b> = <b>${risk}</b>`,
+  calcStopDistance: (pct) => `Стоп за <b>${pct}%</b> від входу`,
+  calcSize: (notional) => `\u{1F4E6} Розмір позиції: <b>${notional}</b>`,
+  calcQty: (qty, base) => `\u{1FA99} Кількість: <b>${qty}</b> ${base}`,
+  calcMargin: (margin, leverage) => `\u{1F4B0} Маржа за ${leverage}x: <b>${margin}</b>`,
+  calcCapped: '\u26A0\uFE0F <i>Обмежено твоїм депозитом \u2014 повний розмір потребує більше застави, ніж є на рахунку.</i>',
+  calcNote: '<i>Лише розрахунок. За тебе нічого не виставляється, і саме стоп робить цю арифметику правдивою.</i>',
 };

@@ -1,3 +1,4 @@
+import { PositionCalculator } from '@/components/signals/PositionCalculator';
 import { m } from 'framer-motion';
 import { ArrowDownRight, ArrowUpRight, Hourglass, ShieldAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -167,6 +168,13 @@ export function SignalCard({ signal, index }: { signal: Signal; index: number })
           <Level label={t('signals.target')} value={signal.takeProfit} tone="text-bull" />
         </div>
       </div>
+
+      {/*
+        The calculator sits under an actionable call only. On a `wait` card there
+        is no position to size, and a sizing widget beside "no edge right now"
+        would read as encouragement.
+      */}
+      {signal.verdict !== 'wait' && <PositionCalculator signal={signal} />}
 
       {/* The raw reads, demoted — there to check the sentence against. */}
       <div className="mt-3 flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[11px] text-white/35 [&>span]:whitespace-nowrap">

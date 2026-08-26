@@ -89,6 +89,18 @@ export const en = {
     empty: 'No assets selected.',
   },
 
+  calc: {
+    deposit: 'Deposit',
+    risk: 'Risk',
+    atRisk: 'At risk',
+    size: 'Position',
+    quantity: 'Quantity',
+    margin: 'Margin',
+    capped: 'Capped at your deposit — the full size needs more collateral than that holds.',
+    stopNote: 'Sized so the stop, {{pct}}% away, costs exactly the risk above.',
+    tradeOn: 'Trade on MEXC',
+  },
+
   liveTrades: {
     chartError: 'Could not load the bars',
     chartLoading: 'Loading bars…',

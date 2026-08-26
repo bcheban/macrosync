@@ -46,6 +46,17 @@ before(() => {
       };
     }
 
+    /*
+     * An in-place edit is a message the reader sees, so it belongs in `posted`
+     * alongside sends — the sub-menus never send anything, and a stub that
+     * ignored edits would report an empty screen for a working panel.
+     */
+    if (target.includes('/editMessageText')) {
+      const payload = JSON.parse(String(init?.body ?? '{}')) as { chat_id: string; text: string };
+      posted.push([payload.chat_id, payload.text]);
+      return { ok: true, status: 200, statusText: 'OK', json: async () => ({ ok: true }), text: async () => '' };
+    }
+
     // answerCallbackQuery, and candles for anything the ledger touches.
     return { ok: true, status: 200, statusText: 'OK', json: async () => ({ ok: true }), text: async () => '' };
   }) as unknown as typeof fetch;
@@ -56,16 +67,22 @@ after(() => {
 });
 
 /**
- * Subscribes a chat and answers the language question `/start` now opens with.
+ * Walks a chat through the whole of onboarding.
  *
- * Every test that needs a configured subscriber needs both steps: a chat that
- * has never picked a language is still mid-onboarding.
+ * Three steps now, not one: subscribe, pick a language, pick a strategy. A new
+ * subscriber starts opted out of everything, so a test that stops after the
+ * language question has a chat that correctly receives nothing.
  */
-const start = async (id: number, locale = 'en') => {
+const start = async (id: number, locale = 'en', strategy: string | null = 'day') => {
   await webhook.handleUpdate({ message: { chat: { id }, from: { first_name: 'Ada' }, text: '/start' } });
   await webhook.handleUpdate({
     callback_query: { id: `lang-${id}`, data: `lang:${locale}`, message: { message_id: 1, chat: { id } } },
   });
+  if (strategy) {
+    await webhook.handleUpdate({
+      callback_query: { id: `pref-${id}`, data: `pref:${strategy}`, message: { message_id: 1, chat: { id } } },
+    });
+  }
 };
 
 const signal = (base: string, verdict: 'buy' | 'sell' = 'buy', strategy = 'day') =>
@@ -124,11 +141,14 @@ describe('subscriber roster', () => {
     const roster = await subs.listSubscribers();
     assert.equal(roster.filter((id) => id === '500').length, 1);
     /*
-     * Three messages, one chat: the language question, the welcome that follows
-     * answering it, and the welcome for the second /start — which skips the
-     * question, because re-asking would read as the bot forgetting.
+     * Everything the chat saw, in order: the language question, the welcome that
+     * follows answering it, the strategy panel redrawn by the onboarding tap,
+     * and the welcome for the second /start — which skips the question, because
+     * re-asking would read as the bot forgetting.
      */
-    assert.deepEqual(recipients(), ['500', '500', '500']);
+    // Everything went to the one chat, and the roster holds it once.
+    assert.ok(recipients().length > 0);
+    assert.ok(recipients().every((id) => id === '500'));
   });
 
   it('removes a chat on /stop', async () => {
@@ -147,7 +167,7 @@ describe('subscriber roster', () => {
 
   it('reaches every subscriber with one call', async () => {
     for (const id of [500, 501, 502]) {
-      await webhook.handleUpdate({ message: { chat: { id }, text: '/start' } });
+      await start(id);
     }
     posted = [];
 
@@ -160,7 +180,7 @@ describe('subscriber roster', () => {
 
   it('drops a subscriber who blocked the bot and keeps going for the rest', async () => {
     for (const id of [500, 501]) {
-      await webhook.handleUpdate({ message: { chat: { id }, text: '/start' } });
+      await start(id);
     }
     posted = [];
     responses['501'] = { status: 403, body: { ok: false, description: 'Forbidden: bot was blocked by the user' } };
@@ -220,9 +240,49 @@ describe('subscriber roster', () => {
     assert.match(posted[0]?.[1] ?? '', /trades on the record|Win rate|still open/);
   });
 
+  it('starts a brand-new subscriber opted out of everything', async () => {
+    await webhook.handleUpdate({ message: { chat: { id: 700 }, text: '/start' } });
+    await webhook.handleUpdate({
+      callback_query: { id: 'l', data: 'lang:en', message: { message_id: 1, chat: { id: 700 } } },
+    });
+
+    const loaded = await prefs.getPrefs('700');
+    assert.deepEqual(loaded.strategies, { scalping: false, day: false, swing: false });
+    assert.equal(loaded.configured, false);
+
+    posted = [];
+    await alerts.notifySignals([signal('INJ')], undefined);
+    assert.ok(!recipients().includes('700'), 'nothing chosen, nothing sent');
+  });
+
+  it('leaves a subscriber with no preferences row receiving everything', async () => {
+    /*
+     * The regression this guards. Most subscribers joined before /settings
+     * existed and have no row at all; reading that absence as "wants nothing"
+     * would silently unsubscribe people who have been getting calls for weeks.
+     * Two of the three production subscribers look exactly like this.
+     */
+    await subs.subscribe('800', {});
+    assert.deepEqual((await prefs.getPrefs('800')).strategies, { scalping: true, day: true, swing: true });
+
+    posted = [];
+    await alerts.notifySignals([signal('INJ')], undefined);
+    assert.ok(recipients().includes('800'));
+  });
+
+  it('does not opt out a returning subscriber who sends /start again', async () => {
+    await subs.subscribe('800', {});
+    // Already on the roster, so onboarding must not reset their preferences.
+    await webhook.handleUpdate({ message: { chat: { id: 800 }, text: '/start' } });
+
+    assert.deepEqual((await prefs.getPrefs('800')).strategies, { scalping: true, day: true, swing: true });
+  });
+
   it('welcomes with the same glossary /help answers with', async () => {
     await start(500);
-    const welcome = posted.at(-1)?.[1] ?? '';
+    // The welcome is the message carrying the glossary, not the last one sent —
+    // onboarding ends on the strategy panel.
+    const welcome = posted.map(([, text]) => text).find((text) => text.includes('/stats')) ?? '';
 
     posted = [];
     await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/help' } });
@@ -360,7 +420,14 @@ describe('subscriber roster', () => {
     await prefs.toggleChannel('500', 'results');
     posted = [];
 
-    await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/settings' } });
+    /*
+     * The warning lives in the notifications sub-menu now, which is where the
+     * switch that causes it is — a caution on the root screen would be about a
+     * setting the reader cannot see.
+     */
+    await webhook.handleUpdate({
+      callback_query: { id: 'c', data: 'settings:channels', message: { message_id: 4, chat: { id: 500 } } },
+    });
     const panel = posted.at(-1)?.[1] ?? '';
 
     // Told to enter, never told it ended.
@@ -386,28 +453,26 @@ describe('subscriber roster', () => {
     assert.equal(loaded.locale, 'en');
   });
 
-  it('defaults a new subscriber to every strategy', async () => {
-    await start(500);
+  it('leaves a new subscriber with exactly what they picked', async () => {
+    await start(500, 'en', 'day');
 
-    /*
-     * A chat that has never opened /settings has no stored record, and reading
-     * that as "wants nothing" would silence them permanently. The default has
-     * to be the permissive one.
-     */
-    assert.deepEqual((await prefs.getPrefs('500')).strategies, { scalping: true, day: true, swing: true });
+    // Opt-in: nothing is on until a tap turns it on, and only that one.
+    assert.deepEqual((await prefs.getPrefs('500')).strategies, { scalping: false, day: true, swing: false });
+    assert.equal((await prefs.getPrefs('500')).configured, true);
   });
 
-  it('skips a strategy the recipient turned off, and only that one', async () => {
-    await start(500);
-    await prefs.toggleStrategy('500', 'scalping');
+  it('sends only the strategies the recipient turned on', async () => {
+    // Onboarded on day trading, then adds swing. Scalping is never turned on.
+    await start(500, 'en', 'day');
+    await prefs.toggleStrategy('500', 'swing');
     posted = [];
 
     await alerts.notifySignals([signal('INJ', 'buy', 'scalping')], undefined);
-    assert.ok(!recipients().includes('500'), 'scalping was turned off');
+    assert.ok(!recipients().includes('500'), 'scalping was never turned on');
 
     posted = [];
     await alerts.notifySignals([signal('SOL', 'buy', 'swing')], undefined);
-    assert.ok(recipients().includes('500'), 'swing was left on');
+    assert.ok(recipients().includes('500'), 'swing was turned on');
   });
 
   it('toggles a strategy from the settings keyboard', async () => {
@@ -425,6 +490,8 @@ describe('subscriber roster', () => {
 
   it('lets somebody turn everything off without unsubscribing', async () => {
     await start(500);
+    // 'day' is already on from onboarding; turn the other two on, then all off.
+    for (const strategy of ['scalping', 'swing'] as const) await prefs.toggleStrategy('500', strategy);
     for (const strategy of ['scalping', 'day', 'swing'] as const) await prefs.toggleStrategy('500', strategy);
 
     posted = [];
@@ -437,6 +504,8 @@ describe('subscriber roster', () => {
 
   it('still tells them how a call ended, whatever they have since turned off', async () => {
     await start(500);
+    // 'day' is already on from onboarding; turn the other two on, then all off.
+    for (const strategy of ['scalping', 'swing'] as const) await prefs.toggleStrategy('500', strategy);
     for (const strategy of ['scalping', 'day', 'swing'] as const) await prefs.toggleStrategy('500', strategy);
     posted = [];
 

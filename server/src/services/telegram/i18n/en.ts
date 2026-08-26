@@ -202,6 +202,47 @@ export const en = {
   cardRR: 'R:R',
   cardHeld: 'Held',
   cardFooter: 'via @MacroSyncBot',
+
+  // --- settings sub-menus ---------------------------------------------------
+  settingsBack: '\u00AB Back to settings',
+  settingsRootHint: 'Two things to set, and the language. Tap one.',
+  settingsStrategiesButton: 'Strategies',
+  settingsChannelsButton: 'Notification types',
+  settingsStrategiesTitle: '\u{1F4CA} <b>Strategies</b> \u2014 which setups reach you',
+  settingsChannelsTitle: '\u{1F514} <b>Notification types</b> \u2014 which moments reach you',
+  settingsPickOne: '\u26A0\uFE0F <i>Nothing is on, so no calls will reach you. Tap a strategy to start.</i>',
+
+  // --- deep link ------------------------------------------------------------
+  tradeOnMexc: '\u{1F680} Trade on MEXC',
+
+  // --- calculator -----------------------------------------------------------
+  calcUsage: [
+    '\u{1F9EE} <b>Position calculator</b>',
+    '',
+    'Send your deposit, the percent you will risk, and the levels:',
+    '',
+    '<code>/calc 1000 2 5.60 5.32</code>',
+    '<i>deposit \u2014 risk% \u2014 entry \u2014 stop</i>',
+    '',
+    'Leave the levels out and it uses the account you saved with /balance against the most recent call:',
+    '',
+    '<code>/calc</code>  \u2014 saved deposit, latest signal',
+    '<code>/calc 500 1</code>  \u2014 these numbers, latest signal',
+  ].join('\n'),
+  calcNoLevels: '\u26A0\uFE0F No open call to price against. Send entry and stop yourself: <code>/calc 1000 2 5.60 5.32</code>',
+  calcNoAccount: '\u26A0\uFE0F No deposit saved. Send <code>/calc 1000 2</code>, or set one with /balance.',
+  calcBadLevels: '\u26A0\uFE0F Entry and stop cannot be the same price, and neither can be zero.',
+  calcTitleCustom: '\u{1F9EE} <b>Position</b>',
+  calcTitle: (base: string) => `\u{1F9EE} <b>${base}</b> \u2014 position`,
+  calcFromSignal: (base: string) => `<i>Levels from the open ${base} call.</i>`,
+  calcAccount: (deposit: string, riskPct: number, risk: string) =>
+    `Deposit <b>${deposit}</b> \u00B7 risking <b>${riskPct}%</b> = <b>${risk}</b>`,
+  calcStopDistance: (pct: string) => `Stop is <b>${pct}%</b> from entry`,
+  calcSize: (notional: string) => `\u{1F4E6} Position size: <b>${notional}</b>`,
+  calcQty: (qty: string, base: string) => `\u{1FA99} Quantity: <b>${qty}</b> ${base}`,
+  calcMargin: (margin: string, leverage: number) => `\u{1F4B0} Margin at ${leverage}x: <b>${margin}</b>`,
+  calcCapped: '\u26A0\uFE0F <i>Capped at your deposit \u2014 the full size needs more collateral than the account holds.</i>',
+  calcNote: '<i>Sizing only. Nothing is placed for you, and the stop is what makes this arithmetic true.</i>',
 } as const;
 
 export type Dictionary = {

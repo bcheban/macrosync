@@ -11,7 +11,7 @@ import {
 import { activeRecipients, unsubscribe, type Recipient } from './subscribers.service.js';
 import type { Channel, Locale, Prefs } from './preferences.service.js';
 import { dict } from './i18n/index.js';
-import { getAccount, planPosition } from './sizing.service.js';
+import { getAccount, mexcFuturesUrl, planPosition } from './sizing.service.js';
 import type { ActiveTrade } from '../trades/trades.service.js';
 
 /**
@@ -59,9 +59,17 @@ export interface AlertRun {
  * `callback_data` is capped at 64 bytes and stays English — it is an identifier
  * the bot parses, not text anybody sees.
  */
-const signalKeyboard = (prefs: Prefs): InlineKeyboard => {
+const signalKeyboard = (prefs: Prefs, symbol?: string): InlineKeyboard => {
   const t = dict(prefs.locale);
+
   return [
+    /*
+     * The contract page, on its own row and first. Everything above it in the
+     * message is a reason to act; this is the only button that acts, and burying
+     * it beside "Stats" would make the reader hunt for the one thing they came
+     * to do.
+     */
+    ...(symbol ? [[{ text: t.tradeOnMexc, url: mexcFuturesUrl(symbol) }]] : []),
     [
       { text: t.statsButton, callback_data: 'stats' },
       { text: t.muteButton(2), callback_data: 'mute:2' },
@@ -333,7 +341,7 @@ export async function notifySignals(signals: Signal[], event: MacroEvent | undef
 
 ${sizing}` : body;
       },
-      signalKeyboard,
+      (prefs) => signalKeyboard(prefs, signal.symbol),
       signal.strategy,
       'signals',
     );

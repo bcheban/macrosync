@@ -1,6 +1,6 @@
+import type { Strategy } from '../../types/domain.js';
 import COMMAND_SPECS from '../../data/commands.json' with { type: 'json' };
 import { env } from '../../config/env.js';
-import { loadActive, loadStats, winRate } from '../trades/trades.service.js';
 import { mute, mutedUntil, subscribe, subscribersStatus, unmute, unsubscribe } from './subscribers.service.js';
 import {
   answerCallbackQuery,
@@ -14,6 +14,7 @@ import {
   CHANNELS,
   getPrefs,
   LOCALES,
+  initialiseOptIn,
   setLocale,
   STRATEGIES,
   strandedByFilters,
@@ -26,7 +27,17 @@ import {
 } from './preferences.service.js';
 import { dict, guessLocale, LOCALE_LABEL } from './i18n/index.js';
 import { analyticsForReader, formatAnalyticsFor } from '../admin/analytics.service.js';
-import { clearAccount, getAccount, parseBalanceCommand, setAccount } from './sizing.service.js';
+import {
+  calculatePosition,
+  clearAccount,
+  getAccount,
+  mexcFuturesUrl,
+  parseBalanceCommand,
+  setAccount,
+} from './sizing.service.js';
+import { loadActive, loadStats, winRate } from '../trades/trades.service.js';
+import { maxSafeLeverage } from '../signal.engine.js';
+import { getContractSpecs } from '../market.service.js';
 
 /**
  * Everything the bot does when somebody talks to it.
@@ -82,78 +93,112 @@ const STRATEGY_LABEL: Record<(typeof STRATEGIES)[number], string> = {
  * The tick is the entire status display — there is no separate line saying what
  * is on, so the button cannot disagree with the state it toggles.
  */
-const TICK = (on: boolean): string => (on ? '✅' : '❌');
+const TICK = (on: boolean): string => (on ? '\u2705' : '\u274c');
 
 /**
- * The settings panel: three groups, one button per switch.
+ * The settings tree: one compact root, two sub-menus, one message.
  *
- * Every button carries its own state in its label, so the keyboard *is* the
- * status display. A separate list of what is on would be a second thing to keep
- * in sync, and the moment it drifted the panel would be lying about the very
- * settings it exists to change.
+ * It used to be a single screen carrying six toggles, three language buttons and
+ * eleven lines of prose. Everything was reachable in one tap, which sounds like a
+ * virtue until you look at it on a phone — the thing somebody came to change was
+ * buried among five they did not.
+ *
+ * Every screen edits the same message rather than sending a new one, so browsing
+ * leaves one panel instead of a column of stale ones showing settings that have
+ * since changed.
  */
-function settingsKeyboard(prefs: Prefs): InlineKeyboard {
+type SettingsView = 'root' | 'strategies' | 'channels';
+
+const strategyLabels = (locale: Locale): Record<Strategy, string> => {
+  const t = dict(locale);
+  return { scalping: t.strategyScalping, day: t.strategyDay, swing: t.strategySwing };
+};
+
+const channelLabels = (locale: Locale): Record<Channel, string> => {
+  const t = dict(locale);
+  return { signals: t.channelSignals, updates: t.channelUpdates, results: t.channelResults };
+};
+
+function settingsKeyboard(prefs: Prefs, view: SettingsView): InlineKeyboard {
   const t = dict(prefs.locale);
 
-  const strategyLabel: Record<string, string> = {
-    scalping: t.strategyScalping,
-    day: t.strategyDay,
-    swing: t.strategySwing,
-  };
-  const channelLabel: Record<Channel, string> = {
-    signals: t.channelSignals,
-    updates: t.channelUpdates,
-    results: t.channelResults,
-  };
+  if (view === 'strategies') {
+    const label = strategyLabels(prefs.locale);
+    return [
+      ...STRATEGIES.map((strategy) => [
+        { text: `${TICK(prefs.strategies[strategy])} ${label[strategy]}`, callback_data: `pref:${strategy}` },
+      ]),
+      [{ text: t.settingsBack, callback_data: 'settings:root' }],
+    ];
+  }
+
+  if (view === 'channels') {
+    const label = channelLabels(prefs.locale);
+    return [
+      ...CHANNELS.map((channel) => [
+        { text: `${TICK(prefs.channels[channel])} ${label[channel]}`, callback_data: `chan:${channel}` },
+      ]),
+      [{ text: t.settingsBack, callback_data: 'settings:root' }],
+    ];
+  }
+
+  /*
+   * The root counts what is on beside each entry, so the summary lives on the
+   * button rather than in prose above it — one place to be wrong instead of two.
+   */
+  const onStrategies = STRATEGIES.filter((key) => prefs.strategies[key]).length;
+  const onChannels = CHANNELS.filter((key) => prefs.channels[key]).length;
 
   return [
-    ...STRATEGIES.map((strategy) => [
+    [
       {
-        text: `${TICK(prefs.strategies[strategy])} ${strategyLabel[strategy]}`,
-        callback_data: `pref:${strategy}`,
+        text: `\u{1F4CA} ${t.settingsStrategiesButton} (${onStrategies}/${STRATEGIES.length})`,
+        callback_data: 'settings:strategies',
       },
-    ]),
-    ...CHANNELS.map((channel) => [
+    ],
+    [
       {
-        text: `${TICK(prefs.channels[channel])} ${channelLabel[channel]}`,
-        callback_data: `chan:${channel}`,
+        text: `\u{1F514} ${t.settingsChannelsButton} (${onChannels}/${CHANNELS.length})`,
+        callback_data: 'settings:channels',
       },
-    ]),
-    // One row: three languages fit, and a column of them would dwarf the rest.
+    ],
     LOCALES.map((locale) => ({
-      text: prefs.locale === locale ? `• ${LOCALE_LABEL[locale]}` : LOCALE_LABEL[locale],
+      text: prefs.locale === locale ? `\u2022 ${LOCALE_LABEL[locale]}` : LOCALE_LABEL[locale],
       callback_data: `lang:${locale}`,
     })),
   ];
 }
 
-/** The prose above the keyboard, which explains what the switches mean. */
-function settingsText(prefs: Prefs): string {
+function settingsText(prefs: Prefs, view: SettingsView): string {
   const t = dict(prefs.locale);
 
-  const lines = [
-    t.settingsTitle,
-    '',
-    t.settingsStrategies,
-    `${t.strategyScalping} — <i>${t.strategyScalpingHint}</i>`,
-    `${t.strategyDay} — <i>${t.strategyDayHint}</i>`,
-    `${t.strategySwing} — <i>${t.strategySwingHint}</i>`,
-    '',
-    t.settingsChannels,
-    `${t.channelSignals} — <i>${t.channelSignalsHint}</i>`,
-    `${t.channelUpdates} — <i>${t.channelUpdatesHint}</i>`,
-    `${t.channelResults} — <i>${t.channelResultsHint}</i>`,
-    '',
-    t.settingsHint,
-  ];
+  if (view === 'strategies') {
+    const lines = [
+      t.settingsStrategiesTitle,
+      '',
+      `${t.strategyScalping} \u2014 <i>${t.strategyScalpingHint}</i>`,
+      `${t.strategyDay} \u2014 <i>${t.strategyDayHint}</i>`,
+      `${t.strategySwing} \u2014 <i>${t.strategySwingHint}</i>`,
+    ];
+    if (STRATEGIES.every((key) => !prefs.strategies[key])) lines.push('', t.settingsPickOne);
+    return lines.join('\n');
+  }
 
-  /*
-   * Two states worth saying out loud, because neither is obvious from a
-   * keyboard of ticks and neither is something anybody chooses on purpose.
-   */
+  if (view === 'channels') {
+    const lines = [
+      t.settingsChannelsTitle,
+      '',
+      `${t.channelSignals} \u2014 <i>${t.channelSignalsHint}</i>`,
+      `${t.channelUpdates} \u2014 <i>${t.channelUpdatesHint}</i>`,
+      `${t.channelResults} \u2014 <i>${t.channelResultsHint}</i>`,
+    ];
+    // The one combination nobody picks on purpose by tapping one button.
+    if (strandedByFilters(prefs)) lines.push('', t.settingsStranded);
+    return lines.join('\n');
+  }
+
+  const lines = [t.settingsTitle, '', t.settingsRootHint];
   if (wantsNothing(prefs)) lines.push('', t.settingsAllOff);
-  else if (strandedByFilters(prefs)) lines.push('', t.settingsStranded);
-
   return lines.join('\n');
 }
 
@@ -303,7 +348,16 @@ async function handleCommand(
 
   switch (command) {
     case '/start': {
-      await subscribe(chatId, profile);
+      const { added } = await subscribe(chatId, profile);
+
+      /*
+       * Opt-in applies to chats joining for the first time, and only those. A
+       * subscriber who has been receiving calls since before this existed keeps
+       * receiving them — a deployment that silences people is not a UX change,
+       * it is an outage they have to notice on their own.
+       */
+      if (added) await initialiseOptIn(chatId);
+
       const prefs = await getPrefs(chatId);
 
       /*
@@ -396,6 +450,105 @@ async function handleCommand(
       return;
     }
 
+    case '/calc': {
+      const locale = (await getPrefs(chatId)).locale;
+      const t = dict(locale);
+
+      const parts = text.trim().split(/\s+/).slice(1);
+      const num = (raw: string | undefined): number => Number((raw ?? '').replace(/[$%,\s]/g, ''));
+
+      // `/calc` bare is a request for the instructions, not a failed command.
+      if (!parts.length && !(await getAccount(chatId))) {
+        await sendTelegramMessage(t.calcUsage, { chatId });
+        return;
+      }
+
+      const account = await getAccount(chatId);
+      const balance = parts.length ? num(parts[0]) : (account?.balance ?? 0);
+      const riskPct = parts.length > 1 ? num(parts[1]) : (account?.riskPct ?? 1);
+
+      if (!(balance > 0) || !(riskPct > 0)) {
+        await sendTelegramMessage(parts.length ? t.calcUsage : t.calcNoAccount, { chatId });
+        return;
+      }
+
+      /*
+       * Levels come from the command when given, and otherwise from whatever the
+       * bot is currently tracking — the newest open trade. Pricing against a
+       * call that is already running is the common case: somebody reads an
+       * alert, wants their own size, and should not have to retype its levels.
+       */
+      let entry = parts.length > 2 ? num(parts[2]) : 0;
+      let stopLoss = parts.length > 3 ? num(parts[3]) : 0;
+      let fromSignal: string | undefined;
+      let symbol: string | undefined;
+
+      if (!entry || !stopLoss) {
+        const active = await loadActive();
+        const latest = active[active.length - 1];
+        if (!latest) {
+          await sendTelegramMessage(t.calcNoLevels, { chatId });
+          return;
+        }
+        entry = latest.entry;
+        // The published stop, not one that has since moved to breakeven.
+        stopLoss = latest.initialStopLoss ?? latest.stopLoss;
+        fromSignal = latest.base;
+        symbol = latest.symbol;
+      }
+
+      if (!(entry > 0) || !(stopLoss > 0) || entry === stopLoss) {
+        await sendTelegramMessage(t.calcBadLevels, { chatId });
+        return;
+      }
+
+      /*
+       * Leverage is derived from the levels rather than carried on the trade.
+       * The ledger never stored it, and recomputing is both cheap — the specs
+       * are cached — and correct for hand-typed levels the bot never called.
+       */
+      const specs = symbol ? await getContractSpecs().catch(() => new Map()) : new Map();
+      const leverage = maxSafeLeverage(entry, stopLoss, symbol ? specs.get(symbol) : undefined);
+
+      const result = calculatePosition({ balance, riskPct, entry, stopLoss, leverage });
+      if (!result) {
+        await sendTelegramMessage(t.calcBadLevels, { chatId });
+        return;
+      }
+
+      const money = (value: number): string =>
+        value >= 100 ? Math.round(value).toLocaleString('en-US') : value.toFixed(2);
+      // Coin quantities span nine orders of magnitude across this board.
+      const qty = result.quantity >= 1 ? result.quantity.toFixed(2) : result.quantity.toPrecision(4);
+
+      const lines = [
+        fromSignal ? t.calcTitle(fromSignal) : t.calcTitleCustom,
+        fromSignal ? t.calcFromSignal(fromSignal) : '',
+        '',
+        t.calcAccount(money(balance), riskPct, money(result.riskAmount)),
+        t.calcStopDistance((result.stopFraction * 100).toFixed(2)),
+        '',
+        t.calcSize(money(result.notional)),
+        // The coin count is the number that goes into an order ticket.
+        t.calcQty(qty, fromSignal ?? '').trimEnd(),
+        result.margin !== null && result.leverage ? t.calcMargin(money(result.margin), result.leverage) : '',
+        result.capped ? t.calcCapped : '',
+        '',
+        t.calcNote,
+      ];
+
+      await sendTelegramMessage(
+        lines.filter((line) => line !== '').join('\n'),
+        {
+          chatId,
+          keyboard: fromSignal
+            ? [[{ text: t.tradeOnMexc, url: mexcFuturesUrl(`${fromSignal}USDT`) }]]
+            : MENU,
+        },
+      );
+      return;
+    }
+
     case '/guide': {
       const locale = (await getPrefs(chatId)).locale;
       await sendTelegramMessage(guideMenu(locale), { chatId, keyboard: guideKeyboard(locale) });
@@ -417,7 +570,7 @@ async function handleCommand(
 
     case '/settings': {
       const prefs = await getPrefs(chatId);
-      await sendTelegramMessage(settingsText(prefs), { chatId, keyboard: settingsKeyboard(prefs) });
+      await sendTelegramMessage(settingsText(prefs, 'root'), { chatId, keyboard: settingsKeyboard(prefs, 'root') });
       return;
     }
 
@@ -466,9 +619,23 @@ async function handleCallback(query: NonNullable<TelegramUpdate['callback_query'
 
   switch (action) {
     case 'settings': {
+      /*
+       * `settings:root|strategies|channels`. A bare `settings` still arrives
+       * from the persistent menu keyboard, which predates the sub-menus.
+       */
+      const view: SettingsView = argument === 'strategies' || argument === 'channels' ? argument : 'root';
+
       await answerCallbackQuery(id);
       const prefs = await getPrefs(chat);
-      await sendTelegramMessage(settingsText(prefs), { chatId: chat, keyboard: settingsKeyboard(prefs) });
+
+      // Edited in place when there is a message to edit, so navigating the
+      // sub-menus leaves one panel rather than a column of them.
+      if (messageId !== undefined) {
+        await editMessageText(chat, messageId, settingsText(prefs, view), settingsKeyboard(prefs, view));
+        return;
+      }
+
+      await sendTelegramMessage(settingsText(prefs, view), { chatId: chat, keyboard: settingsKeyboard(prefs, view) });
       return;
     }
 
@@ -517,6 +684,20 @@ async function handleCallback(query: NonNullable<TelegramUpdate['callback_query'
           if (!before.localeChosen) {
             await answerCallbackQuery(id, toast);
             await sendTelegramMessage(welcome(locale), { chatId: chat, keyboard: MENU });
+
+            /*
+             * The strategy picker follows immediately, because opt-in without a
+             * visible next step is just a bot that says hello and goes quiet. A
+             * new subscriber has nothing turned on, and this is the screen that
+             * turns something on.
+             */
+            const fresh = await getPrefs(chat);
+            if (!fresh.configured) {
+              await sendTelegramMessage(settingsText(fresh, 'strategies'), {
+                chatId: chat,
+                keyboard: settingsKeyboard(fresh, 'strategies'),
+              });
+            }
             return;
           }
         }
@@ -530,13 +711,15 @@ async function handleCallback(query: NonNullable<TelegramUpdate['callback_query'
       await answerCallbackQuery(id, toast);
 
       /*
-       * The prose is redrawn too, not just the buttons. Switching language has
-       * to change the whole panel, and the two warnings — everything off, and
-       * results-off-while-signals-on — live in the text rather than the
-       * keyboard, so a keyboard-only edit would leave them stale.
+       * Redrawn on the screen the tap came from, so a toggle inside a sub-menu
+       * does not bounce the reader back to the root. The prose is rewritten too,
+       * not just the buttons: switching language changes the whole panel, and
+       * the warnings live in the text rather than the keyboard.
        */
+      const view: SettingsView = action === 'pref' ? 'strategies' : action === 'chan' ? 'channels' : 'root';
+
       if (messageId !== undefined) {
-        await editMessageText(chat, messageId, settingsText(prefs), settingsKeyboard(prefs));
+        await editMessageText(chat, messageId, settingsText(prefs, view), settingsKeyboard(prefs, view));
       }
       return;
     }

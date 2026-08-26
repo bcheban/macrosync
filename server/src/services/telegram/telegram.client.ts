@@ -72,7 +72,15 @@ export interface SendResult {
 }
 
 /** One row of buttons under a message. */
-export type InlineKeyboard = { text: string; callback_data: string }[][];
+/**
+ * One row per array. A button either calls back or opens a URL — Telegram
+ * rejects both on the same button, and silently drops one that carries neither.
+ */
+export type InlineButton =
+  | { text: string; callback_data: string; url?: never }
+  | { text: string; url: string; callback_data?: never };
+
+export type InlineKeyboard = InlineButton[][];
 
 export interface SendOptions {
   /** Defaults to the owner chat from the environment. */

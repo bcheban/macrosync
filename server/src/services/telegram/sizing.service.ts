@@ -138,3 +138,65 @@ export function planPosition(account: Account, signal: Signal): PositionPlan | n
     capped,
   };
 }
+
+/**
+ * The MEXC contract page for a symbol.
+ *
+ * One place, because the underscore that separates the internal form from the
+ * exchange's belongs in as few files as possible — the bot button and the
+ * dashboard link both come from here.
+ */
+export const mexcFuturesUrl = (symbol: string): string =>
+  `https://futures.mexc.com/exchange/${symbol.includes('_') ? symbol : symbol.replace(/(USDT|USDC)$/, '_$1')}`;
+
+export interface CalcInput {
+  balance: number;
+  riskPct: number;
+  entry: number;
+  stopLoss: number;
+  /** Only used to price the margin line; the position size does not need it. */
+  leverage?: number;
+}
+
+export interface CalcResult {
+  riskAmount: number;
+  stopFraction: number;
+  notional: number;
+  /** Coins, not contracts — what somebody types into an order ticket. */
+  quantity: number;
+  margin: number | null;
+  leverage: number | null;
+  capped: boolean;
+}
+
+/**
+ * The same identity `planPosition` rests on, exposed for arbitrary levels.
+ *
+ * `planPosition` sizes a *signal* — it needs a `Signal` and takes the leverage
+ * from it. This one takes four numbers, which is what a calculator is: somebody
+ * pricing a trade the bot never called.
+ */
+export function calculatePosition(input: CalcInput): CalcResult | null {
+  const { balance, riskPct, entry, stopLoss } = input;
+
+  if (!(balance > 0) || !(riskPct > 0) || !(entry > 0) || !(stopLoss > 0)) return null;
+  if (entry === stopLoss) return null;
+
+  const stopFraction = Math.abs(entry - stopLoss) / entry;
+  const riskAmount = (balance * riskPct) / 100;
+  const notional = riskAmount / stopFraction;
+
+  const leverage = input.leverage && input.leverage > 0 ? input.leverage : null;
+  const wanted = leverage ? notional / leverage : null;
+  const capped = wanted !== null && wanted > balance;
+
+  return {
+    riskAmount,
+    stopFraction,
+    notional: capped && leverage ? balance * leverage : notional,
+    quantity: (capped && leverage ? balance * leverage : notional) / entry,
+    margin: capped ? balance : wanted,
+    leverage,
+    capped,
+  };
+}

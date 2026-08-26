@@ -193,4 +193,45 @@ export const de: Dictionary = {
   cardRR: 'CRV',
   cardHeld: 'Gehalten',
   cardFooter: 'via @MacroSyncBot',
+
+  // --- settings sub-menus ---------------------------------------------------
+  settingsBack: '\u00AB Zurück zu den Einstellungen',
+  settingsRootHint: 'Zwei Bereiche und die Sprache. Tippe einen an.',
+  settingsStrategiesButton: 'Strategien',
+  settingsChannelsButton: 'Benachrichtigungsarten',
+  settingsStrategiesTitle: '\u{1F4CA} <b>Strategien</b> \u2014 welche Setups dich erreichen',
+  settingsChannelsTitle: '\u{1F514} <b>Benachrichtigungsarten</b> \u2014 welche Momente dich erreichen',
+  settingsPickOne: '\u26A0\uFE0F <i>Nichts ist an, also erreicht dich kein Signal. Tippe eine Strategie an, um zu beginnen.</i>',
+
+  // --- deep link ------------------------------------------------------------
+  tradeOnMexc: '\u{1F680} Auf MEXC handeln',
+
+  // --- calculator -----------------------------------------------------------
+  calcUsage: [
+    '\u{1F9EE} <b>Positionsrechner</b>',
+    '',
+    'Schick deine Einlage, den Risikoprozentsatz und die Levels:',
+    '',
+    '<code>/calc 1000 2 5.60 5.32</code>',
+    '<i>Einlage \u2014 Risiko% \u2014 Einstieg \u2014 Stop</i>',
+    '',
+    'Ohne Levels nimmt er das mit /balance gespeicherte Konto und das jüngste Signal:',
+    '',
+    '<code>/calc</code>  \u2014 gespeicherte Einlage, letztes Signal',
+    '<code>/calc 500 1</code>  \u2014 diese Zahlen, letztes Signal',
+  ].join('\n'),
+  calcNoLevels: '\u26A0\uFE0F Kein offenes Signal zum Rechnen. Schick Einstieg und Stop selbst: <code>/calc 1000 2 5.60 5.32</code>',
+  calcNoAccount: '\u26A0\uFE0F Keine Einlage gespeichert. Schick <code>/calc 1000 2</code> oder lege eine mit /balance fest.',
+  calcBadLevels: '\u26A0\uFE0F Einstieg und Stop dürfen nicht derselbe Preis sein, und keiner darf null sein.',
+  calcTitleCustom: '\u{1F9EE} <b>Position</b>',
+  calcTitle: (base) => `\u{1F9EE} <b>${base}</b> \u2014 Position`,
+  calcFromSignal: (base) => `<i>Levels aus dem offenen ${base}-Signal.</i>`,
+  calcAccount: (deposit, riskPct, risk) =>
+    `Einlage <b>${deposit}</b> \u00B7 Risiko <b>${riskPct}%</b> = <b>${risk}</b>`,
+  calcStopDistance: (pct) => `Der Stop liegt <b>${pct}%</b> vom Einstieg entfernt`,
+  calcSize: (notional) => `\u{1F4E6} Positionsgröße: <b>${notional}</b>`,
+  calcQty: (qty, base) => `\u{1FA99} Menge: <b>${qty}</b> ${base}`,
+  calcMargin: (margin, leverage) => `\u{1F4B0} Margin bei ${leverage}x: <b>${margin}</b>`,
+  calcCapped: '\u26A0\uFE0F <i>Auf deine Einlage begrenzt \u2014 die volle Größe braucht mehr Sicherheit, als das Konto hergibt.</i>',
+  calcNote: '<i>Nur Berechnung. Für dich wird nichts platziert, und erst der Stop macht diese Rechnung wahr.</i>',
 };

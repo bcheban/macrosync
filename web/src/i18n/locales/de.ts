@@ -90,6 +90,18 @@ export const de: Translation = {
     empty: 'Keine Assets ausgewählt.',
   },
 
+  calc: {
+    deposit: 'Einlage',
+    risk: 'Risiko',
+    atRisk: 'Im Risiko',
+    size: 'Position',
+    quantity: 'Menge',
+    margin: 'Margin',
+    capped: 'Auf deine Einlage begrenzt — die volle Größe braucht mehr Sicherheit, als sie hergibt.',
+    stopNote: 'So bemessen, dass der Stop {{pct}}% entfernt genau das Risiko oben kostet.',
+    tradeOn: 'Auf MEXC handeln',
+  },
+
   liveTrades: {
     chartError: 'Kerzen konnten nicht geladen werden',
     chartLoading: 'Kerzen werden geladen…',

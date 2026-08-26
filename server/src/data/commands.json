@@ -14,6 +14,13 @@
     "primary": true
   },
   {
+    "command": "calc",
+    "usage": "/calc <deposit> <risk%> [entry] [stop]",
+    "menu": "Work out a position size",
+    "primary": true,
+    "help": "Position size, coin quantity and margin for any levels. Leave the levels out and it prices the newest open call against your saved deposit."
+  },
+  {
     "command": "stats",
     "usage": "/stats",
     "menu": "Win rate and open trades",

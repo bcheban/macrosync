@@ -40,6 +40,19 @@ export interface Prefs {
   locale: Locale;
   /** False until the subscriber has actually been asked, so `/start` asks once. */
   localeChosen: boolean;
+  /**
+   * Whether this record was written by somebody making a choice.
+   *
+   * The flag that keeps opt-in defaults from silencing anyone. New subscribers
+   * start with every strategy off and pick what they want; a record that
+   * predates this field was written when the default was all-on, and reading
+   * *its* absence as "wants nothing" would silently unsubscribe people who
+   * have been receiving calls for weeks.
+   *
+   * So absence means "grandfathered, all on" — the opposite of what it means
+   * for a subscriber created after this change.
+   */
+  configured: boolean;
 }
 
 const PREFS_KEY = (chatId: string): string => storeKey(`telegram:prefs:${chatId}`);
@@ -61,16 +74,30 @@ type StoredPrefs = Partial<Prefs> & Partial<StrategyPrefs>;
 function normalise(stored: StoredPrefs | null): Prefs {
   const flat = stored?.scalping !== undefined || stored?.day !== undefined || stored?.swing !== undefined;
 
+  /*
+   * Everything except an explicit opt-in record is grandfathered to all-on.
+   *
+   * That includes *no record at all*, which is what most subscribers look like:
+   * they joined before `/settings` existed and have never opened it. Reading
+   * their absence as "wants nothing" would silently unsubscribe people who have
+   * been receiving calls for weeks — which a test caught, on the two production
+   * subscribers who have no preferences row.
+   *
+   * Opt-in is therefore something the new onboarding *writes*, not something
+   * absence implies.
+   */
+  const fallback = stored?.configured !== false;
+
   const strategies: StrategyPrefs = flat
     ? {
-        scalping: stored?.scalping ?? true,
-        day: stored?.day ?? true,
-        swing: stored?.swing ?? true,
+        scalping: stored?.scalping ?? fallback,
+        day: stored?.day ?? fallback,
+        swing: stored?.swing ?? fallback,
       }
     : {
-        scalping: stored?.strategies?.scalping ?? true,
-        day: stored?.strategies?.day ?? true,
-        swing: stored?.strategies?.swing ?? true,
+        scalping: stored?.strategies?.scalping ?? fallback,
+        day: stored?.strategies?.day ?? fallback,
+        swing: stored?.strategies?.swing ?? fallback,
       };
 
   const locale = stored?.locale;
@@ -84,8 +111,13 @@ function normalise(stored: StoredPrefs | null): Prefs {
     },
     locale: locale && (LOCALES as readonly string[]).includes(locale) ? locale : 'en',
     localeChosen: stored?.localeChosen ?? false,
+    configured: stored?.configured ?? stored !== null,
   };
 }
+
+/** True when a subscriber has been onboarded but has not picked a strategy. */
+export const awaitingChoice = (prefs: Prefs): boolean =>
+  prefs.localeChosen && !prefs.configured && STRATEGIES.every((key) => !prefs.strategies[key]);
 
 export async function getPrefs(chatId: string): Promise<Prefs> {
   return normalise(await getJson<StoredPrefs | null>(PREFS_KEY(chatId), null));
@@ -104,7 +136,12 @@ export async function setPrefs(chatId: string, prefs: Prefs): Promise<void> {
  */
 export async function toggleStrategy(chatId: string, strategy: Strategy): Promise<Prefs> {
   const current = await getPrefs(chatId);
-  const next: Prefs = { ...current, strategies: { ...current.strategies, [strategy]: !current.strategies[strategy] } };
+  // The first tap is the choice that makes this record a configured one.
+  const next: Prefs = {
+    ...current,
+    configured: true,
+    strategies: { ...current.strategies, [strategy]: !current.strategies[strategy] },
+  };
 
   await setPrefs(chatId, next);
   return next;
@@ -116,6 +153,26 @@ export async function toggleChannel(chatId: string, channel: Channel): Promise<P
 
   await setPrefs(chatId, next);
   return next;
+}
+
+/**
+ * Writes the empty record a brand-new subscriber starts from.
+ *
+ * Only ever called for a chat joining the roster for the first time. Everyone
+ * already on it keeps what they had, because the alternative is a deployment
+ * that quietly stops talking to existing readers.
+ */
+export async function initialiseOptIn(chatId: string): Promise<void> {
+  const existing = await getJson<StoredPrefs | null>(PREFS_KEY(chatId), null);
+  if (existing) return;
+
+  await setJson(PREFS_KEY(chatId), {
+    strategies: { scalping: false, day: false, swing: false },
+    channels: { signals: true, updates: true, results: true },
+    locale: 'en',
+    localeChosen: false,
+    configured: false,
+  } satisfies Prefs);
 }
 
 export async function setLocale(chatId: string, locale: Locale): Promise<Prefs> {
