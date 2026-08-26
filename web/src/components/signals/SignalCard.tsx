@@ -80,7 +80,16 @@ function Level({
   );
 }
 
-export function SignalCard({ signal, index }: { signal: Signal; index: number }) {
+export function SignalCard({
+  signal,
+  index,
+  className,
+}: {
+  signal: Signal;
+  index: number;
+  /** Lets the grid fold the card away on a phone without wrapping it in a div. */
+  className?: string;
+}) {
   const { t, text } = useTx();
   const { t: tt } = useTranslation();
 
@@ -97,7 +106,7 @@ export function SignalCard({ signal, index }: { signal: Signal; index: number })
       exit={{ opacity: 0, y: -8, scale: 0.98 }}
       transition={{ duration: 0.4, delay: Math.min(index, 8) * 0.04, ease: [0.16, 1, 0.3, 1] }}
       whileHover={{ y: -4 }}
-      className="p-4 sm:p-5"
+      className={cn('p-4 sm:p-5', className)}
     >
       <span
         aria-hidden

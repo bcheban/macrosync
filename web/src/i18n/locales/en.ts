@@ -98,6 +98,7 @@ export const en = {
     margin: 'Margin',
     capped: 'Capped at your deposit — the full size needs more collateral than that holds.',
     stopNote: 'Sized so the stop, {{pct}}% away, costs exactly the risk above.',
+    toggle: 'Size this trade',
     tradeOn: 'Trade on MEXC',
   },
 
@@ -122,6 +123,7 @@ export const en = {
 
   signals: {
     title: 'Strategy Signals',
+    showMore: 'Show {{count}} more',
     live: '{{count}} actionable',
     error: 'Signal engine unreachable — {{message}}',
     empty: 'No signals for this selection',

@@ -99,6 +99,7 @@ export const de: Translation = {
     margin: 'Margin',
     capped: 'Auf deine Einlage begrenzt — die volle Größe braucht mehr Sicherheit, als sie hergibt.',
     stopNote: 'So bemessen, dass der Stop {{pct}}% entfernt genau das Risiko oben kostet.',
+    toggle: 'Position berechnen',
     tradeOn: 'Auf MEXC handeln',
   },
 
@@ -123,6 +124,7 @@ export const de: Translation = {
 
   signals: {
     title: 'Strategie-Signale',
+    showMore: '{{count}} weitere anzeigen',
     live: '{{count}} handelbar',
     error: 'Signal-Engine nicht erreichbar — {{message}}',
     empty: 'Keine Signale für diese Auswahl',

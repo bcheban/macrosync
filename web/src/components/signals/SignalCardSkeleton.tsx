@@ -1,4 +1,5 @@
 import { Skeleton } from '@/components/ui/Skeleton';
+import { cn } from '@/lib/cn';
 
 /**
  * A placeholder shaped like a real {@link SignalCard}.
@@ -9,9 +10,9 @@ import { Skeleton } from '@/components/ui/Skeleton';
  * indicator strip and three rationale lines — keeps the height stable through
  * the swap, which is what takes cumulative layout shift to zero.
  */
-export function SignalCardSkeleton() {
+export function SignalCardSkeleton({ className }: { className?: string }) {
   return (
-    <div className="glass rounded-card p-4 sm:p-5">
+    <div className={cn('glass rounded-card p-4 sm:p-5', className)}>
       {/* header: base + badges, then the price */}
       <div className="flex items-start justify-between gap-2.5">
         <div className="space-y-1.5">

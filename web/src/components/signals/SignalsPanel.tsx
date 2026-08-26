@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { usePolling } from '@/hooks/usePolling';
 import { api } from '@/lib/api';
+import { cn } from '@/lib/cn';
 import { timeAgo } from '@/lib/format';
 import { useAssetScope } from '@/state/AssetScope';
 import type { Strategy } from '@/types/domain';
@@ -13,6 +14,18 @@ import { AssetFocusTabs, type AssetFocus } from './AssetFocusTabs';
 import { SignalCard } from './SignalCard';
 import { SignalCardSkeleton } from './SignalCardSkeleton';
 import { StrategyTabs } from './StrategyTabs';
+
+/**
+ * How many signal cards a phone shows before asking.
+ *
+ * Four, where the trade board shows six, because these cards are roughly three
+ * times the height: four of them is about the same amount of page as six
+ * trades, and page is the thing being rationed. Enforced in CSS rather than by
+ * slicing the array, so the desktop grid cannot be affected by it — there is no
+ * breakpoint in JavaScript to get wrong and no resize listener to fall out of
+ * step with the layout.
+ */
+const MOBILE_LIMIT = 4;
 
 const REFRESH_MS: Record<Strategy, number> = {
   scalping: 15_000,
@@ -31,6 +44,8 @@ export function SignalsPanel() {
   const { selected, bySymbol, loading: scopeLoading } = useAssetScope();
   const [strategy, setStrategy] = useState<Strategy>('day');
   const [focus, setFocus] = useState<AssetFocus>(null);
+  /** Whether the reader has asked for the rest, on a phone. Ignored above `md`. */
+  const [expanded, setExpanded] = useState(false);
 
   const symbolKey = selected.join(',');
   const { data, loading, error, lastUpdated } = usePolling(
@@ -74,7 +89,24 @@ export function SignalsPanel() {
     if (focus && !bases.includes(focus) && bases.length) setFocus(null);
   }, [focus, bases]);
 
-  const visible = focus ? signals.filter((item) => item.base === focus) : signals;
+  /*
+   * Actionable calls first, then confidence — which is the order the API
+   * already returns them in.
+   *
+   * Not newest-first, which is the obvious rule and would do nothing here:
+   * every card in a response is computed in one batch off the same candles, so
+   * the timestamps differ by milliseconds and sorting on them is a shuffle.
+   * Order only started to matter once a phone sees four cards out of eight, and
+   * what must not happen is those four all being `wait` — the reader would
+   * scroll the whole panel without meeting one call they could act on.
+   */
+  const visible = useMemo(() => {
+    const scoped = focus ? signals.filter((item) => item.base === focus) : signals;
+    return [
+      ...scoped.filter((item) => item.verdict !== 'wait'),
+      ...scoped.filter((item) => item.verdict === 'wait'),
+    ];
+  }, [signals, focus]);
   // Counts actionable calls, which is what the badge implies — a `forming`
   // long is a watch item, and counting it made the header overstate the tape.
   const liveCount = visible.filter((item) => item.verdict !== 'wait').length;
@@ -157,16 +189,48 @@ export function SignalsPanel() {
             change height when the payload lands. */}
         {waiting
           ? Array.from({ length: Math.min(selected.length || 8, 16) }).map((_, index) => (
-              <SignalCardSkeleton key={index} />
+              <SignalCardSkeleton
+                key={index}
+                /*
+                 * Folded on the same rule as the cards they stand in for.
+                 * Otherwise a phone paints eight placeholders and drops to four
+                 * when the payload lands — the exact shift this component was
+                 * shaped to prevent.
+                 */
+                className={cn(index >= MOBILE_LIMIT && 'hidden md:block')}
+              />
             ))
           : null}
 
         <AnimatePresence mode="popLayout">
           {visible.map((signal, index) => (
-            <SignalCard key={signal.id} signal={signal} index={index} />
+            <SignalCard
+              key={signal.id}
+              signal={signal}
+              index={index}
+              /*
+               * Hidden below `md` only, and only while collapsed. The card stays
+               * mounted either way, so expanding is instant and the desktop grid
+               * never sees this class do anything at all.
+               */
+              className={cn(index >= MOBILE_LIMIT && !expanded && 'hidden md:block')}
+            />
           ))}
         </AnimatePresence>
       </m.div>
+
+      {!waiting && visible.length > MOBILE_LIMIT && (
+        <button
+          type="button"
+          // `md:hidden`: above the breakpoint everything is already shown.
+          className="w-full rounded-xl border border-white/10 bg-white/3 py-2 text-[11.5px] font-medium text-white/55 transition-colors duration-200 hover:border-white/20 hover:text-white/85 md:hidden"
+          onClick={() => setExpanded((current) => !current)}
+        >
+          {expanded
+            ? t('common.showLess')
+            : t('signals.showMore', { count: visible.length - MOBILE_LIMIT })}
+        </button>
+      )}
     </section>
   );
 }
