@@ -99,6 +99,7 @@ export function SignalCard({
   return (
     <GlassCard
       interactive
+      fill
       glow={verdict.glow}
       layout
       initial={{ opacity: 0, y: 14, scale: 0.98 }}
@@ -204,27 +205,39 @@ export function SignalCard({
       </div>
 
       {/*
-        Sizing sits last and visibly apart. The levels above are what the engine
-        decided; this is what the reader does about it, and interleaving the two
-        made the card read as one undifferentiated block of numbers.
+        What the reader does about the card, pinned to its bottom edge.
 
-        Actionable calls only — a sizing widget beside "no edge right now" reads
-        as encouragement.
+        `mt-auto` eats whatever slack the stretched card has, so the exchange
+        button sits the same distance from the bottom on every card in the row
+        however far the summary above it wrapped. That only holds while the
+        calculator is the last thing in here — which is why the event warning
+        now comes before it rather than after. It reads better in that order
+        anyway: the risk, and then the size to take given the risk.
       */}
-      {signal.verdict !== 'wait' && <PositionCalculator signal={signal} />}
+      <div className="mt-auto">
+        {signal.eventWarning && (
+          <m.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mt-3.5 flex items-start gap-2 rounded-lg border border-warn/25 bg-warn/8 px-2.5 py-2"
+          >
+            <ShieldAlert className="mt-px size-3.5 shrink-0 text-warn" />
+            <p className="line-clamp-3 min-w-0 text-[11px] leading-relaxed text-warn/90">
+              {text(signal.eventWarning)}
+            </p>
+          </m.div>
+        )}
 
-      {signal.eventWarning && (
-        <m.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="mt-3.5 flex items-start gap-2 rounded-lg border border-warn/25 bg-warn/8 px-2.5 py-2"
-        >
-          <ShieldAlert className="mt-px size-3.5 shrink-0 text-warn" />
-          <p className="line-clamp-3 min-w-0 text-[11px] leading-relaxed text-warn/90">
-            {text(signal.eventWarning)}
-          </p>
-        </m.div>
-      )}
+        {/*
+          The levels above are what the engine decided; this is what the reader
+          does about it, and interleaving the two made the card read as one
+          undifferentiated block of numbers.
+
+          Actionable calls only — a sizing widget beside "no edge right now"
+          reads as encouragement.
+        */}
+        {signal.verdict !== 'wait' && <PositionCalculator signal={signal} />}
+      </div>
     </GlassCard>
   );
 }
