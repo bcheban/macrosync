@@ -1,3 +1,10 @@
+/*
+ * First, before anything in this module runs: the language detector reads
+ * localStorage during `init()` below, and the rename has to have happened by
+ * then. Ordering this from `main.tsx` does not work — `App` imports this module
+ * itself, so i18next is evaluated before any line of `main.tsx` executes.
+ */
+import '@/lib/storage-migration';
 import i18n from 'i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import { initReactI18next } from 'react-i18next';

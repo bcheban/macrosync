@@ -1,9 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
-// Side-effect imports, in this order on purpose: the rename migration has to
-// move the stored language before i18next reads it.
-import './lib/storage-migration';
+// Side-effect import: configures i18next before the first render.
 import './i18n';
 import './index.css';
 

@@ -7,9 +7,10 @@
  * silently reset all of it on the first visit after the rebrand — a deposit
  * somebody entered to size a real trade is not state to throw away for tidiness.
  *
- * A side-effect module rather than a function call, because `i18n` reads its key
- * while it is being evaluated. Imports are hoisted, so nothing written in
- * `main.tsx` can run before that — but a module imported ahead of it can.
+ * A side-effect module, imported at the top of `src/i18n/index.ts` rather than
+ * from `main.tsx`: the language detector reads its key while that module is
+ * being evaluated, and `App` pulls the module in itself, so it runs before
+ * any statement in `main.tsx` could.
  *
  * Safe to keep indefinitely and safe to delete once the tail of returning
  * visitors has passed: it only ever copies a key the new name does not have.
