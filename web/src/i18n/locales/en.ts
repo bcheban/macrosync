@@ -102,6 +102,8 @@ export const en = {
   },
 
   liveTrades: {
+    showMore: 'Show {{count}} more',
+    showLess: 'Show less',
     chartError: 'Could not load the bars',
     chartLoading: 'Loading bars…',
     protected: 'Stop moved to entry',

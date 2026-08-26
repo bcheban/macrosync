@@ -107,6 +107,8 @@ export const uk: Translation = {
   },
 
   liveTrades: {
+    showMore: 'Показати ще {{count}}',
+    showLess: 'Згорнути',
     chartError: 'Не вдалося завантажити свічки',
     chartLoading: 'Завантажую свічки…',
     protected: 'Стоп перенесено на вхід',

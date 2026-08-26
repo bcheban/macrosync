@@ -27,6 +27,17 @@ interface LiveTradesProps {
 /** Fixed order, so the sections do not reshuffle as counts change. */
 const ORDER: Strategy[] = ['scalping', 'day', 'swing'];
 
+/**
+ * How many cards a section shows on a phone before asking.
+ *
+ * Six is a screen and a half in one column — enough to see that a section has
+ * depth without making the reader scroll past it to reach the next strategy.
+ * The limit is enforced in CSS rather than by slicing the array, so the desktop
+ * grid cannot be affected by it: there is no breakpoint in JavaScript to get
+ * wrong, and no resize listener to fall out of step with the layout.
+ */
+const MOBILE_LIMIT = 6;
+
 const COLUMN_ACCENT: Record<Strategy, string> = {
   scalping: 'from-warn/40',
   day: 'from-accent-soft/40',
@@ -63,11 +74,14 @@ function TradeCard({
   index,
   open,
   onOpen,
+  className,
 }: {
   trade: ActiveSignal;
   index: number;
   open: boolean;
   onOpen: () => void;
+  /** Lets the section hide it on narrow screens without wrapping it in a div. */
+  className?: string;
 }) {
   const { t } = useTranslation();
   const { isSelected } = useAssetScope();
@@ -88,6 +102,7 @@ function TradeCard({
         'group relative block w-full overflow-hidden rounded-xl border p-2.5 text-left transition-colors duration-200',
         'focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:outline-none',
         open ? 'border-white/20 bg-white/8' : 'border-white/8 bg-white/3 hover:border-white/14 hover:bg-white/6',
+        className,
       )}
     >
       {/* A hairline in the trade's direction — the card reads before the text. */}
@@ -164,9 +179,23 @@ export function LiveTrades({ data, loading }: LiveTradesProps) {
   const { t } = useTranslation();
   const { toggle, isSelected } = useAssetScope();
   const [openId, setOpenId] = useState<string>();
+  /** Sections the reader has expanded on a phone. Ignored above `md`. */
+  const [expanded, setExpanded] = useState<Set<Strategy>>(new Set());
 
+  /*
+   * Newest first, everywhere.
+   *
+   * Chosen over distance-to-entry, which sounds more useful and is not: a trade
+   * sitting a hair from its entry is either minutes old or one that ran up and
+   * came all the way back, and those are opposite situations shown in the same
+   * position. Age says one thing and says it unambiguously — and a call from ten
+   * minutes ago is the one still worth acting on.
+   */
   const columns = useMemo(() => {
-    const signals = data?.signals ?? [];
+    const signals = [...(data?.signals ?? [])].sort(
+      (a, b) => Date.parse(b.openedAt) - Date.parse(a.openedAt),
+    );
+
     return ORDER.map((strategy) => ({
       strategy,
       trades: signals.filter((signal) => signal.strategy === strategy),
@@ -252,9 +281,38 @@ export function LiveTrades({ data, loading }: LiveTradesProps) {
                         index={index}
                         open={trade.id === openId}
                         onOpen={() => handleOpen(trade)}
+                        /*
+                         * Hidden below `md` only, and only while collapsed. The
+                         * card stays mounted either way, so opening a section is
+                         * instant and the desktop grid never sees this class do
+                         * anything at all.
+                         */
+                        className={cn(
+                          index >= MOBILE_LIMIT && !expanded.has(column.strategy) && 'hidden md:block',
+                        )}
                       />
                     ))}
                   </div>
+
+                  {column.trades.length > MOBILE_LIMIT && (
+                    <button
+                      type="button"
+                      // `md:hidden`: above the breakpoint everything is already shown.
+                      className="mt-2 w-full rounded-xl border border-white/10 bg-white/3 py-2 text-[11.5px] font-medium text-white/55 transition-colors duration-200 hover:border-white/20 hover:text-white/85 md:hidden"
+                      onClick={() =>
+                        setExpanded((current) => {
+                          const next = new Set(current);
+                          if (next.has(column.strategy)) next.delete(column.strategy);
+                          else next.add(column.strategy);
+                          return next;
+                        })
+                      }
+                    >
+                      {expanded.has(column.strategy)
+                        ? t('liveTrades.showLess')
+                        : t('liveTrades.showMore', { count: column.trades.length - MOBILE_LIMIT })}
+                    </button>
+                  )}
                 </section>
               ))}
           </div>

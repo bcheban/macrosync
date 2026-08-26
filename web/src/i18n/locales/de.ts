@@ -103,6 +103,8 @@ export const de: Translation = {
   },
 
   liveTrades: {
+    showMore: '{{count}} weitere anzeigen',
+    showLess: 'Weniger anzeigen',
     chartError: 'Kerzen konnten nicht geladen werden',
     chartLoading: 'Kerzen werden geladen…',
     protected: 'Stop auf den Einstieg gezogen',
