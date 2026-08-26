@@ -124,8 +124,9 @@ describe('alert dispatch', () => {
   });
 
   it('stops retrying a call that can never be delivered', async () => {
-    // How the Bot API really reports a chat it cannot reach: 4xx, not 200.
-    reply = { status: 400, body: { ok: false, description: 'chat not found' } };
+    // A block is permanent in a way `chat not found` is not — that one also
+    // covers a subscriber who has yet to press Start on a freshly issued bot.
+    reply = { status: 403, body: { ok: false, description: 'Forbidden: bot was blocked by the user' } };
 
     // Permanent rejections give up on the first run rather than every run forever.
     await alerts.notifySignals([signal('INJ', 'buy')], undefined);

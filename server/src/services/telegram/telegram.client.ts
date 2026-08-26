@@ -117,8 +117,22 @@ const nextChatSendAt = new Map<string, number>();
 /** ~25/s, comfortably inside the documented 30. */
 const GLOBAL_GAP_MS = 40;
 
-/** Descriptions that mean the recipient will never receive anything again. */
-const GONE = ['bot was blocked', 'user is deactivated', 'chat not found', 'bot was kicked', 'group chat was upgraded'];
+/**
+ * Descriptions that mean the recipient will never receive anything again.
+ *
+ * `chat not found` is deliberately absent, though Telegram returns it with a
+ * 400 that reads exactly like a dead chat. It is also what the API says about
+ * somebody who has simply never pressed Start on *this* bot — which, the first
+ * time a newly issued token broadcasts, is every name on the roster. Left on
+ * this list it would have emptied the roster on the move to @AyanoxTradeBot,
+ * one alert run after the token changed.
+ *
+ * The two mistakes do not cost the same. Keeping a genuinely dead chat costs
+ * one failed request per run. Dropping a live one loses a subscriber with no
+ * way to ask them back, because a bot cannot open a conversation its user has
+ * not started.
+ */
+const GONE = ['bot was blocked', 'user is deactivated', 'bot was kicked', 'group chat was upgraded'];
 
 const isGone = (status: number, description: string): boolean => {
   const detail = description.toLowerCase();
