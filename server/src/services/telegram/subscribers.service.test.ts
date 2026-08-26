@@ -121,6 +121,44 @@ const signal = (base: string, verdict: 'buy' | 'sell' = 'buy', strategy = 'day')
 
 const recipients = () => posted.map(([chatId]) => chatId);
 
+describe('the published record', () => {
+  it('breaks the win rate down by setup, and omits setups with nothing settled', async () => {
+    /*
+     * `byStrategy` has always been written when a trade closes; what was
+     * missing was anyone reading it. The case that matters is the third row:
+     * a setup with no settled trade is left out rather than printed at 0%,
+     * because zero of zero is not a win rate and sits in the list inviting a
+     * comparison against setups that have actually traded.
+     */
+    const store = await import('../store/store.js');
+    await store.setJson(store.storeKey('trades:stats'), {
+      wins: 9,
+      losses: 5,
+      expired: 2,
+      superseded: 0,
+      voided: 0,
+      breakeven: 3,
+      byStrategy: {
+        scalping: { wins: 7, losses: 1 },
+        day: { wins: 2, losses: 4 },
+        swing: { wins: 0, losses: 0 },
+      },
+      updatedAt: new Date().toISOString(),
+    });
+
+    await start(900, 'en');
+    posted = [];
+    await webhook.handleUpdate({ message: { chat: { id: 900 }, text: '/stats' } });
+
+    const text = posted.map(([, body]) => body).join(' ');
+    assert.match(text, /Win rate 64%/);
+    assert.match(text, /7W \/ 1L/);
+    assert.match(text, /2W \/ 4L/);
+    // Swing settled nothing, so it has no row at all.
+    assert.ok(!/Swing/i.test(text.split('By setup')[1] ?? ''));
+  });
+});
+
 describe('subscriber roster', () => {
   beforeEach(() => {
     resetMemoryStore();

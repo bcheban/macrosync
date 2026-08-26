@@ -82,6 +82,9 @@ export const de: Dictionary = {
     `📊 Noch nichts abgeschlossen — ${open} laufen. Die Bilanz beginnt, wenn der erste Trade schließt.`,
   statsRate: (rate, wins, losses, expired) =>
     `📊 <b>Trefferquote ${rate}%</b> — ${wins}G / ${losses}V${expired}`,
+  statsByStrategy: '<b>Nach Strategie</b>',
+  statsStrategyRow: (label, rate, wins, losses) =>
+    `${label} — <b>${rate}%</b> · ${wins}G / ${losses}V`,
   statsExpired: (n) => ` · ${n} verfallen`,
   statsOpen: (n) => `📈 ${n} Trade${n === 1 ? '' : 's'} gerade offen`,
   statsFootnote:

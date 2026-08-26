@@ -202,7 +202,21 @@ function settingsText(prefs: Prefs, view: SettingsView): string {
   return lines.join('\n');
 }
 
-/** The published record, phrased the same way everywhere it appears. */
+/** Fixed order, so the split does not reshuffle as one setup pulls ahead. */
+const STATS_ORDER: Strategy[] = ['scalping', 'day', 'swing'];
+
+/**
+ * The published record, phrased the same way everywhere it appears.
+ *
+ * The per-setup split reads `byStrategy`, which the ledger has maintained since
+ * it was written — closing a trade already buckets it. Nothing new is stored
+ * for this: a second set of counters would only be a second thing to keep in
+ * step with the first, and the first is the one the reset clears.
+ *
+ * A setup with nothing settled is left out rather than shown at 0%. Zero of
+ * zero is not a win rate, and printing one puts it in a list inviting
+ * comparison against setups that have actually traded.
+ */
 async function statsLine(locale: Locale): Promise<string> {
   const t = dict(locale);
   const [stats, active] = await Promise.all([loadStats(), loadActive()]);
@@ -211,12 +225,24 @@ async function statsLine(locale: Locale): Promise<string> {
   if (!decided) return active.length ? t.statsOnlyOpen(active.length) : t.statsNone;
 
   const expired = stats.expired ? t.statsExpired(stats.expired) : '';
-  return [
-    t.statsRate(winRate(stats), stats.wins, stats.losses, expired),
-    t.statsOpen(active.length),
-    '',
-    t.statsFootnote,
-  ].join('\n');
+  const labels = strategyLabels(locale);
+  const lines = [t.statsRate(winRate(stats), stats.wins, stats.losses, expired), t.statsOpen(active.length)];
+
+  const split = STATS_ORDER.map((strategy) => ({
+    label: labels[strategy],
+    ...(stats.byStrategy[strategy] ?? { wins: 0, losses: 0 }),
+  })).filter((row) => row.wins + row.losses > 0);
+
+  if (split.length) {
+    lines.push('', t.statsByStrategy);
+    for (const row of split) {
+      const n = row.wins + row.losses;
+      lines.push(t.statsStrategyRow(row.label, Math.round((row.wins / n) * 100), row.wins, row.losses));
+    }
+  }
+
+  lines.push('', t.statsFootnote);
+  return lines.join('\n');
 }
 
 /**

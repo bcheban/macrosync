@@ -87,6 +87,10 @@ export const en = {
     `📊 No settled trades yet — ${open} still open. The record starts when the first one closes.`,
   statsRate: (rate: number, wins: number, losses: number, expired: string) =>
     `📊 <b>Win rate ${rate}%</b> — ${wins}W / ${losses}L${expired}`,
+  /** Heading for the per-setup split. Only rendered when a setup has a record. */
+  statsByStrategy: '<b>By setup</b>',
+  statsStrategyRow: (label: string, rate: number, wins: number, losses: number) =>
+    `${label} — <b>${rate}%</b> · ${wins}W / ${losses}L`,
   statsExpired: (n: number) => ` · ${n} expired`,
   statsOpen: (n: number) => `📈 ${n} trade${n === 1 ? '' : 's'} open right now`,
   statsFootnote:

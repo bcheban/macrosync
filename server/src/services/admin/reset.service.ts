@@ -27,6 +27,16 @@ const LEDGER_PATTERNS = [
   'trades:stats',
   'trades:history',
   'alerts:last',
+  /*
+   * The derived read of the ledger, and it was missed the first time.
+   *
+   * `/stats` came back to zero the moment `trades:stats` went, because it reads
+   * that key directly. `/stats_deep` did not: it reads this snapshot, which the
+   * cron refreshes on its own schedule, so it went on quoting a 21% win rate
+   * over 75 trades that no longer existed. Anything computed *from* the ledger
+   * has to go with it, or the reset is only half a reset.
+   */
+  'analytics:snapshot',
   'telegram:delivery',
   'radar:cursor',
   'cron:last',

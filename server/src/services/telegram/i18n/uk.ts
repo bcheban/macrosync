@@ -76,6 +76,9 @@ export const uk: Dictionary = {
     `📊 Закритих угод ще немає — ${open} у роботі. Запис почнеться, коли закриється перша.`,
   statsRate: (rate, wins, losses, expired) =>
     `📊 <b>Вінрейт ${rate}%</b> — ${wins}П / ${losses}З${expired}`,
+  statsByStrategy: '<b>За стратегіями</b>',
+  statsStrategyRow: (label, rate, wins, losses) =>
+    `${label} — <b>${rate}%</b> · ${wins}П / ${losses}З`,
   statsExpired: (n) => ` · ${n} протерміновано`,
   statsOpen: (n) => `📈 Зараз відкрито угод: ${n}`,
   statsFootnote:
