@@ -143,6 +143,7 @@ export const de: Translation = {
     target: 'Ziel',
     riskReward: 'CRV',
     risk: 'Risiko',
+    details: 'Details',
     leverage: 'Max. Hebel',
     rsi: 'RSI',
     atr: 'ATR',

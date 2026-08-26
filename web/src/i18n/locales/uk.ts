@@ -147,6 +147,7 @@ export const uk: Translation = {
     target: 'Ціль',
     riskReward: 'R:R',
     risk: 'Ризик',
+    details: 'Деталі',
     leverage: 'Макс. плече',
     rsi: 'RSI',
     atr: 'ATR',

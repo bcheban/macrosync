@@ -24,6 +24,8 @@ const admin = await import('../admin/reset.service.js');
 let responses: Record<string, { status: number; body: unknown }> = {};
 /** Every send, in order: `[chatId, text]`. */
 let posted: [string, string][] = [];
+/** Persistent keyboards, in the order they were attached. */
+let replyKeyboards: string[][][] = [];
 
 const okReply = { status: 200, body: { ok: true, result: {} } };
 
@@ -34,8 +36,16 @@ before(() => {
     const target = String(url);
 
     if (target.includes('/sendMessage')) {
-      const payload = JSON.parse(String(init?.body ?? '{}')) as { chat_id: string; text: string };
+      const payload = JSON.parse(String(init?.body ?? '{}')) as {
+        chat_id: string;
+        text: string;
+        reply_markup?: { keyboard?: { text: string }[][] };
+      };
       posted.push([payload.chat_id, payload.text]);
+
+      const rows = payload.reply_markup?.keyboard;
+      if (rows) replyKeyboards.push(rows.map((row) => row.map((button) => button.text)));
+
       const reply = responses[payload.chat_id] ?? okReply;
       return {
         ok: reply.status < 400,
@@ -116,6 +126,7 @@ describe('subscriber roster', () => {
     resetMemoryStore();
     responses = {};
     posted = [];
+    replyKeyboards = [];
   });
 
   it('seeds the owner so a fresh deploy still alerts somebody', async () => {
@@ -278,24 +289,50 @@ describe('subscriber roster', () => {
     assert.deepEqual((await prefs.getPrefs('800')).strategies, { scalping: true, day: true, swing: true });
   });
 
-  it('welcomes with the same glossary /help answers with', async () => {
+  it('keeps the welcome short and puts the glossary in /help', async () => {
     await start(500);
-    // The welcome is the message carrying the glossary, not the last one sent —
-    // onboarding ends on the strategy panel.
-    const welcome = posted.map(([, text]) => text).find((text) => text.includes('/stats')) ?? '';
+    const welcome = posted.map(([, text]) => text).find((text) => text.includes('MacroSync')) ?? '';
+
+    /*
+     * The first screen has one job: say what this is and give the reader one
+     * thing to do. Eight command lines under a paragraph is everything they
+     * need and nothing they can act on.
+     */
+    assert.ok(!welcome.includes('/mute'), 'the full glossary does not belong here');
+    assert.ok(welcome.length < 700, `welcome is ${welcome.length} chars`);
 
     posted = [];
     await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/help' } });
     const help = posted.at(-1)?.[1] ?? '';
 
-    /*
-     * Both are built from one list, so the blue Menu button, the welcome and
-     * /help cannot end up describing different bots.
-     */
-    for (const command of ['/settings', '/balance', '/stats', '/help', '/mute', '/stop']) {
-      assert.ok(welcome.includes(command), `welcome is missing ${command}`);
+    for (const command of ['/settings', '/balance', '/calc', '/guide', '/mute', '/stop']) {
       assert.ok(help.includes(command), `help is missing ${command}`);
     }
+  });
+
+  it('answers a hub button in any language, not just the current one', async () => {
+    await start(500, 'uk');
+    posted = [];
+
+    /*
+     * A reply keyboard stays on screen until a message replaces it, so somebody
+     * who has just switched language is still looking at the old labels. A press
+     * that did nothing would read as a broken bot rather than as stale markup.
+     */
+    const { dict } = await import('./i18n/index.js');
+    for (const locale of ['en', 'uk', 'de'] as const) {
+      posted = [];
+      await webhook.handleUpdate({ message: { chat: { id: 500 }, text: dict(locale).hubGuide } });
+      assert.match(posted.at(-1)?.[1] ?? '', /Довідник|Guide|Leitfaden/, `${locale} label went unanswered`);
+    }
+  });
+
+  it('sends the hub in the language the reader picked', async () => {
+    await start(500, 'de');
+    const withHub = replyKeyboards.at(-1);
+
+    assert.ok(withHub, 'onboarding must leave a hub on screen');
+    assert.deepEqual(withHub.flat(), ['📊 Statistik', '⚙️ Einstellungen', '🧮 Rechner', '📖 Leitfaden']);
   });
 
   it('publishes a menu Telegram will accept', () => {

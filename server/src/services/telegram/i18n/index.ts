@@ -22,6 +22,38 @@ export const LOCALE_LABEL: Record<Locale, string> = {
 
 export const dict = (locale: Locale): Dictionary => DICTIONARIES[locale] ?? en;
 
+/** The four hub buttons, in the reader's language. */
+export const hubKeyboard = (locale: Locale): string[][] => {
+  const t = dict(locale);
+  return [
+    [t.hubDeepStats, t.hubSettings],
+    [t.hubCalculator, t.hubGuide],
+  ];
+};
+
+/**
+ * Maps a hub button press back to the command it stands for.
+ *
+ * Checked against *every* language, not just the reader's. Telegram keeps a
+ * reply keyboard on screen until it is replaced, so somebody who switches to
+ * German is still looking at the Ukrainian buttons until the next message
+ * carrying a keyboard arrives — and a press that did nothing would read as a
+ * broken bot rather than as stale markup.
+ */
+export function hubCommand(text: string): string | undefined {
+  const trimmed = text.trim();
+
+  for (const locale of Object.keys(DICTIONARIES) as Locale[]) {
+    const t = DICTIONARIES[locale];
+    if (trimmed === t.hubDeepStats) return '/stats_deep';
+    if (trimmed === t.hubSettings) return '/settings';
+    if (trimmed === t.hubCalculator) return '/calc';
+    if (trimmed === t.hubGuide) return '/guide';
+  }
+
+  return undefined;
+}
+
 /**
  * Guesses a starting language from Telegram's `language_code`.
  *

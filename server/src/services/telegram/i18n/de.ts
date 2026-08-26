@@ -15,7 +15,7 @@ export const de: Dictionary = {
   welcomeBody:
     'Er durchsucht rund um die Uhr die liquiden USDT-Perpetuals auf MEXC. Bestätigt sich ein Setup, bekommst du das Signal: Einstieg, Stop, Ziel, die Begründung in einem Satz und den Hebel, bei dem die Liquidation noch hinter dem Stop liegt.',
   welcomeSubscribed:
-    'Du bist angemeldet. Mehr braucht es nicht — mit den Befehlen unten werden die Meldungen aber deine statt allgemeiner.',
+    'Du bist angemeldet. Die Schaltflächen unter der Tastatur sind alles Weitere: Einstellungen, der Leitfaden, ein Positionsrechner und die Bilanz.',
   helpIntro: '📡 <b>MacroSync</b> — ein automatischer Radar für MEXC-Perpetuals.',
 
   commandsHeading: '<b>Befehle</b>',
@@ -234,4 +234,10 @@ export const de: Dictionary = {
   calcMargin: (margin, leverage) => `\u{1F4B0} Margin bei ${leverage}x: <b>${margin}</b>`,
   calcCapped: '\u26A0\uFE0F <i>Auf deine Einlage begrenzt \u2014 die volle Größe braucht mehr Sicherheit, als das Konto hergibt.</i>',
   calcNote: '<i>Nur Berechnung. Für dich wird nichts platziert, und erst der Stop macht diese Rechnung wahr.</i>',
+
+  // --- persistent keyboard --------------------------------------------------
+  hubDeepStats: '\u{1F4CA} Statistik',
+  hubSettings: '\u2699\uFE0F Einstellungen',
+  hubCalculator: '\u{1F9EE} Rechner',
+  hubGuide: '\u{1F4D6} Leitfaden',
 };

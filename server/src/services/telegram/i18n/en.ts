@@ -15,7 +15,7 @@ export const en = {
   welcomeBody:
     'It scans the liquid USDT perpetuals on MEXC around the clock, and when a setup confirms you get the call: entry, stop, target, the reasoning in one sentence, and the leverage at which liquidation still sits clear of the stop.',
   welcomeSubscribed:
-    'You are subscribed. Nothing else is needed — but the commands below make the alerts yours rather than generic.',
+    'You are subscribed. The buttons below the keyboard are everything else — settings, the guide, a position calculator, and the record.',
   helpIntro: '📡 <b>MacroSync</b> — an automated futures radar for MEXC perpetuals.',
 
   commandsHeading: '<b>Commands</b>',
@@ -243,6 +243,12 @@ export const en = {
   calcMargin: (margin: string, leverage: number) => `\u{1F4B0} Margin at ${leverage}x: <b>${margin}</b>`,
   calcCapped: '\u26A0\uFE0F <i>Capped at your deposit \u2014 the full size needs more collateral than the account holds.</i>',
   calcNote: '<i>Sizing only. Nothing is placed for you, and the stop is what makes this arithmetic true.</i>',
+
+  // --- persistent keyboard --------------------------------------------------
+  hubDeepStats: '\u{1F4CA} Deep stats',
+  hubSettings: '\u2699\uFE0F Settings',
+  hubCalculator: '\u{1F9EE} Calculator',
+  hubGuide: '\u{1F4D6} Guide',
 } as const;
 
 export type Dictionary = {

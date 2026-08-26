@@ -140,14 +140,20 @@ export function planPosition(account: Account, signal: Signal): PositionPlan | n
 }
 
 /**
- * The MEXC contract page for a symbol.
+ * The exchange page for a symbol.
  *
- * One place, because the underscore that separates the internal form from the
- * exchange's belongs in as few files as possible — the bot button and the
- * dashboard link both come from here.
+ * `https://www.mexc.com/futures/BTC_USDT` — the URL MEXC publishes in its own
+ * sitemap, which matters twice over. It is the canonical trading page rather
+ * than a guess, and it sits on the domain the mobile apps claim for universal
+ * links: tapping it opens the MEXC app straight onto the contract when it is
+ * installed, and the web page when it is not.
+ *
+ * A `mexcapp://` scheme would open the app too, and Telegram accepts it in a
+ * button — but with nothing installed it is a button that does nothing at all,
+ * and there is no way to attach a fallback to an inline URL.
  */
 export const mexcFuturesUrl = (symbol: string): string =>
-  `https://futures.mexc.com/exchange/${symbol.includes('_') ? symbol : symbol.replace(/(USDT|USDC)$/, '_$1')}`;
+  `https://www.mexc.com/futures/${symbol.includes('_') ? symbol : symbol.replace(/(USDT|USDC)$/, '_$1')}`;
 
 export interface CalcInput {
   balance: number;

@@ -1,9 +1,15 @@
 /**
  * The exchange page for a symbol.
  *
- * Kept beside the other formatters rather than inlined at the call sites: the
- * underscore that separates our internal form from MEXC's belongs in as few
- * places as possible, and the bot has exactly one of these too.
+ * `https://www.mexc.com/futures/BTC_USDT` — the URL MEXC publishes in its own
+ * sitemap, which matters twice over. It is the canonical trading page rather
+ * than a guess, and it sits on the domain the mobile apps claim for universal
+ * links: tapping it opens the MEXC app straight onto the contract when it is
+ * installed, and the web page when it is not.
+ *
+ * A `mexcapp://` scheme would open the app too, and Telegram accepts it in a
+ * button — but with nothing installed it is a button that does nothing at all,
+ * and there is no way to attach a fallback to an inline URL.
  */
 export const mexcFuturesUrl = (symbol: string): string =>
-  `https://futures.mexc.com/exchange/${symbol.includes('_') ? symbol : symbol.replace(/(USDT|USDC)$/, '_$1')}`;
+  `https://www.mexc.com/futures/${symbol.includes('_') ? symbol : symbol.replace(/(USDT|USDC)$/, '_$1')}`;

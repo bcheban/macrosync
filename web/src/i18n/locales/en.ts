@@ -142,6 +142,7 @@ export const en = {
     target: 'Target',
     riskReward: 'R:R',
     risk: 'Risk',
+    details: 'Details',
     leverage: 'Max lev',
     rsi: 'RSI',
     atr: 'ATR',

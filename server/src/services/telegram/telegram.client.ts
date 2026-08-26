@@ -86,6 +86,15 @@ export interface SendOptions {
   /** Defaults to the owner chat from the environment. */
   chatId?: string;
   keyboard?: InlineKeyboard;
+  /**
+   * The buttons that live at the bottom of the chat, replacing the keyboard.
+   *
+   * Sent with a message rather than on its own — Telegram has no way to set one
+   * without one. It persists until replaced, so it is attached to the messages
+   * that mark a change of state (the welcome, a language switch) rather than to
+   * every reply, which would be a wasted field on ninety percent of sends.
+   */
+  replyKeyboard?: string[][];
 }
 
 /** What Telegram puts in the body. `ok` is authoritative; the status is not. */
@@ -131,7 +140,23 @@ async function attempt(html: string, options: SendOptions): Promise<SendResult &
         parse_mode: 'HTML',
         // The alert is the message; a link preview would bury it.
         link_preview_options: { is_disabled: true },
-        ...(options.keyboard ? { reply_markup: { inline_keyboard: options.keyboard } } : {}),
+        /*
+         * One or the other. Telegram takes a single `reply_markup`, and an
+         * inline keyboard under the message is not the same object as the
+         * persistent one under the composer — sending both means losing one
+         * silently, so the inline keyboard wins where a caller asks for both.
+         */
+        ...(options.keyboard
+          ? { reply_markup: { inline_keyboard: options.keyboard } }
+          : options.replyKeyboard
+            ? {
+                reply_markup: {
+                  keyboard: options.replyKeyboard.map((row) => row.map((text) => ({ text }))),
+                  resize_keyboard: true,
+                  is_persistent: true,
+                },
+              }
+            : {}),
       }),
     });
 

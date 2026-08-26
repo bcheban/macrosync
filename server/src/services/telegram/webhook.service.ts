@@ -25,7 +25,7 @@ import {
   type Locale,
   type Prefs,
 } from './preferences.service.js';
-import { dict, guessLocale, LOCALE_LABEL } from './i18n/index.js';
+import { dict, guessLocale, hubCommand, hubKeyboard, LOCALE_LABEL } from './i18n/index.js';
 import { analyticsForReader, formatAnalyticsFor } from '../admin/analytics.service.js';
 import {
   calculatePosition,
@@ -305,14 +305,21 @@ function glossary(): string {
  */
 const welcome = (locale: Locale): string => {
   const t = dict(locale);
+
+  /*
+   * Four short blocks instead of one long one.
+   *
+   * The previous welcome opened with a paragraph and then dropped eight command
+   * lines under it. That is everything a reader needs and nothing they can act
+   * on — the first screen has one job, which is to say what this is and give
+   * them one thing to do. The full glossary is a tap away in /help.
+   */
   return [
     t.welcomeIntro,
     '',
     t.welcomeBody,
     '',
     t.welcomeSubscribed,
-    '',
-    glossary(),
     '',
     t.disclaimerLong,
   ].join('\n');
@@ -343,8 +350,15 @@ async function handleCommand(
   text: string,
   profile: { name?: string; username?: string; languageCode?: string },
 ): Promise<void> {
+  /*
+   * A hub button arrives as ordinary text carrying its own label, so it is
+   * translated back into a command before anything else looks at it.
+   */
+  const pressed = hubCommand(text);
+  const line = pressed ?? text;
+
   // `/start@SomeBot` in a group, and any argument, both trail the command.
-  const command = text.trim().split(/[\s@]/)[0]?.toLowerCase() ?? '';
+  const command = line.trim().split(/[\s@]/)[0]?.toLowerCase() ?? '';
 
   switch (command) {
     case '/start': {
@@ -377,7 +391,7 @@ async function handleCommand(
         return;
       }
 
-      await sendTelegramMessage(welcome(prefs.locale), { chatId, keyboard: MENU });
+      await sendTelegramMessage(welcome(prefs.locale), { chatId, replyKeyboard: hubKeyboard(prefs.locale) });
       return;
     }
 
@@ -396,7 +410,7 @@ async function handleCommand(
 
     case '/balance': {
       const t = dict((await getPrefs(chatId)).locale);
-      const parsed = parseBalanceCommand(text);
+      const parsed = parseBalanceCommand(line);
 
       if ('reset' in parsed) {
         await clearAccount(chatId);
@@ -454,7 +468,7 @@ async function handleCommand(
       const locale = (await getPrefs(chatId)).locale;
       const t = dict(locale);
 
-      const parts = text.trim().split(/\s+/).slice(1);
+      const parts = line.trim().split(/\s+/).slice(1);
       const num = (raw: string | undefined): number => Number((raw ?? '').replace(/[$%,\s]/g, ''));
 
       // `/calc` bare is a request for the instructions, not a failed command.
@@ -590,7 +604,9 @@ async function handleCommand(
     }
 
     case '/help': {
-      await sendTelegramMessage(help((await getPrefs(chatId)).locale), { chatId, keyboard: MENU });
+      const locale = (await getPrefs(chatId)).locale;
+      // Refreshed here too, so a reader who changed language sees their own labels.
+      await sendTelegramMessage(help(locale), { chatId, replyKeyboard: hubKeyboard(locale) });
       return;
     }
 
@@ -677,13 +693,26 @@ async function handleCallback(query: NonNullable<TelegramUpdate['callback_query'
           toast = dict(locale).languageSet;
 
           /*
+           * The hub is stale the moment the language changes, so it is replaced
+           * — but only for a reader who already had one. During onboarding the
+           * welcome carries it a moment later, and sending a bare confirmation
+           * first would be one message saying what the next one already shows.
+           */
+          if (before.localeChosen) {
+            await sendTelegramMessage(dict(locale).languageSet, {
+              chatId: chat,
+              replyKeyboard: hubKeyboard(locale),
+            });
+          }
+
+          /*
            * First answer: this tap came from the onboarding question, not from
            * the settings panel, so the welcome is what should follow it — and
            * there is no panel to redraw.
            */
           if (!before.localeChosen) {
             await answerCallbackQuery(id, toast);
-            await sendTelegramMessage(welcome(locale), { chatId: chat, keyboard: MENU });
+            await sendTelegramMessage(welcome(locale), { chatId: chat, replyKeyboard: hubKeyboard(locale) });
 
             /*
              * The strategy picker follows immediately, because opt-in without a
