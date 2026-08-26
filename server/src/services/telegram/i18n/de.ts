@@ -192,7 +192,7 @@ export const de: Dictionary = {
   cardRoi: 'ROI',
   cardRR: 'CRV',
   cardHeld: 'Gehalten',
-  cardFooter: 'via @AyanoxBot',
+  cardFooter: 'via @AyanoxTradeBot',
 
   // --- settings sub-menus ---------------------------------------------------
   settingsBack: '\u00AB Zurück zu den Einstellungen',

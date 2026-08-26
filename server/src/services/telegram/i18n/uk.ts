@@ -186,7 +186,7 @@ export const uk: Dictionary = {
   cardRoi: 'ROI',
   cardRR: 'R:R',
   cardHeld: 'Тривало',
-  cardFooter: 'через @AyanoxBot',
+  cardFooter: 'через @AyanoxTradeBot',
 
   // --- settings sub-menus ---------------------------------------------------
   settingsBack: '\u00AB До налаштувань',

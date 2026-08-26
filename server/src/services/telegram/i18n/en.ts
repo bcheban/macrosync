@@ -201,7 +201,7 @@ export const en = {
   cardRoi: 'ROI',
   cardRR: 'R:R',
   cardHeld: 'Held',
-  cardFooter: 'via @AyanoxBot',
+  cardFooter: 'via @AyanoxTradeBot',
 
   // --- settings sub-menus ---------------------------------------------------
   settingsBack: '\u00AB Back to settings',
