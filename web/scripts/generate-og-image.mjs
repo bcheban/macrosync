@@ -33,7 +33,7 @@ if (!chrome) {
   process.exit(1);
 }
 
-const profile = join(tmpdir(), `macrosync-og-${process.pid}`);
+const profile = join(tmpdir(), `ayanox-og-${process.pid}`);
 mkdirSync(dirname(output), { recursive: true });
 
 try {

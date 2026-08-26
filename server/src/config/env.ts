@@ -185,6 +185,13 @@ export const env = {
    */
   redisUrl: process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL ?? '',
   redisToken: process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN ?? '',
+  /*
+   * Left on the old name through the rebrand, on purpose. This prefix is the
+   * namespace every live Redis key already sits under — bot subscribers, their
+   * per-chat preferences, the cached feeds. Renaming it does not move that
+   * data; it hides it, and the first symptom is that every subscriber silently
+   * stops receiving alerts. Change it only alongside a key migration.
+   */
   redisPrefix: process.env.REDIS_PREFIX ?? 'macrosync',
   redisTimeoutMs: positiveInt(process.env.REDIS_TIMEOUT_MS, 4000),
 

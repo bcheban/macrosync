@@ -11,12 +11,12 @@ export const en = {
   chooseLanguage: '🌍 <b>Choose your language</b>\n\nAll alerts and menus will use it.',
   languageSet: '🌍 Language set to <b>English</b>.',
 
-  welcomeIntro: '📡 <b>MacroSync</b> — an automated futures radar.',
+  welcomeIntro: '📡 <b>Ayanox</b> — an automated futures radar.',
   welcomeBody:
     'It scans the liquid USDT perpetuals on MEXC around the clock, and when a setup confirms you get the call: entry, stop, target, the reasoning in one sentence, and the leverage at which liquidation still sits clear of the stop.',
   welcomeSubscribed:
     'You are subscribed. The buttons below the keyboard are everything else — settings, the guide, a position calculator, and the record.',
-  helpIntro: '📡 <b>MacroSync</b> — an automated futures radar for MEXC perpetuals.',
+  helpIntro: '📡 <b>Ayanox</b> — an automated futures radar for MEXC perpetuals.',
 
   commandsHeading: '<b>Commands</b>',
   alsoHeading: '<b>Also</b>',
@@ -201,7 +201,7 @@ export const en = {
   cardRoi: 'ROI',
   cardRR: 'R:R',
   cardHeld: 'Held',
-  cardFooter: 'via @MacroSyncBot',
+  cardFooter: 'via @AyanoxBot',
 
   // --- settings sub-menus ---------------------------------------------------
   settingsBack: '\u00AB Back to settings',

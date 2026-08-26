@@ -1,5 +1,5 @@
 import { m } from 'framer-motion';
-import { RefreshCw, Radio } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
 import { MarketStatus } from '@/components/layout/MarketStatus';
@@ -50,14 +50,27 @@ export function TopBar({ context, tickers, streaming = false, refreshing, onRefr
       <div className="glass-bar px-3 py-2.5 sm:px-6 sm:py-3">
         <div className="mx-auto flex max-w-[1600px] items-center gap-3 sm:gap-4">
           <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
-            <m.span
+            <m.img
+              src="/logo.svg"
+              alt=""
+              aria-hidden
+              width={36}
+              height={36}
               initial={{ scale: 0.85, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: 'spring', stiffness: 220, damping: 18 }}
-              className="relative flex size-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-accent to-cyber shadow-[0_0_24px_-4px] shadow-accent/70"
-            >
-              <Radio className="size-4.5 text-white" strokeWidth={2.4} />
-            </m.span>
+              /*
+               * `size-9` — 36px — rather than the `h-8 w-auto` a logo swap
+               * usually gets. The pre-rendered shell in `index.html` reserves a
+               * 36px square inside a 61px bar so React's first paint moves
+               * nothing; a 32px logo here would buy four pixels of nothing and
+               * cost the zero-CLS the shell exists for.
+               *
+               * `alt=""` and `aria-hidden` because the wordmark beside it already
+               * says Ayanox, and a screen reader should hear the brand once.
+               */
+              className="relative size-9 shrink-0 rounded-xl"
+            />
             <div className="min-w-0 leading-tight">
               <p className="truncate text-[15px] font-semibold tracking-tight text-white">
                 {head}

@@ -291,7 +291,7 @@ describe('subscriber roster', () => {
 
   it('keeps the welcome short and puts the glossary in /help', async () => {
     await start(500);
-    const welcome = posted.map(([, text]) => text).find((text) => text.includes('MacroSync')) ?? '';
+    const welcome = posted.map(([, text]) => text).find((text) => text.includes('Ayanox')) ?? '';
 
     /*
      * The first screen has one job: say what this is and give the reader one

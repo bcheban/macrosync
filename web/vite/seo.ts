@@ -98,7 +98,7 @@ export function seo(options: SeoOptions): Plugin {
     .join('\n');
 
   return {
-    name: 'macrosync:seo',
+    name: 'ayanox:seo',
 
     transformIndexHtml: {
       order: 'pre',

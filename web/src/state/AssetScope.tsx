@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { api } from '@/lib/api';
 import type { AssetGroup, AssetMeta } from '@/types/domain';
 
-const STORAGE_KEY = 'macrosync.assets';
+const STORAGE_KEY = 'ayanox.assets';
 
 /**
  * How far down the volume ranking the picker shows by default.

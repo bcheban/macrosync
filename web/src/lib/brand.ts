@@ -7,10 +7,17 @@
  */
 export const BRAND = {
   /** Full wordmark. */
-  name: 'MacroSync',
-  /** Split for the two-tone logotype: `Macro` + accented `Sync`. */
-  nameParts: ['Macro', 'Sync'] as const,
+  name: 'Ayanox',
+  /** Split for the two-tone logotype: `Aya` + accented `nox`. */
+  nameParts: ['Aya', 'nox'] as const,
   /** Used in the document title and anywhere a compact form is needed. */
-  short: 'MacroSync',
+  short: 'Ayanox',
+  /*
+   * Still the old origin, deliberately. This value is the canonical URL, the
+   * `hreflang` alternates and every absolute link in `sitemap.xml`; pointing it
+   * at a host that does not resolve yet would deindex a live site far faster
+   * than the rename could ever pay back. Flip it in the same change that moves
+   * DNS, not before.
+   */
   domain: 'macrosync.io',
 } as const;

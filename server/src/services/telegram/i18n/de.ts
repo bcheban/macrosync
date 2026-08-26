@@ -11,12 +11,12 @@ export const de: Dictionary = {
   chooseLanguage: '🌍 <b>Sprache wählen</b>\n\nAlle Meldungen und Menüs erscheinen darin.',
   languageSet: '🌍 Sprache auf <b>Deutsch</b> gesetzt.',
 
-  welcomeIntro: '📡 <b>MacroSync</b> — ein automatischer Futures-Radar.',
+  welcomeIntro: '📡 <b>Ayanox</b> — ein automatischer Futures-Radar.',
   welcomeBody:
     'Er durchsucht rund um die Uhr die liquiden USDT-Perpetuals auf MEXC. Bestätigt sich ein Setup, bekommst du das Signal: Einstieg, Stop, Ziel, die Begründung in einem Satz und den Hebel, bei dem die Liquidation noch hinter dem Stop liegt.',
   welcomeSubscribed:
     'Du bist angemeldet. Die Schaltflächen unter der Tastatur sind alles Weitere: Einstellungen, der Leitfaden, ein Positionsrechner und die Bilanz.',
-  helpIntro: '📡 <b>MacroSync</b> — ein automatischer Radar für MEXC-Perpetuals.',
+  helpIntro: '📡 <b>Ayanox</b> — ein automatischer Radar für MEXC-Perpetuals.',
 
   commandsHeading: '<b>Befehle</b>',
   alsoHeading: '<b>Außerdem</b>',
@@ -192,7 +192,7 @@ export const de: Dictionary = {
   cardRoi: 'ROI',
   cardRR: 'CRV',
   cardHeld: 'Gehalten',
-  cardFooter: 'via @MacroSyncBot',
+  cardFooter: 'via @AyanoxBot',
 
   // --- settings sub-menus ---------------------------------------------------
   settingsBack: '\u00AB Zurück zu den Einstellungen',

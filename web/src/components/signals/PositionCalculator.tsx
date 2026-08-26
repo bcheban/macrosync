@@ -30,7 +30,7 @@ import type { Signal } from '@/types/domain';
  * desktop card is exactly what it was and no resize can put the two out of step.
  */
 
-const STORAGE_KEY = 'macrosync.calc';
+const STORAGE_KEY = 'ayanox.calc';
 
 interface Saved {
   balance: number;

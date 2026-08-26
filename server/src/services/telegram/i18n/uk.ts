@@ -5,12 +5,12 @@ export const uk: Dictionary = {
   chooseLanguage: '🌍 <b>Обери мову</b>\n\nУсі сповіщення й меню будуть нею.',
   languageSet: '🌍 Мову встановлено: <b>українська</b>.',
 
-  welcomeIntro: '📡 <b>MacroSync</b> — автоматичний ф’ючерсний радар.',
+  welcomeIntro: '📡 <b>Ayanox</b> — автоматичний ф’ючерсний радар.',
   welcomeBody:
     'Він цілодобово сканує ліквідні безстрокові контракти USDT на MEXC, і коли сетап підтверджується, ти отримуєш сигнал: вхід, стоп, ціль, причину одним реченням і плече, за якого ліквідація лишається за стопом.',
   welcomeSubscribed:
     'Ти підписаний. Кнопки під клавіатурою — це все інше: налаштування, довідник, калькулятор позиції та статистика.',
-  helpIntro: '📡 <b>MacroSync</b> — автоматичний радар безстрокових контрактів MEXC.',
+  helpIntro: '📡 <b>Ayanox</b> — автоматичний радар безстрокових контрактів MEXC.',
 
   commandsHeading: '<b>Команди</b>',
   alsoHeading: '<b>Ще</b>',
@@ -186,7 +186,7 @@ export const uk: Dictionary = {
   cardRoi: 'ROI',
   cardRR: 'R:R',
   cardHeld: 'Тривало',
-  cardFooter: 'через @MacroSyncBot',
+  cardFooter: 'через @AyanoxBot',
 
   // --- settings sub-menus ---------------------------------------------------
   settingsBack: '\u00AB До налаштувань',

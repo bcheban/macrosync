@@ -15,7 +15,7 @@ export const INTL_LOCALE: Record<Locale, string> = {
   de: 'de-DE',
 };
 
-export const STORAGE_KEY = 'macrosync.lang';
+export const STORAGE_KEY = 'ayanox.lang';
 
 export const resources = {
   en: { translation: en },

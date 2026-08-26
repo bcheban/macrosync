@@ -13,7 +13,7 @@ async function fetchText(url: string, headers: Record<string, string> = {}): Pro
       redirect: 'follow',
       headers: {
         // Several newsrooms reject the default fetch agent outright.
-        'user-agent': 'MacroSyncBot/1.0 (+https://github.com/bcheban/macrosync)',
+        'user-agent': 'AyanoxBot/1.0 (+https://github.com/bcheban/macrosync)',
         ...headers,
       },
     });

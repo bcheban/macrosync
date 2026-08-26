@@ -1,12 +1,12 @@
 <div align="center">
 
-# MacroSync
+# Ayanox
 
 ### Macro-Synced Signal &amp; Risk Terminal
 
 **Technical analysis breaks when the news hits.** Indicators only describe what already
 happened, so they are structurally blind to a rate decision that lands in forty minutes.
-MacroSync keeps the chart in sync with the macro calendar.
+Ayanox keeps the chart in sync with the macro calendar.
 
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white&style=for-the-badge)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white&style=for-the-badge)](https://www.typescriptlang.org)
@@ -1125,7 +1125,7 @@ the code to `LOCALES` there and to the server's locale list in `server/src/route
 ## Project structure
 
 ```
-macrosync/
+ayanox/
 ├── api/index.mjs                   # Vercel serverless entry — re-exports the Express app
 ├── vercel.json                     # install/build/output + /api rewrite
 ├── server/

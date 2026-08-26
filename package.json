@@ -1,8 +1,8 @@
 {
-  "name": "macrosync",
+  "name": "ayanox",
   "private": true,
   "version": "0.1.0",
-  "description": "MacroSync — a crypto trading dashboard that fuses technical signals, a macro-news countdown radar and AI risk-management insights.",
+  "description": "Ayanox — a crypto trading dashboard that fuses technical signals, a macro-news countdown radar and AI risk-management insights.",
   "workspaces": [
     "server",
     "web"

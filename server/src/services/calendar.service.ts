@@ -151,7 +151,7 @@ async function loadCalendar(): Promise<MacroEvent[]> {
     try {
       const response = await fetch(FEED_URL, {
         signal: controller.signal,
-        headers: { accept: 'application/json', 'user-agent': 'MacroSyncBot/1.0' },
+        headers: { accept: 'application/json', 'user-agent': 'AyanoxBot/1.0' },
       });
       if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
 

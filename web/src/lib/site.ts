@@ -16,7 +16,7 @@ export const SITE = {
   ogImage: '/og-image.png',
   ogImageWidth: 1200,
   ogImageHeight: 630,
-  twitterHandle: '@macrosync',
+  twitterHandle: '@ayanox',
 } as const;
 
 /** The query parameter that makes each language a distinct, indexable URL. */
