@@ -13,6 +13,24 @@ const positiveInt = (value: string | undefined, fallback: number): number => {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
 };
 
+/**
+ * A fraction strictly inside 0..1, or the fallback.
+ *
+ * Both ends are excluded deliberately. At 0 the stop would jump to entry the
+ * instant the trade opened, closing almost everything at a scratch; at 1 it
+ * would only move once the target was already reached, which is a no-op. Both
+ * are silent misconfigurations rather than crashes, so they are refused here
+ * instead of being discovered in the record weeks later.
+ */
+const fraction = (value: string | undefined, fallback: number): number => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed >= 1) {
+    if (value) console.warn(`[env] BREAKEVEN_THRESHOLD "${value}" is not a fraction in (0,1) — using ${fallback}`);
+    return fallback;
+  }
+  return parsed;
+};
+
 const parseList = (value: string | undefined, fallback: string[]): string[] =>
   value
     ? value
@@ -129,6 +147,20 @@ export const env = {
    * authenticated POST is a foot-gun waiting for a mistyped curl.
    */
   adminSecret: process.env.ADMIN_SECRET ?? '',
+
+  /*
+   * How far a trade must travel before its stop is pulled to entry.
+   *
+   * Raised from 0.5 to 0.75 after the first weeks of live trading: at halfway,
+   * the entry and the halfway mark sit inside the same recent range on an hourly
+   * bar, so a wick back through entry scratched trades that were still working.
+   * Seven of the first twenty-four settled trades closed that way.
+   *
+   * Tunable rather than fixed because the right value is an empirical question
+   * this record cannot yet answer — `/api/admin/analytics` reports what the
+   * scratched trades did afterwards, which is the evidence for moving it again.
+   */
+  breakevenThreshold: fraction(process.env.BREAKEVEN_THRESHOLD, 0.75),
 
   /* --- persistence -------------------------------------------------------- */
 

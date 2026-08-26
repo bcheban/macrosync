@@ -16,6 +16,7 @@ import {
 import { botStatus, handleUpdate, type TelegramUpdate } from '../services/telegram/webhook.service.js';
 import { getActiveSignals } from '../services/trades/active.service.js';
 import { resetStore, type ResetScope } from '../services/admin/reset.service.js';
+import { buildAnalytics, formatAnalytics } from '../services/admin/analytics.service.js';
 import {
   isSelectableSymbol,
   nextBatch,
@@ -420,5 +421,39 @@ api.get(
 
     const set = await getKlines(raw, interval, limit);
     res.json({ symbol: set.symbol, interval: set.interval, candles: set.candles });
+  }),
+);
+
+/**
+ * What the record says once you stop looking only at the headline percentage.
+ *
+ * Behind the same secret as the reset, and for a related reason: it replays
+ * candles for every scratched trade, so an open endpoint would be a way to make
+ * the server do unbounded upstream work on request.
+ *
+ * `?format=text` returns the Telegram summary instead of JSON, which is what
+ * makes `/stats_deep` and this endpoint the same answer rather than two
+ * implementations that can disagree.
+ */
+api.get(
+  '/admin/analytics',
+  route(async (req, res) => {
+    const header = req.headers.authorization ?? '';
+    const bearer = header.startsWith('Bearer ') ? header.slice(7) : '';
+    const provided = bearer || (typeof req.query.secret === 'string' ? req.query.secret : '');
+
+    if (!env.adminSecret || provided !== env.adminSecret) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    const analytics = await buildAnalytics(env.breakevenThreshold);
+
+    if (req.query.format === 'text') {
+      res.type('text/plain').send(formatAnalytics(analytics).replace(/<[^>]+>/g, ''));
+      return;
+    }
+
+    res.json(analytics);
   }),
 );

@@ -105,9 +105,9 @@ describe('trade ledger', () => {
     assert.equal(trades.winRate(stats), 100);
   });
 
-  it('moves the stop to entry at the halfway mark', async () => {
-    // Halfway from 100 to 110 is 105; the first bar reaches it and stops there.
-    script = { BEAUSDT: [[106], [101]] };
+  it('moves the stop to entry at the configured threshold', async () => {
+    // 75% of the way from 100 to 110 is 107.5; the bar reaches it and stops there.
+    script = { BEAUSDT: [[108], [101]] };
 
     await trades.openTrade(signal('BEA', 'buy', 100, 95, 110));
     const { closed, movedToBreakeven } = await trades.evaluateTrades();
@@ -119,7 +119,7 @@ describe('trade ledger', () => {
   });
 
   it('announces the move once, not on every run', async () => {
-    script = { BEBUSDT: [[106], [101]] };
+    script = { BEBUSDT: [[108], [101]] };
 
     await trades.openTrade(signal('BEB', 'buy', 100, 95, 110));
     await trades.evaluateTrades();
@@ -137,8 +137,8 @@ describe('trade ledger', () => {
   });
 
   it('scratches rather than losing once the stop has moved', async () => {
-    // Reaches 106, then trades back through entry.
-    script = { BECUSDT: [[106, 101], [101, 99]] };
+    // Reaches 108, then trades back through entry.
+    script = { BECUSDT: [[108, 101], [101, 99]] };
 
     await trades.openTrade(signal('BEC', 'buy', 100, 95, 110));
     const { closed, stats } = await trades.evaluateTrades();
@@ -154,6 +154,46 @@ describe('trade ledger', () => {
     assert.equal(stats.breakeven, 1);
   });
 
+  it('leaves a trade alone below the threshold', async () => {
+    /*
+     * The change this file exists to pin down. At 50% a bar topping out at 106
+     * moved the stop to entry, and the next wick back through it scratched a
+     * trade that was still working; at 75% the same bar does nothing.
+     */
+    script = { BEFUSDT: [[106, 101], [101, 99]] };
+
+    await trades.openTrade(signal('BEF', 'buy', 100, 95, 110));
+    const { closed, movedToBreakeven } = await trades.evaluateTrades();
+
+    assert.equal(movedToBreakeven.length, 0, 'below the trigger');
+    assert.equal(closed.length, 0, 'and so the dip back to 99 costs nothing');
+  });
+
+  it('reads the threshold from configuration, not a constant', async () => {
+    /*
+     * `env` is `as const`, which is a type-level guarantee rather than a frozen
+     * object — the cast is what lets one case move the dial without a second
+     * process. If this ever starts throwing, `env` has been frozen and the
+     * resolution loop should take the threshold as an argument instead.
+     */
+    const { env } = await import('../../config/env.js');
+    const mutable = env as { breakevenThreshold: number };
+    const original = mutable.breakevenThreshold;
+
+    try {
+      // A trade that does not trigger at 0.75 must trigger at 0.5.
+      mutable.breakevenThreshold = 0.5;
+      script = { BEGUSDT: [[106], [101]] };
+
+      await trades.openTrade(signal('BEG', 'buy', 100, 95, 110));
+      const { movedToBreakeven } = await trades.evaluateTrades();
+
+      assert.equal(movedToBreakeven.length, 1, 'the threshold is read at call time');
+    } finally {
+      mutable.breakevenThreshold = original;
+    }
+  });
+
   it('costs a win when one bar both scratches and targets', async () => {
     /*
      * Documented rather than avoided. The second bar has a low of 99 and a high
@@ -162,7 +202,7 @@ describe('trade ledger', () => {
      * entry would have been closed before the target printed, so this reads as
      * the scratch — the same "flatters least" rule the levels have always used.
      */
-    script = { BEDUSDT: [[105, 111], [99, 99]] };
+    script = { BEDUSDT: [[108, 111], [99, 99]] };
 
     await trades.openTrade(signal('BED', 'buy', 100, 95, 110));
     const { closed } = await trades.evaluateTrades();
@@ -170,9 +210,9 @@ describe('trade ledger', () => {
     assert.equal(closed[0]?.outcome, 'breakeven');
   });
 
-  it('reads the halfway mark in the trade direction for a short', async () => {
-    // Short from 100 to 90: halfway is 95.
-    script = { BEEUSDT: [[99], [94]] };
+  it('reads the threshold in the trade direction for a short', async () => {
+    // Short from 100 to 90: 75% of the way down is 92.5.
+    script = { BEEUSDT: [[99], [92]] };
 
     await trades.openTrade(signal('BEE', 'sell', 100, 105, 90));
     const { movedToBreakeven } = await trades.evaluateTrades();

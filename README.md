@@ -304,7 +304,8 @@ Everything lives in `server/.env` (see `server/.env.example`). Every value has a
 | `ALERTS_SEND_RETRIES`   | `3`                     | Attempts before a message is abandoned for the run           |
 | `TELEGRAM_WEBHOOK_SECRET` | —                     | Guards `/api/telegram/webhook`; the route 404s while unset    |
 | `PUBLIC_BASE_URL`       | —                       | Where Telegram delivers, for the registration script          |
-| `ADMIN_SECRET`          | —                       | Guards `/api/admin/reset`; the route 404s while unset          |
+| `ADMIN_SECRET`          | —                       | Guards `/api/admin/reset` and `/api/admin/analytics`           |
+| `BREAKEVEN_THRESHOLD`   | `0.75`                  | Fraction of the way to target before the stop moves to entry   |
 | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | —        | Upstash Redis; injected by the Vercel integration           |
 | `ALERTS_TEST_SECRET`    | —                       | Guards `/api/alerts/test`                                   |
 | `LLM_PROVIDER`          | `auto`                  | `auto` · `anthropic` · `openai` · `heuristic`                |
@@ -349,6 +350,7 @@ is why the API function is pinned to `fra1` in `vercel.json`.
 | POST   | `/api/telegram/webhook`        | Telegram updates. Guarded by `secret_token`; 404s while unset |
 | POST   | `/api/alerts/test`             | Sends one real signal to prove the path. `?secret=`        |
 | POST   | `/api/admin/reset`             | Clears the trading record. `Bearer $ADMIN_SECRET` + `?confirm=RESET` |
+| GET    | `/api/admin/analytics`         | Win rates, confidence correlation, breakeven what-if. `?format=text` |
 
 The last four **404 rather than 401 while their secret is unset** — an unconfigured deploy denies
 that they exist at all, so nothing is triggerable by anyone who reads the source.
@@ -475,8 +477,14 @@ for every signal tells the reader nothing.
 
 ### Breakeven stops — `server/src/services/trades/`
 
-A trade that travels halfway to its target has its stop pulled to entry, and the channel is told.
-From that point the position cannot cost anything.
+A trade that travels **75%** of the way to its target has its stop pulled to entry, and the channel
+is told. From that point the position cannot cost anything.
+
+The threshold started at 50% and moved after the first weeks of live trading: on an hourly bar the
+entry and the halfway mark sit inside the same recent range, so a wick back through entry scratched
+trades that were still working — 29 of the first 92 settled trades closed that way. It reads from
+`BREAKEVEN_THRESHOLD` at call time rather than a module constant, so it can be tuned from a
+deployment and set per case in a test.
 
 The rule forced the resolution loop to be rewritten. It used to ask whether *any* bar touched the
 stop and whether *any* bar touched the target — order-blind, and perfectly adequate while the stop
@@ -519,6 +527,40 @@ comma is a decimal mark in half the world and a thousands separator in the other
 wrong sizes a position at a thousandth of what was meant, and saves it without complaint. Groups of
 exactly three digits are now read as separators, anything else as a decimal mark, and a dot settles
 it outright.
+
+### Analytics — `GET /api/admin/analytics`, `/stats_deep`
+
+Three questions the headline percentage cannot answer, behind the same secret as the reset — it
+replays candles for every scratched trade, so an open endpoint would be a way to make the server do
+unbounded upstream work on request. `?format=text` returns the same figures as the bot's summary, so
+the two cannot disagree.
+
+**Win rate, both ways.** Excluding breakeven trades and counting them as non-wins. The gap is the
+size of the flattery: on the live record, 22.2% against 15.2%.
+
+> Worth stating plainly, because it is easy to get backwards: scratched trades **raise** the reported
+> rate rather than lowering it. They leave the denominator entirely, and every one of them used to be
+> a loss. What they cost is *wins* — trades that would have reached target.
+
+**Confidence against outcome.** Point-biserial `r` between the confluence score and win/loss. The
+score was not stored on a trade until this change, so it reads empty until new calls settle — said
+outright rather than defaulted to zero, which would produce a strong-looking correlation describing
+when the field was added.
+
+**What the scratched trades did next.** For each breakeven exit, the candles after the close are
+replayed in order, bounded by the trade's own lifetime — an unbounded future would credit the
+strategy with moves it would never have held for. A close outside the candle window is reported as
+`unknown`, never folded into "neither": one means it did not get there, the other means the record
+cannot say.
+
+Reliability is a margin test, not a count. The first real dataset produced 7 targets against 5 stops,
+which a `>= 10 samples` rule called reliable while the margin sat inside one standard error of a coin
+flip. The observed share must now differ from 0.5 by more than one standard error before the module
+will call a direction — a low bar, and that data does not clear it.
+
+`projectedRate` is the decision-relevant figure: the rate the record would show had none of these
+been scratched. It is lower than the eye-catching "58% of resolved cases would have won", because the
+cases that went nowhere would simply have expired.
 
 ### Clean slate — `POST /api/admin/reset`
 

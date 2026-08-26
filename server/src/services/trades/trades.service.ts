@@ -1,3 +1,4 @@
+import { env } from '../../config/env.js';
 import { getKlines, type Interval } from '../market.service.js';
 import type { Signal, Strategy } from '../../types/domain.js';
 import { getJson, setJson, storeKey } from '../store/store.js';
@@ -35,6 +36,15 @@ export interface ActiveTrade {
   openedAt: string;
   /** When the stop was moved to entry, if it has been. */
   breakevenAt?: string;
+  /**
+   * The confluence score the call was published with, 0-100.
+   *
+   * Optional because trades opened before this field existed do not carry it,
+   * and the analytics that reads it says so rather than treating an absent
+   * score as a zero — which would drag any correlation toward a number that
+   * describes the migration rather than the strategy.
+   */
+  confidence?: number;
 }
 
 /**
@@ -96,7 +106,7 @@ const EMPTY_STATS: TradeStats = {
   updatedAt: new Date(0).toISOString(),
 };
 
-const INTERVAL: Record<Strategy, Interval> = { scalping: '5m', day: '1h', swing: '4h' };
+export const INTERVAL: Record<Strategy, Interval> = { scalping: '5m', day: '1h', swing: '4h' };
 
 /**
  * How long a call is given to resolve, roughly three times the duration the
@@ -107,14 +117,14 @@ const INTERVAL: Record<Strategy, Interval> = { scalping: '5m', day: '1h', swing:
  * and the win rate silently counts only the decisive calls — which is the most
  * flattering possible sample.
  */
-const MAX_LIFETIME_MS: Record<Strategy, number> = {
+export const MAX_LIFETIME_MS: Record<Strategy, number> = {
   scalping: 6 * 60 * 60_000,
   day: 36 * 60 * 60_000,
   swing: 10 * 24 * 60 * 60_000,
 };
 
 /** Bars fetched per resolve — must span the longest a trade can stay open. */
-const LOOKBACK: Record<Strategy, number> = {
+export const LOOKBACK: Record<Strategy, number> = {
   scalping: Math.ceil(MAX_LIFETIME_MS.scalping / (5 * 60_000)) + 5, // 77
   day: Math.ceil(MAX_LIFETIME_MS.day / (60 * 60_000)) + 5, // 41
   swing: Math.ceil(MAX_LIFETIME_MS.swing / (4 * 60 * 60_000)) + 5, // 65
@@ -191,6 +201,7 @@ export async function openTrade(signal: Signal): Promise<{ opened: boolean; supe
     stopLoss: signal.stopLoss,
     initialStopLoss: signal.stopLoss,
     takeProfit: signal.takeProfit,
+    confidence: signal.confidence,
     timeframe: signal.timeframe,
     openedAt: new Date().toISOString(),
   });
@@ -240,12 +251,14 @@ function resolvable(trade: ActiveTrade): boolean {
 }
 
 /**
- * The point at which the stop is pulled up to entry.
+ * The point at which the stop is pulled up to entry, as a fraction of the
+ * distance from entry to target.
  *
- * Halfway to target: far enough that the call has been paid for in movement,
- * near enough that most trades reach it before they decide.
+ * Read from `BREAKEVEN_THRESHOLD` at call time rather than captured in a module
+ * constant, so a deployment can move it without a rebuild and a test can set it
+ * per case.
  */
-const BREAKEVEN_FRACTION = 0.5;
+const breakevenFraction = (): number => env.breakevenThreshold;
 
 export interface Resolution {
   trade: ActiveTrade;
@@ -281,7 +294,7 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
 
   const long = trade.side === 'buy';
   // Signed so a long and a short read identically from here on.
-  const halfway = trade.entry + (trade.takeProfit - trade.entry) * BREAKEVEN_FRACTION;
+  const trigger = trade.entry + (trade.takeProfit - trade.entry) * breakevenFraction();
 
   let stop = trade.stopLoss;
   let atBreakeven = Boolean(trade.breakevenAt);
@@ -320,7 +333,7 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
       }
 
       // Checked after the levels, so a bar cannot both save and settle itself.
-      if (!atBreakeven && (long ? candle.high >= halfway : candle.low <= halfway)) {
+      if (!atBreakeven && (long ? candle.high >= trigger : candle.low <= trigger)) {
         stop = trade.entry;
         atBreakeven = true;
         moved = true;

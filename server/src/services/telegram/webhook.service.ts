@@ -25,6 +25,7 @@ import {
   type Prefs,
 } from './preferences.service.js';
 import { dict, guessLocale, LOCALE_LABEL } from './i18n/index.js';
+import { buildAnalytics, formatAnalytics } from '../admin/analytics.service.js';
 import { clearAccount, getAccount, parseBalanceCommand, setAccount } from './sizing.service.js';
 
 /**
@@ -363,6 +364,23 @@ async function handleCommand(
         ].join('\n'),
         { chatId, keyboard: MENU },
       );
+      return;
+    }
+
+    case '/stats_deep': {
+      /*
+       * Owner only. Not because the numbers are secret — the dashboard shows
+       * the win rate to anyone — but because it replays candles for every
+       * scratched trade, and an open command would let any chat make the server
+       * do unbounded upstream work.
+       *
+       * Deliberately not in the command menu: it answers a question about the
+       * strategy's own parameters, which is an operator's question.
+       */
+      if (chatId !== env.telegramChatId) return;
+
+      const analytics = await buildAnalytics(env.breakevenThreshold);
+      await sendTelegramMessage(formatAnalytics(analytics), { chatId });
       return;
     }
 
