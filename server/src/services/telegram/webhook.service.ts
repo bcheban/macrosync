@@ -257,8 +257,15 @@ async function statsLine(locale: Locale): Promise<string> {
 interface CommandSpec {
   command: string;
   usage: string;
-  /** One line, under 256 chars: what Telegram shows in the Menu button. */
-  menu: string;
+  /**
+   * What Telegram shows in the blue Menu button, per language. Under 256 chars.
+   *
+   * These live beside the command rather than in the locale files, unlike the
+   * `/help` prose. Two reasons: they are captions rather than sentences and
+   * belong with `usage` and `icon`, and `register-webhook.mjs` is plain
+   * JavaScript that publishes them without ever loading the TypeScript build.
+   */
+  menu: Record<Locale, string>;
   /** One glyph, so the glossary scans as a list rather than a wall of text. */
   icon: string;
   /** English fallback. The reader's language comes from `commandHelp`. */
@@ -353,17 +360,26 @@ const welcome = (locale: Locale): string => {
   const t = dict(locale);
 
   /*
-   * Four short blocks instead of one long one.
+   * What this is, then what it can do, then the small print.
    *
-   * The previous welcome opened with a paragraph and then dropped eight command
-   * lines under it. That is everything a reader needs and nothing they can act
-   * on — the first screen has one job, which is to say what this is and give
-   * them one thing to do. The full glossary is a tap away in /help.
+   * The glossary used to be left out of here on the argument that a first
+   * screen has one job and the list is a tap away in /help. That holds for
+   * somebody arriving from a link who already knows what they came for; it does
+   * not hold for the case this is now written for, which is a stranger opening
+   * the bot cold. They cannot tap a command they have not been shown, and
+   * "send /help" is a worse first instruction than the help itself.
+   *
+   * The primary commands only. The full list including /stop and /stats_deep
+   * stays in /help — an onboarding message that ends with how to leave has
+   * spent its last line badly.
    */
   return [
     t.welcomeIntro,
     '',
     t.welcomeBody,
+    '',
+    t.commandsHeading,
+    ...glossaryLines(COMMANDS.filter((spec) => spec.primary), locale),
     '',
     t.welcomeSubscribed,
     '',
@@ -384,12 +400,20 @@ const help = (locale: Locale): string => {
  * `scripts/register-webhook.mjs` publishes the same thing automatically; this is
  * for setting it by hand.
  */
-export const botFatherBlock = (): string =>
-  COMMANDS.map((spec) => `${spec.command} - ${spec.menu}`).join('\n');
+export const botFatherBlock = (locale: Locale = 'en'): string =>
+  COMMANDS.map((spec) => `${spec.command} - ${spec.menu[locale] ?? spec.menu.en}`).join('\n');
 
-/** What `setMyCommands` takes. */
-export const menuCommands = (): { command: string; description: string }[] =>
-  COMMANDS.map((spec) => ({ command: spec.command, description: spec.menu }));
+/**
+ * What `setMyCommands` takes, for one language.
+ *
+ * Telegram keys menus by `language_code` and falls back to the default list for
+ * anything unpublished, so the default stays English and `uk`/`de` are
+ * published alongside it. A reader's menu language follows their Telegram
+ * client, not the language they picked here — those are different settings and
+ * Telegram only lets us answer the first.
+ */
+export const menuCommands = (locale: Locale = 'en'): { command: string; description: string }[] =>
+  COMMANDS.map((spec) => ({ command: spec.command, description: spec.menu[locale] ?? spec.menu.en }));
 
 async function handleCommand(
   chatId: string,

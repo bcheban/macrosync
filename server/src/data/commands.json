@@ -2,7 +2,11 @@
   {
     "command": "settings",
     "usage": "/settings",
-    "menu": "Choose which strategies you receive",
+    "menu": {
+      "en": "Choose which strategies you receive",
+      "uk": "Обрати стратегії, які надходять",
+      "de": "Strategien wählen, die dich erreichen"
+    },
     "help": "Choose which strategies you want — Scalping, Day Trading, Swing. Only what is ticked reaches you.",
     "primary": true,
     "icon": "⚙️"
@@ -10,7 +14,11 @@
   {
     "command": "balance",
     "usage": "/balance <deposit> <risk%>",
-    "menu": "Set deposit and risk for position sizing",
+    "menu": {
+      "en": "Set deposit and risk for position sizing",
+      "uk": "Депозит і ризик для розрахунку позиції",
+      "de": "Einlage und Risiko für die Positionsgröße"
+    },
     "help": "Set your account size and risk per trade to get a personalised margin in every signal. <code>/balance 1000 1</code> is a $1,000 deposit at 1% risk.",
     "primary": true,
     "icon": "💰"
@@ -18,7 +26,11 @@
   {
     "command": "calc",
     "usage": "/calc <deposit> <risk%> [entry] [stop]",
-    "menu": "Work out a position size",
+    "menu": {
+      "en": "Work out a position size",
+      "uk": "Порахувати розмір позиції",
+      "de": "Positionsgröße berechnen"
+    },
     "primary": true,
     "help": "Position size, coin quantity and margin for any levels. Leave the levels out and it prices the newest open call against your saved deposit.",
     "icon": "🧮"
@@ -26,7 +38,11 @@
   {
     "command": "stats",
     "usage": "/stats",
-    "menu": "Win rate and open trades",
+    "menu": {
+      "en": "Win rate and open trades",
+      "uk": "Вінрейт і відкриті угоди",
+      "de": "Trefferquote und offene Trades"
+    },
     "help": "The global win rate and how the algorithm has actually performed.",
     "primary": true,
     "icon": "📊"
@@ -34,7 +50,11 @@
   {
     "command": "watching",
     "usage": "/watching [clear]",
-    "menu": "Setups you asked to be told about",
+    "menu": {
+      "en": "Setups you asked to be told about",
+      "uk": "Сетапи, за якими стежиш",
+      "de": "Beobachtete Setups"
+    },
     "help": "The setups you tapped Track on. <code>/watching clear</code> drops all of them.",
     "primary": true,
     "icon": "👁"
@@ -42,7 +62,11 @@
   {
     "command": "guide",
     "usage": "/guide",
-    "menu": "Strategies, risk and leverage explained",
+    "menu": {
+      "en": "Strategies, risk and leverage explained",
+      "uk": "Стратегії, ризик і плече — коротко",
+      "de": "Strategien, Risiko und Hebel — kurz"
+    },
     "help": "Short explainers you can browse: which strategy is which, why a 35% win rate makes money, and how the leverage figure is worked out.",
     "primary": true,
     "icon": "📘"
@@ -50,7 +74,11 @@
   {
     "command": "stats_deep",
     "usage": "/stats_deep",
-    "menu": "The record in depth",
+    "menu": {
+      "en": "The record in depth",
+      "uk": "Запис детально",
+      "de": "Die Bilanz im Detail"
+    },
     "help": "Win rate with and without break-even trades, whether confidence predicts outcome, and what the scratched trades did next.",
     "primary": false,
     "icon": "🔎"
@@ -58,7 +86,11 @@
   {
     "command": "help",
     "usage": "/help",
-    "menu": "Show this instruction menu",
+    "menu": {
+      "en": "Show this instruction menu",
+      "uk": "Показати меню команд",
+      "de": "Befehlsmenü anzeigen"
+    },
     "help": "Show this instruction menu.",
     "primary": true,
     "icon": "❓"
@@ -66,7 +98,11 @@
   {
     "command": "mute",
     "usage": "/mute",
-    "menu": "Two hours of quiet",
+    "menu": {
+      "en": "Two hours of quiet",
+      "uk": "Дві години тиші",
+      "de": "Zwei Stunden Ruhe"
+    },
     "help": "Two hours of quiet. You stay subscribed.",
     "primary": false,
     "icon": "🔕"
@@ -74,7 +110,11 @@
   {
     "command": "unmute",
     "usage": "/unmute",
-    "menu": "Turn alerts back on",
+    "menu": {
+      "en": "Turn alerts back on",
+      "uk": "Повернути сповіщення",
+      "de": "Benachrichtigungen zurück"
+    },
     "help": "Lift a mute early.",
     "primary": false,
     "icon": "🔔"
@@ -82,7 +122,11 @@
   {
     "command": "start",
     "usage": "/start",
-    "menu": "Subscribe to signal alerts",
+    "menu": {
+      "en": "Subscribe to signal alerts",
+      "uk": "Підписатися на сигнали",
+      "de": "Signale abonnieren"
+    },
     "help": "Subscribe. Also lifts a mute.",
     "primary": false,
     "icon": "▶️"
@@ -90,7 +134,11 @@
   {
     "command": "stop",
     "usage": "/stop",
-    "menu": "Unsubscribe",
+    "menu": {
+      "en": "Unsubscribe",
+      "uk": "Відписатися",
+      "de": "Abbestellen"
+    },
     "help": "Unsubscribe. Send /start whenever you want them back.",
     "primary": false,
     "icon": "⏹️"

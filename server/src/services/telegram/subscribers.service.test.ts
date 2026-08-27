@@ -327,23 +327,31 @@ describe('subscriber roster', () => {
     assert.deepEqual((await prefs.getPrefs('800')).strategies, { scalping: true, day: true, swing: true });
   });
 
-  it('keeps the welcome short and puts the glossary in /help', async () => {
+  it('shows a newcomer the primary commands, and keeps the rest for /help', async () => {
     await start(500);
     const welcome = posted.map(([, text]) => text).find((text) => text.includes('Ayanox')) ?? '';
 
     /*
-     * The first screen has one job: say what this is and give the reader one
-     * thing to do. Eight command lines under a paragraph is everything they
-     * need and nothing they can act on.
+     * A stranger opening the bot cold cannot tap a command they have not been
+     * shown, and "send /help" is a worse first instruction than the help
+     * itself. So the primary commands are on the first screen.
+     *
+     * What stays out is the rest: an onboarding message that ends with how to
+     * leave has spent its last line badly, and /stats_deep answers a question
+     * nobody has yet.
      */
-    assert.ok(!welcome.includes('/mute'), 'the full glossary does not belong here');
-    assert.ok(welcome.length < 700, `welcome is ${welcome.length} chars`);
+    for (const command of ['/settings', '/balance', '/stats', '/watching']) {
+      assert.ok(welcome.includes(command), `welcome is missing ${command}`);
+    }
+    assert.ok(!welcome.includes('/stop'), 'how to leave does not belong on the first screen');
+    assert.ok(!welcome.includes('/stats_deep'), '/stats_deep answers a question nobody has yet');
 
     posted = [];
     await webhook.handleUpdate({ message: { chat: { id: 500 }, text: '/help' } });
     const help = posted.at(-1)?.[1] ?? '';
 
-    for (const command of ['/settings', '/balance', '/calc', '/guide', '/mute', '/stop']) {
+    // /help is the complete list, including the two the welcome withholds.
+    for (const command of ['/settings', '/balance', '/calc', '/guide', '/watching', '/mute', '/stop', '/stats_deep']) {
       assert.ok(help.includes(command), `help is missing ${command}`);
     }
   });

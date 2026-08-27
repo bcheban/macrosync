@@ -83,13 +83,38 @@ const specs = JSON.parse(
   await readFile(new URL('../src/data/commands.json', import.meta.url), 'utf8'),
 );
 
-const menu = await call('setMyCommands', {
-  commands: specs.map((spec) => ({ command: spec.command, description: spec.menu })),
-});
-console.log(menu.ok ? `✔ Command menu published (${specs.length} commands)` : `⚠ Command menu failed: ${menu.description}`);
+/*
+ * One menu per language.
+ *
+ * Telegram keys menus by `language_code` and falls back to the unkeyed list for
+ * anything it has not been given, so English is published without a code and
+ * the rest alongside it. Which one a reader sees follows their Telegram client,
+ * not the language they picked in the bot — those are separate settings and
+ * this is the only one Telegram lets us answer.
+ *
+ * Published in order with English last, so a failure part-way leaves the
+ * fallback correct rather than leaving some readers with no menu at all.
+ */
+const LOCALES = Object.keys(specs[0]?.menu ?? { en: '' }).filter((code) => code !== 'en');
+
+for (const code of [...LOCALES, null]) {
+  const menu = await call('setMyCommands', {
+    commands: specs.map((spec) => ({
+      command: spec.command,
+      description: spec.menu[code ?? 'en'] ?? spec.menu.en,
+    })),
+    ...(code ? { language_code: code } : {}),
+  });
+  const label = code ? `language_code=${code}` : 'default (en)';
+  console.log(
+    menu.ok
+      ? `✔ Command menu published — ${label} (${specs.length} commands)`
+      : `⚠ Command menu failed for ${label}: ${menu.description}`,
+  );
+}
 
 // The same list, in the shape @BotFather's /setcommands wants it pasted.
 console.log('');
-console.log('  To set it by hand instead — @BotFather -> /setcommands -> paste:');
+console.log("  To set it by hand instead — @BotFather -> /setcommands -> paste:");
 console.log('');
-for (const spec of specs) console.log(`  ${spec.command} - ${spec.menu}`);
+for (const spec of specs) console.log(`  ${spec.command} - ${spec.menu.en}`);
