@@ -166,7 +166,10 @@ export function MobileControls({ context, live, streaming = false, className }: 
 
                   <section className="space-y-2">
                     <h3 className="text-[10px] tracking-[0.16em] text-white/35 uppercase">{t('language.label')}</h3>
-                    <LanguageSwitcher className="w-fit" />
+                    {/* A list, not a dropdown: the sheet is already a menu,
+                        and its scroll container would clip one opening from
+                        the last block in it. */}
+                    <LanguageSwitcher variant="list" />
                   </section>
                 </div>
               </m.div>
