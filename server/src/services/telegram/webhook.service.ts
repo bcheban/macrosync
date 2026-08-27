@@ -259,7 +259,9 @@ interface CommandSpec {
   usage: string;
   /** One line, under 256 chars: what Telegram shows in the Menu button. */
   menu: string;
-  /** The fuller sentence, for `/help`. May contain HTML. */
+  /** One glyph, so the glossary scans as a list rather than a wall of text. */
+  icon: string;
+  /** English fallback. The reader's language comes from `commandHelp`. */
   help: string;
   /** Listed first in the glossary; the rest follow as a smaller group. */
   primary: boolean;
@@ -267,8 +269,24 @@ interface CommandSpec {
 
 const COMMANDS = COMMAND_SPECS as CommandSpec[];
 
-const glossaryLines = (specs: CommandSpec[]): string[] =>
-  specs.map((spec) => `<code>${escapeHtml(spec.usage)}</code>${NBSP}— ${spec.help}`);
+/**
+ * One line per command, in the reader's language.
+ *
+ * The command *names* stay English because that is what has to be typed, and
+ * the syntax comes from `commands.json` for the same reason. Only the sentence
+ * after the dash is translated.
+ *
+ * English is the fallback rather than a thrown error: a command whose
+ * translation has not landed should still be discoverable, and a glossary
+ * missing a row is a worse failure than one carrying an English row.
+ */
+const glossaryLines = (specs: CommandSpec[], locale: Locale): string[] => {
+  const table = dict(locale).commandHelp as Record<string, string | undefined>;
+  return specs.map(
+    (spec) =>
+      `${spec.icon}${NBSP}<code>${escapeHtml(spec.usage)}</code>${NBSP}— ${table[spec.command] ?? spec.help}`,
+  );
+};
 
 /**
  * The language picker, shown once on `/start`.
@@ -311,16 +329,17 @@ const LANGUAGE_KEYBOARD: InlineKeyboard = [
 ];
 
 /** Everything the bot answers, primary commands first. */
-function glossary(): string {
+function glossary(locale: Locale): string {
+  const t = dict(locale);
   const primary = COMMANDS.filter((spec) => spec.primary);
   const rest = COMMANDS.filter((spec) => !spec.primary);
 
   return [
-    '<b>Commands</b>',
-    ...glossaryLines(primary),
+    t.commandsHeading,
+    ...glossaryLines(primary, locale),
     '',
-    '<b>Also</b>',
-    ...glossaryLines(rest),
+    t.alsoHeading,
+    ...glossaryLines(rest, locale),
   ].join('\n');
 }
 
@@ -354,7 +373,7 @@ const welcome = (locale: Locale): string => {
 
 const help = (locale: Locale): string => {
   const t = dict(locale);
-  return [t.helpIntro, '', glossary(), '', t.disclaimerShort].join('\n');
+  return [t.helpIntro, '', glossary(locale), '', t.disclaimerShort].join('\n');
 };
 
 /**

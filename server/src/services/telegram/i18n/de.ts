@@ -18,6 +18,29 @@ export const de: Dictionary = {
     'Du bist angemeldet. Die Schaltflächen unter der Tastatur sind alles Weitere: Einstellungen, der Leitfaden, ein Positionsrechner und die Bilanz.',
   helpIntro: '📡 <b>Ayanox</b> — ein automatischer Radar für MEXC-Perpetuals.',
 
+  /**
+   * One line per command, in the reader's language.
+   *
+   * The list itself lives in `commands.json` — order, syntax, icon and which
+   * are primary are the same in every language. Only the prose is here, so a
+   * command added there fails to compile until all three files carry its line.
+   * That is the point: a glossary that silently falls back to English reads as
+   * a half-translated bot, which is worse than an obviously missing one.
+   */
+  commandHelp: {
+    settings: "Wähle deine Strategien — Scalping, Day Trading, Swing. Nur was angehakt ist, erreicht dich.",
+    balance: "Gib Kontogröße und Risiko pro Trade an, damit jedes Signal eine persönliche Margin trägt. <code>/balance 1000 1</code> ist eine Einlage von 1000 $ bei 1% Risiko.",
+    calc: "Positionsgröße, Coin-Menge und Margin für beliebige Level. Ohne Level rechnet er das jüngste Signal.",
+    stats: "Die Gesamt-Trefferquote und wie der Algorithmus tatsächlich gelaufen ist.",
+    watching: "Die Setups, bei denen du auf Verfolgen getippt hast. <code>/watching clear</code> entfernt alle.",
+    guide: "Kurze Erklärungen: welche Strategie was tut, warum 35% Trefferquote Geld verdient, und wie man das Konto nicht verbrennt.",
+    stats_deep: "Trefferquote mit und ohne Breakeven-Trades, ob Konfidenz das Ergebnis vorhersagt, und was die Stichprobengröße dazu sagt.",
+    help: "Dieses Befehlsmenü anzeigen.",
+    mute: "Zwei Stunden Ruhe. Das Abo bleibt.",
+    unmute: "Ruhe vorzeitig beenden.",
+    start: "Abonnieren. Beendet auch eine Ruhephase.",
+    stop: "Abbestellen. Sende /start, wann immer du sie zurückwillst.",
+  },
   commandsHeading: '<b>Befehle</b>',
   alsoHeading: '<b>Außerdem</b>',
   disclaimerLong:

@@ -64,7 +64,18 @@ export function hubCommand(text: string): string | undefined {
  */
 export function guessLocale(languageCode?: string): Locale {
   const tag = (languageCode ?? '').slice(0, 2).toLowerCase();
-  return tag === 'uk' || tag === 'de' ? tag : 'en';
+  if (tag === 'de') return 'de';
+  /*
+   * `ru` opens in Ukrainian, not English.
+   *
+   * A judgement about this audience rather than about the languages: the tape
+   * is Ukrainian futures traders, and a phone set to Russian in that group is
+   * far more likely to read Ukrainian comfortably than English. It only decides
+   * the language the *question* is asked in — the picker is the next message,
+   * and one tap overrides it.
+   */
+  if (tag === 'uk' || tag === 'ru' || tag === 'be') return 'uk';
+  return 'en';
 }
 
 export type { Dictionary };

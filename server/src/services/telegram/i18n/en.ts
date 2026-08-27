@@ -18,6 +18,29 @@ export const en = {
     'You are subscribed. The buttons below the keyboard are everything else — settings, the guide, a position calculator, and the record.',
   helpIntro: '📡 <b>Ayanox</b> — an automated futures radar for MEXC perpetuals.',
 
+  /**
+   * One line per command, in the reader's language.
+   *
+   * The list itself lives in `commands.json` — order, syntax, icon and which
+   * are primary are the same in every language. Only the prose is here, so a
+   * command added there fails to compile until all three files carry its line.
+   * That is the point: a glossary that silently falls back to English reads as
+   * a half-translated bot, which is worse than an obviously missing one.
+   */
+  commandHelp: {
+    settings: "Choose which strategies you want — Scalping, Day Trading, Swing. Only what is ticked reaches you.",
+    balance: "Set your account size and risk per trade to get a personalised margin in every signal. <code>/balance 1000 1</code> is a $1,000 deposit at 1% risk.",
+    calc: "Position size, coin quantity and margin for any levels. Leave the levels out and it prices the newest open call against your saved deposit.",
+    stats: "The global win rate and how the algorithm has actually performed.",
+    watching: "The setups you tapped Track on. <code>/watching clear</code> drops all of them.",
+    guide: "Short explainers you can browse: which strategy is which, why a 35% win rate makes money, and how the leverage figure is worked out.",
+    stats_deep: "Win rate with and without break-even trades, whether confidence predicts outcome, and what the scratched trades did next.",
+    help: "Show this instruction menu.",
+    mute: "Two hours of quiet. You stay subscribed.",
+    unmute: "Lift a mute early.",
+    start: "Subscribe. Also lifts a mute.",
+    stop: "Unsubscribe. Send /start whenever you want them back.",
+  },
   commandsHeading: '<b>Commands</b>',
   alsoHeading: '<b>Also</b>',
   disclaimerLong:
@@ -267,8 +290,22 @@ export const en = {
   hubGuide: '\u{1F4D6} Guide',
 } as const;
 
+/**
+ * The shape every translation has to fill.
+ *
+ * Derived from the English file rather than declared beside it, so a key added
+ * there fails to compile in the other two until they carry it. That is the
+ * whole safety net: without it a missing translation surfaces as `undefined` in
+ * somebody's chat, which reads as a broken bot rather than a missing string.
+ *
+ * Three cases, not two. A function keeps its arguments, a nested record keeps
+ * its keys — that one is what lets `commandHelp` be a table the compiler checks
+ * per command rather than one opaque blob — and everything else is a string.
+ */
 export type Dictionary = {
   [K in keyof typeof en]: (typeof en)[K] extends (...args: infer A) => string
     ? (...args: A) => string
-    : string;
+    : (typeof en)[K] extends object
+      ? { [P in keyof (typeof en)[K]]: string }
+      : string;
 };

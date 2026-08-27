@@ -12,6 +12,29 @@ export const uk: Dictionary = {
     'Ти підписаний. Кнопки під клавіатурою — це все інше: налаштування, довідник, калькулятор позиції та статистика.',
   helpIntro: '📡 <b>Ayanox</b> — автоматичний радар безстрокових контрактів MEXC.',
 
+  /**
+   * One line per command, in the reader's language.
+   *
+   * The list itself lives in `commands.json` — order, syntax, icon and which
+   * are primary are the same in every language. Only the prose is here, so a
+   * command added there fails to compile until all three files carry its line.
+   * That is the point: a glossary that silently falls back to English reads as
+   * a half-translated bot, which is worse than an obviously missing one.
+   */
+  commandHelp: {
+    settings: "Обери потрібні стратегії — Скальпінг, Внутрішньоденна, Свінг. Доходить лише те, що позначено.",
+    balance: "Вкажи розмір рахунку й ризик на угоду, щоб у кожному сигналі була персональна маржа. <code>/balance 1000 1</code> — це депозит $1000 із ризиком 1%.",
+    calc: "Розмір позиції, кількість монет і маржа для будь-яких рівнів. Без рівнів рахує найсвіжіший сигнал.",
+    stats: "Загальний вінрейт і те, як алгоритм справді відпрацював.",
+    watching: "Сетапи, на яких ти натиснув «Відстежувати». <code>/watching clear</code> прибирає всі.",
+    guide: "Короткі пояснення: яка стратегія що робить, чому 35% виграшів приносять прибуток і як не спалити депозит.",
+    stats_deep: "Вінрейт із беззбитковими угодами й без них, чи передбачає впевненість результат, і що каже розмір вибірки.",
+    help: "Показати це меню команд.",
+    mute: "Дві години тиші. Підписка лишається.",
+    unmute: "Зняти тишу достроково.",
+    start: "Підписатися. Також знімає тишу.",
+    stop: "Відписатися. Надішли /start, коли захочеш повернути.",
+  },
   commandsHeading: '<b>Команди</b>',
   alsoHeading: '<b>Ще</b>',
   disclaimerLong:
