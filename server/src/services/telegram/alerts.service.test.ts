@@ -15,6 +15,7 @@ process.env.TELEGRAM_COOLDOWN_MS = '5400000';
 process.env.ALERTS_SEND_GAP_MS = '1';
 process.env.ALERTS_SEND_RETRIES = '2';
 process.env.ALERTS_MAX_PER_RUN = '2';
+process.env.PUBLIC_BASE_URL = 'https://terminal.test/';
 
 const { resetMemoryStore } = await import('../store/store.js');
 const { deliveryStats } = await import('./telegram.client.js');
@@ -24,13 +25,17 @@ const trades = await import('../trades/trades.service.js');
 /** How the next Telegram call answers. */
 let reply: { status: number; body: unknown } = { status: 200, body: { ok: true, result: {} } };
 let posted: string[] = [];
+/** The inline keyboard attached to each send, in the same order. */
+let markups: { text: string; url?: string; callback_data?: string }[][][] = [];
 
 const realFetch = globalThis.fetch;
 
 before(() => {
   globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
     if (String(url).includes('api.telegram.org')) {
-      posted.push(JSON.parse(String(init?.body ?? '{}')).text ?? '');
+      const body = JSON.parse(String(init?.body ?? '{}'));
+      posted.push(body.text ?? '');
+      if (body.reply_markup?.inline_keyboard) markups.push(body.reply_markup.inline_keyboard);
       return {
         ok: reply.status < 400,
         status: reply.status,
@@ -76,7 +81,29 @@ describe('alert dispatch', () => {
   beforeEach(() => {
     resetMemoryStore();
     posted = [];
+    markups = [];
     reply = { status: 200, body: { ok: true, result: {} } };
+  });
+
+  it('puts the exchange and the terminal under a call, on separate rows', async () => {
+    /*
+     * Both are destinations, and a reader skimming an alert should not have to
+     * pick the right one of two adjacent blue buttons — hence one per row. The
+     * terminal link carries the reader's language, so it lands on the same
+     * indexable URL the site advertises to search rather than on a page that
+     * switches language under them.
+     */
+    await alerts.notifySignals([signal('INJ', 'buy')], undefined);
+
+    const rows = markups[0] ?? [];
+    const links = rows.flat().filter((button) => button.url);
+
+    assert.equal(links.length, 2);
+    assert.match(links[0]?.url ?? '', /mexc\.com/);
+    assert.match(links[1]?.url ?? '', /^https:\/\/terminal\.test\//);
+    // Separate rows, and the trailing slash of PUBLIC_BASE_URL is normalised off.
+    assert.ok(rows[0]?.length === 1 && rows[1]?.length === 1);
+    assert.ok(!(links[1]?.url ?? '').includes('//?'));
   });
 
   it('sends a confirmed call and records it', async () => {
