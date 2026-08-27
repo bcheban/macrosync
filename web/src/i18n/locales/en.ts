@@ -41,6 +41,7 @@ export const en = {
     breadth: 'Breadth {{value}}%',
     streaming: 'MEXC live stream',
     exchangeData: 'MEXC data',
+    connecting: 'Connecting…',
     disconnected: 'Exchange unreachable',
     atr: 'ATR {{value}}%',
     status: 'Market status',

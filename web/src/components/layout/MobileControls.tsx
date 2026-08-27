@@ -15,6 +15,7 @@ interface MobileControlsProps {
   context?: MarketContext;
   live: boolean;
   streaming?: boolean;
+  connecting?: boolean;
   className?: string;
 }
 
@@ -31,7 +32,13 @@ interface MobileControlsProps {
  * which makes that element the containing block for `position: fixed`
  * descendants — an in-place overlay would be clipped to the height of the bar.
  */
-export function MobileControls({ context, live, streaming = false, className }: MobileControlsProps) {
+export function MobileControls({
+  context,
+  live,
+  streaming = false,
+  connecting = false,
+  className,
+}: MobileControlsProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const titleId = useId();
@@ -157,7 +164,13 @@ export function MobileControls({ context, live, streaming = false, className }: 
 
                   <section className="space-y-2">
                     <h3 className="text-[10px] tracking-[0.16em] text-white/35 uppercase">{t('topbar.status')}</h3>
-                    <MarketStatus context={context} live={live} streaming={streaming} variant="stacked" />
+                    <MarketStatus
+                      context={context}
+                      live={live}
+                      streaming={streaming}
+                      connecting={connecting}
+                      variant="stacked"
+                    />
                   </section>
 
                   <section>

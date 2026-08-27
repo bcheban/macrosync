@@ -39,6 +39,7 @@ export const uk: Translation = {
     breadth: 'Ширина ринку {{value}}%',
     streaming: 'MEXC наживо',
     exchangeData: 'Дані MEXC',
+    connecting: 'З’єднання…',
     disconnected: 'Біржа недоступна',
     atr: 'ATR {{value}}%',
     status: 'Стан ринку',

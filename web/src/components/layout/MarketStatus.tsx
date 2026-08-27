@@ -12,6 +12,16 @@ interface MarketStatusProps {
   /** Live exchange socket, as opposed to a REST poll. */
   streaming?: boolean;
   /**
+   * The first request has not settled yet.
+   *
+   * Without this the badge has two states for three situations, and the one it
+   * cannot express is the first second of a page load: no ticker has arrived,
+   * so `live` is false, so the header announces the exchange is down before
+   * anybody has asked it anything. Silence is the honest reading of a question
+   * still in flight.
+   */
+  connecting?: boolean;
+  /**
    * `bar` progressively reveals badges as the header widens; `stacked` shows
    * all of them, for the mobile sheet where there is room.
    */
@@ -26,10 +36,19 @@ interface MarketStatusProps {
  * sheet below `md`, so the same information is reachable at every size instead
  * of being dropped on small viewports.
  */
-export function MarketStatus({ context, live, streaming = false, variant = 'bar', className }: MarketStatusProps) {
+export function MarketStatus({
+  context,
+  live,
+  streaming = false,
+  connecting = false,
+  variant = 'bar',
+  className,
+}: MarketStatusProps) {
   const { t } = useTranslation();
   const breadth = context ? Math.round(context.breadth * 100) : undefined;
   const stacked = variant === 'stacked';
+  /** Nothing has arrived and nothing has failed — the question is still open. */
+  const pending = connecting && !live;
 
   return (
     <div className={cn('flex items-center gap-2', stacked ? 'flex-wrap' : 'gap-2 sm:gap-3', className)}>
@@ -59,14 +78,25 @@ export function MarketStatus({ context, live, streaming = false, variant = 'bar'
         </Badge>
       )}
 
-      <Badge tone={live ? 'bull' : 'warn'} size="md" className={cn('max-w-full', !stacked && 'hidden md:inline-flex')}>
-        <LiveDot tone={live ? 'bull' : 'warn'} />
+      {/*
+        Three states, not two. `warn` is reserved for a feed that has actually
+        failed to answer — reaching for it while the first request is still
+        open is the whole bug this replaced.
+      */}
+      <Badge
+        tone={live ? 'bull' : pending ? 'neutral' : 'warn'}
+        size="md"
+        className={cn('max-w-full', !stacked && 'hidden md:inline-flex')}
+      >
+        <LiveDot tone={live ? 'bull' : pending ? 'neutral' : 'warn'} />
         <span className="min-w-0 truncate">
           {streaming
             ? t('topbar.streaming')
             : live
               ? t('topbar.exchangeData')
-              : t('topbar.disconnected')}
+              : pending
+                ? t('topbar.connecting')
+                : t('topbar.disconnected')}
         </span>
       </Badge>
     </div>
