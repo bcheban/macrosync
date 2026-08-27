@@ -44,9 +44,16 @@ export function GlassCard({
     <m.div
       className={cn(
         'group glass edge-light relative overflow-hidden rounded-card',
-        // `h-full` is belt-and-braces in a stretching grid; it earns its keep
-        // wherever one of these is laid out some other way.
-        fill && 'flex h-full flex-col',
+        /*
+         * Column, but no `h-full`.
+         *
+         * `height: 100%` resolves against the grid *area*, which is still the
+         * full row height even under `items-start` — so leaving it in would
+         * stretch the card straight back and quietly cancel the one class the
+         * grid sets to stop it. The column and the `flex-1` below are what
+         * `mt-auto` needs; the height is what it must not have.
+         */
+        fill && 'flex flex-col',
         interactive && 'transition-colors duration-300 hover:border-white/15',
         className,
       )}

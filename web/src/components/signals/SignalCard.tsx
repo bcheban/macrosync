@@ -205,14 +205,17 @@ export function SignalCard({
       </div>
 
       {/*
-        What the reader does about the card, pinned to its bottom edge.
+        What the reader does about the card.
 
-        `mt-auto` eats whatever slack the stretched card has, so the exchange
-        button sits the same distance from the bottom on every card in the row
-        however far the summary above it wrapped. That only holds while the
-        calculator is the last thing in here — which is why the event warning
-        now comes before it rather than after. It reads better in that order
-        anyway: the risk, and then the size to take given the risk.
+        `mt-auto` stays, but it no longer does anything most of the time: the
+        grid sets `items-start`, so a card is exactly as tall as its contents
+        and there is no slack for an auto margin to eat. It is kept for the
+        case where one of these is laid out somewhere with a definite height —
+        then the sizing block still finds the bottom rather than floating
+        halfway up.
+
+        The event warning comes before the calculator, which is the order that
+        reads: the risk, and then the size to take given the risk.
       */}
       <div className="mt-auto">
         {signal.eventWarning && (
