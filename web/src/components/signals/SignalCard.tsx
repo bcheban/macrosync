@@ -12,7 +12,18 @@ const MiniChart = lazy(() =>
   import('@/components/signals/MiniChart').then((module) => ({ default: module.MiniChart })),
 );
 import { m } from 'framer-motion';
-import { ArrowDownRight, ArrowUpRight, CandlestickChart, Eye, Hourglass, ShieldAlert } from 'lucide-react';
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  CandlestickChart,
+  ChevronDown,
+  ExternalLink,
+  Eye,
+  Hourglass,
+  ShieldAlert,
+  SlidersHorizontal,
+  type LucideIcon,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge, LiveDot } from '@/components/ui/Badge';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -21,6 +32,7 @@ import { Meter } from '@/components/ui/Meter';
 import { useTx } from '@/i18n/useTx';
 import { cn } from '@/lib/cn';
 import { formatPrice } from '@/lib/format';
+import { mexcFuturesUrl } from '@/lib/mexc';
 import type { Signal } from '@/types/domain';
 
 /**
@@ -92,6 +104,37 @@ function Level({
   );
 }
 
+/** A footer toggle. Two of these sit side by side, so they share a shape. */
+function FooterButton({
+  onClick,
+  expanded,
+  icon: Icon,
+  label,
+}: {
+  onClick: () => void;
+  expanded: boolean;
+  icon: LucideIcon;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-expanded={expanded}
+      className={cn(
+        'flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-medium transition-colors duration-200',
+        expanded
+          ? 'border-white/20 bg-white/8 text-white'
+          : 'border-white/10 bg-white/3 text-white/55 hover:border-white/20 hover:text-white/85',
+      )}
+    >
+      <Icon className="size-3.5" />
+      {label}
+      <ChevronDown className={cn('size-3.5 transition-transform duration-200', expanded && 'rotate-180')} />
+    </button>
+  );
+}
+
 export function SignalCard({
   signal,
   index,
@@ -108,6 +151,14 @@ export function SignalCard({
   const verdict = VERDICT[signal.verdict];
   const Icon = verdict.icon;
   const [chartOpen, setChartOpen] = useState(false);
+  /*
+   * Collapsed on every width, not just below `md`.
+   *
+   * Eight cards each carrying an open form is most of the page and almost
+   * none of it is being read — and on a stretched grid every one of those
+   * forms is height the shorter cards have to match.
+   */
+  const [calcOpen, setCalcOpen] = useState(false);
   const track = trackUrl(signal.symbol, signal.strategy);
 
   return (
@@ -159,20 +210,6 @@ export function SignalCard({
           </span>
         </div>
       </div>
-
-      {/* Why, in one sentence — the card's conclusion rather than its inputs. */}
-      {/*
-        This paragraph takes up whatever height the row's tallest card has over
-        this one, which fixes everything below it in place — the meter, the
-        plan and the sizing block all land the same distance from the bottom.
-        
-        The slack goes here rather than into an auto margin at the foot of the
-        card because this box has a border: a reason panel of consistent height
-        reads as a grid, where a floating gap of varying size reads as a bug.
-      */}
-      <p className="mt-3.5 grow rounded-xl border border-white/8 bg-white/3 px-3 py-2.5 text-[12.5px] leading-relaxed text-white/75">
-        {text(signal.summary)}
-      </p>
 
       <div className="mt-3.5">
         <Meter
@@ -228,81 +265,108 @@ export function SignalCard({
       </div>
 
       {/*
-        Two ways to act on the card without leaving the page: check it, or hand
-        it to the bot.
-
-        `Track` is offered on every verdict, not only on `wait`. A standing call
-        is the case where somebody most wants to be told if it flips — and the
-        button says the same thing either way, which is one fewer rule for a
-        reader to work out.
+        The sentence, after the numbers it explains.
+        
+        It reads second because a card is scanned before it is read: entry,
+        target and stop are what somebody is looking for, and a paragraph above
+        them pushes the figures to a different height on every card.
+        
+        `grow` makes this the block that absorbs whatever height the row's
+        tallest card has over this one. The slack lands here rather than in an
+        auto margin because this box has a border — a reason panel of
+        consistent height reads as a grid, where a floating gap reads as a bug.
       */}
-      <div className="mt-3 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setChartOpen((open) => !open)}
-          aria-expanded={chartOpen}
-          className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/3 px-2.5 py-1.5 text-[11px] font-medium text-white/55 transition-colors duration-200 hover:border-white/20 hover:text-white/85"
-        >
-          <CandlestickChart className="size-3.5" />
-          {t(chartOpen ? 'signals.chartHide' : 'signals.chartShow')}
-        </button>
+      <p className="mt-3.5 grow rounded-xl border border-white/8 bg-white/3 px-3 py-2.5 text-[12.5px] leading-relaxed text-white/75">
+        {text(signal.summary)}
+      </p>
 
-        {track && (
-          <a
-            href={track}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => trackEvent('track_click', { strategy: signal.strategy })}
-            className="flex items-center gap-1.5 rounded-lg border border-[#229ED9]/40 bg-[#229ED9]/12 px-2.5 py-1.5 text-[11px] font-medium text-white/80 transition-colors duration-200 hover:bg-[#229ED9]/20 hover:text-white"
-          >
-            <Eye className="size-3.5" />
-            {t('signals.track')}
-          </a>
-        )}
-      </div>
-
+      {/* Disclosures, above the footer so the buttons stay the last thing. */}
       {chartOpen && (
         <Suspense fallback={<div className="mt-3 h-40 animate-pulse rounded-xl bg-white/4 sm:h-48" />}>
           <MiniChart signal={signal} />
         </Suspense>
       )}
 
+      {calcOpen && signal.verdict !== 'wait' && <PositionCalculator signal={signal} />}
+
+      {signal.eventWarning && (
+        <m.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="mt-3.5 flex items-start gap-2 rounded-lg border border-warn/25 bg-warn/8 px-2.5 py-2"
+        >
+          <ShieldAlert className="mt-px size-3.5 shrink-0 text-warn" />
+          <p className="line-clamp-3 min-w-0 text-[11px] leading-relaxed text-warn/90">
+            {text(signal.eventWarning)}
+          </p>
+        </m.div>
+      )}
+
       {/*
-        What the reader does about the card.
+        The footer: three small toggles, then the one button that acts.
 
-        `mt-auto` stays, but it no longer does anything most of the time: the
-        grid sets `items-start`, so a card is exactly as tall as its contents
-        and there is no slack for an auto margin to eat. It is kept for the
-        case where one of these is laid out somewhere with a definite height —
-        then the sizing block still finds the bottom rather than floating
-        halfway up.
+        `mt-auto` is belt-and-braces — the summary above already grows, so
+        there is no slack left for an auto margin to claim. It is here because
+        it costs nothing and it is what keeps this anchored if the summary is
+        ever dropped or stops growing.
 
-        The event warning comes before the calculator, which is the order that
-        reads: the risk, and then the size to take given the risk.
+        The exchange link is full width and last. It used to live inside the
+        calculator; now the calculator is collapsed by default and the link
+        would have been collapsed with it, which is the one control in this
+        card nobody should have to open anything to reach.
       */}
-      <div className="mt-auto">
-        {signal.eventWarning && (
-          <m.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="mt-3.5 flex items-start gap-2 rounded-lg border border-warn/25 bg-warn/8 px-2.5 py-2"
+      <div className="mt-auto pt-3.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <FooterButton
+            onClick={() => setChartOpen((open) => !open)}
+            expanded={chartOpen}
+            icon={CandlestickChart}
+            label={t(chartOpen ? 'signals.chartHide' : 'signals.chartShow')}
+          />
+
+          {/*
+            Sizing on actionable calls only — a position calculator beside "no
+            edge right now" reads as encouragement.
+          */}
+          {signal.verdict !== 'wait' && (
+            <FooterButton
+              onClick={() => setCalcOpen((open) => !open)}
+              expanded={calcOpen}
+              icon={SlidersHorizontal}
+              label={t('calc.toggle')}
+            />
+          )}
+
+          {/*
+            Track is offered on every verdict, not only on `wait`. A standing
+            call is exactly when somebody wants to hear if it flips, and one
+            rule is easier to learn than two.
+          */}
+          {track && (
+            <a
+              href={track}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => trackEvent('track_click', { strategy: signal.strategy })}
+              className="flex h-8 items-center gap-1.5 rounded-lg border border-[#229ED9]/40 bg-[#229ED9]/12 px-2.5 text-[11px] font-medium text-white/80 transition-colors duration-200 hover:bg-[#229ED9]/20 hover:text-white"
+            >
+              <Eye className="size-3.5" />
+              {t('signals.track')}
+            </a>
+          )}
+        </div>
+
+        {signal.verdict !== 'wait' && (
+          <a
+            href={mexcFuturesUrl(signal.symbol)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 flex items-center justify-center gap-1.5 rounded-lg border border-accent/30 bg-linear-to-b from-accent/25 to-accent/10 py-2 text-[12px] font-semibold text-white transition-colors duration-200 hover:from-accent/35 hover:to-accent/15"
           >
-            <ShieldAlert className="mt-px size-3.5 shrink-0 text-warn" />
-            <p className="line-clamp-3 min-w-0 text-[11px] leading-relaxed text-warn/90">
-              {text(signal.eventWarning)}
-            </p>
-          </m.div>
+            {t('calc.tradeOn', { price: formatPrice(signal.entry) })}
+            <ExternalLink className="size-3.5" />
+          </a>
         )}
-
-        {/*
-          The levels above are what the engine decided; this is what the reader
-          does about it, and interleaving the two made the card read as one
-          undifferentiated block of numbers.
-
-          Actionable calls only — a sizing widget beside "no edge right now"
-          reads as encouragement.
-        */}
-        {signal.verdict !== 'wait' && <PositionCalculator signal={signal} />}
       </div>
     </GlassCard>
   );

@@ -1,9 +1,8 @@
-import { ChevronDown, ExternalLink, SlidersHorizontal, TrendingUp } from 'lucide-react';
+import { TrendingUp } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/cn';
 import { formatPrice } from '@/lib/format';
-import { mexcFuturesUrl } from '@/lib/mexc';
 import type { Signal } from '@/types/domain';
 
 /**
@@ -18,16 +17,11 @@ import type { Signal } from '@/types/domain';
  * trade, it never leaves the machine, and asking for it again on every visit
  * would make the widget not worth opening.
  *
- * On a phone the inputs and the arithmetic start folded away, because eight
- * cards each carrying a form is most of the page and almost none of it is being
- * read. What does not fold is the exchange link: it is the one control in here
- * every reader wants, and putting the primary action behind a disclosure to buy
- * back height would be trading away the wrong thing.
- *
- * The fold is CSS, not state — `hidden md:block` on the panel, `md:hidden` on
- * its button. Above `md` the button is in neither the layout nor the
- * accessibility tree and the panel is open whatever the toggle says, so the
- * desktop card is exactly what it was and no resize can put the two out of step.
+ * Purely the arithmetic now. Whether it is on screen at all is the card's
+ * decision — it keeps this behind a toggle on every width, because eight cards
+ * each carrying an open form is most of the page and almost none of it is being
+ * read. The exchange link moved to the card's footer for the opposite reason:
+ * it is the one control every reader wants, so it must not be behind anything.
  */
 
 const STORAGE_KEY = 'ayanox.calc';
@@ -62,9 +56,6 @@ const usd = (value: number): string =>
 export function PositionCalculator({ signal }: { signal: Signal }) {
   const { t } = useTranslation();
   const [saved, setSaved] = useState<Saved>(readSaved);
-  /** Phone-only disclosure. Ignored above `md`, where the panel is always open. */
-  const [open, setOpen] = useState(false);
-  const panelId = `calc-${signal.id}`;
 
   const persist = (next: Saved) => {
     setSaved(next);
@@ -128,29 +119,7 @@ export function PositionCalculator({ signal }: { signal: Signal }) {
 
   return (
     <div className="mt-3 rounded-xl border border-white/8 bg-black/20 p-3">
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        aria-expanded={open}
-        aria-controls={panelId}
-        /*
-          The gap rides on the button rather than the panel, so `md:hidden`
-          takes the spacing away with the control and the desktop card keeps
-          its exact measurements.
-        */
-        className={cn(
-          'flex w-full items-center justify-between gap-2 text-[11.5px] font-medium text-white/55 transition-colors duration-200 hover:text-white/85 md:hidden',
-          open && 'mb-3',
-        )}
-      >
-        <span className="flex items-center gap-1.5">
-          <SlidersHorizontal className="size-3.5" />
-          {t('calc.toggle')}
-        </span>
-        <ChevronDown className={cn('size-4 transition-transform duration-200', open && 'rotate-180')} />
-      </button>
-
-      <div id={panelId} className={cn(!open && 'hidden md:block')}>
+      <div>
         <div className="flex flex-wrap items-end gap-3">
           <label className="min-w-0 flex-1">
             <span className="mb-1 block text-[10px] tracking-wide text-white/35 uppercase">{t('calc.deposit')}</span>
@@ -228,16 +197,6 @@ export function PositionCalculator({ signal }: { signal: Signal }) {
         </p>
       </div>
 
-      {/* Outside the fold on purpose — see the note at the top of the file. */}
-      <a
-        href={mexcFuturesUrl(signal.symbol)}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-accent/30 bg-linear-to-b from-accent/25 to-accent/10 py-2 text-[12px] font-semibold text-white transition-colors duration-200 hover:from-accent/35 hover:to-accent/15"
-      >
-        {t('calc.tradeOn', { price: formatPrice(signal.entry) })}
-        <ExternalLink className="size-3.5" />
-      </a>
     </div>
   );
 }
