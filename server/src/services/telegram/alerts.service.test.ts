@@ -100,7 +100,21 @@ describe('alert dispatch', () => {
 
     assert.equal(links.length, 2);
     assert.match(links[0]?.url ?? '', /mexc\.com/);
-    assert.match(links[1]?.url ?? '', /^https:\/\/terminal\.test\//);
+
+    /*
+     * The terminal link is a deep link: the asset the alert is about, so the
+     * reader lands on its chart rather than on the board. Parsed rather than
+     * string-matched, because the thing worth pinning is that both parameters
+     * survive together — hand-built query strings are where one silently
+     * replaces the other.
+     */
+    const terminal = new URL(links[1]?.url ?? '');
+    assert.equal(terminal.origin, 'https://terminal.test');
+    assert.equal(terminal.pathname, '/');
+    assert.equal(terminal.searchParams.get('symbol'), 'INJUSDT');
+    // The owner's default locale is English, which stays the bare URL.
+    assert.equal(terminal.searchParams.get('lang'), null);
+
     // Separate rows, and the trailing slash of PUBLIC_BASE_URL is normalised off.
     assert.ok(rows[0]?.length === 1 && rows[1]?.length === 1);
     assert.ok(!(links[1]?.url ?? '').includes('//?'));

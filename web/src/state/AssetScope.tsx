@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api } from '@/lib/api';
+import { deepLinkSymbol } from '@/lib/deep-link';
 import type { AssetGroup, AssetMeta } from '@/types/domain';
 
 const STORAGE_KEY = 'ayanox.assets';
@@ -90,7 +91,24 @@ export function AssetScopeProvider({ children }: { children: ReactNode }) {
         setGroups(payload.groups);
         setDefaults(payload.defaults);
         setMaxSelected(payload.maxPerRequest);
-        setSelected(stored?.length ? stored : payload.defaults.filter((symbol) => known.has(symbol)));
+
+        const base = stored?.length ? stored : payload.defaults.filter((symbol) => known.has(symbol));
+
+        /*
+         * An asset asked for by link joins the selection; it does not replace
+         * it. Someone arriving from an alert about SUI still has whatever they
+         * were watching before, and the link reads as "also show me this"
+         * rather than as a reset of their terminal.
+         *
+         * Put first so it survives the `maxPerRequest` cut in `commit`, which
+         * takes from the head — the one asset the reader explicitly asked for
+         * is the last one that should be dropped for being over the limit.
+         *
+         * Validated against the live catalogue: a symbol the API cannot price
+         * would otherwise sit in the selection producing empty panels.
+         */
+        const asked = deepLinkSymbol && known.has(deepLinkSymbol) ? deepLinkSymbol : undefined;
+        setSelected(asked ? [asked, ...base.filter((symbol) => symbol !== asked)] : base);
       })
       .catch(() => {
         /* The panels keep working: an empty selection makes the API use its defaults. */

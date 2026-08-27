@@ -1,11 +1,12 @@
 import { m } from 'framer-motion';
 import { CandlestickChart, Radio, ShieldCheck, X } from 'lucide-react';
-import { Suspense, lazy, useMemo, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { cn } from '@/lib/cn';
+import { consumeDeepLink, deepLinkSymbol } from '@/lib/deep-link';
 import { formatPrice, timeAgo } from '@/lib/format';
 import { useAssetScope } from '@/state/AssetScope';
 import type { ActiveSignal, ActiveSignalsResponse, Strategy } from '@/types/domain';
@@ -232,6 +233,8 @@ export function LiveTrades({ data, loading }: LiveTradesProps) {
   const { t } = useTranslation();
   const { toggle, isSelected } = useAssetScope();
   const [openId, setOpenId] = useState<string>();
+  /** Set only when a deep link opened the chart, so only that case scrolls. */
+  const scrollOnOpen = useRef(false);
   /** Sections the reader has expanded on a phone. Ignored above `md`. */
   const [expanded, setExpanded] = useState<Set<Strategy>>(new Set());
   /** Narrowing, on two independent axes. `null` means "everything" on each. */
@@ -294,6 +297,47 @@ export function LiveTrades({ data, loading }: LiveTradesProps) {
 
   const total = data?.signals.length ?? 0;
   const opened = data?.signals.find((signal) => signal.id === openId);
+  const chartRef = useRef<HTMLDivElement>(null);
+
+  /*
+   * A link that names an asset opens that asset's chart, once the board has
+   * loaded enough to know whether there is one.
+   *
+   * Newest first, matching the board's own order, so a coin carrying two open
+   * trades opens the one the reader was just told about rather than an older
+   * call on the same pair.
+   *
+   * `consumeDeepLink` is what makes this fire exactly once: the poll behind
+   * `data` re-runs every few seconds, and without it every refresh would drag
+   * the reader back to this chart after they had closed it or opened another.
+   * A symbol with no open trade quietly does nothing here — it is still in the
+   * selection, so its card is in the signal grid, which is the honest outcome
+   * when there is no live trade to show.
+   */
+  useEffect(() => {
+    if (!deepLinkSymbol || !data?.signals.length) return;
+
+    const match = [...data.signals]
+      .sort((a, b) => Date.parse(b.openedAt) - Date.parse(a.openedAt))
+      .find((signal) => signal.symbol === deepLinkSymbol);
+    if (!match) return;
+    if (!consumeDeepLink()) return;
+
+    scrollOnOpen.current = true;
+    setOpenId(match.id);
+  }, [data]);
+
+  /*
+   * Arriving from an alert lands at the top of a long page with the chart far
+   * below it, so the one thing the link was for would open unseen. Scrolled
+   * only when the panel appears in response to the link, never when the reader
+   * opened it themselves — they are already looking at the card they clicked.
+   */
+  useEffect(() => {
+    if (!opened || !chartRef.current || !scrollOnOpen.current) return;
+    scrollOnOpen.current = false;
+    chartRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [opened]);
 
   const handleOpen = (trade: ActiveSignal) => {
     setOpenId((current) => (current === trade.id ? undefined : trade.id));
@@ -445,7 +489,7 @@ export function LiveTrades({ data, loading }: LiveTradesProps) {
           </div>
 
           {opened && (
-            <div className="mt-5 rounded-xl border border-white/10 bg-black/25 p-3 sm:p-4">
+            <div ref={chartRef} className="mt-5 rounded-xl border border-white/10 bg-black/25 p-3 sm:p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold text-white">
                   {opened.base}

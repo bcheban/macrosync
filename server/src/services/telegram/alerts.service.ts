@@ -60,14 +60,27 @@ export interface AlertRun {
  * the bot parses, not text anybody sees.
  */
 /**
- * The dashboard, in one language.
+ * The dashboard, in one language, optionally opened on one asset.
  *
  * English is the bare URL and the others hang off `?lang=`, which is exactly
  * how the site's own hreflang alternates are built — so a link from here lands
- * on the same indexable URL the reader would have reached from search.
+ * on the same indexable URL the reader would have reached from search. The
+ * symbol rides alongside as a deep link rather than as part of that identity:
+ * the terminal drops it from the address bar once it has opened the chart, and
+ * the canonical tag never carries it, so an alert for every pair does not turn
+ * into a hundred indexable URLs serving one page.
+ *
+ * Built through `URL` rather than by concatenation. `publicBaseUrl` already has
+ * its trailing slashes stripped, but the ordering and the escaping of two
+ * optional parameters is exactly the arithmetic that produces `//?lang=` or a
+ * stray `&` when it is done by hand.
  */
-const terminalUrl = (locale: Locale): string =>
-  locale === 'en' ? `${env.publicBaseUrl}/` : `${env.publicBaseUrl}/?lang=${locale}`;
+const terminalUrl = (locale: Locale, symbol?: string): string => {
+  const url = new URL(`${env.publicBaseUrl}/`);
+  if (locale !== 'en') url.searchParams.set('lang', locale);
+  if (symbol) url.searchParams.set('symbol', symbol);
+  return url.toString();
+};
 
 const signalKeyboard = (prefs: Prefs, symbol?: string): InlineKeyboard => {
   const t = dict(prefs.locale);
@@ -89,7 +102,7 @@ const signalKeyboard = (prefs: Prefs, symbol?: string): InlineKeyboard => {
      * skimming. Omitted entirely when `PUBLIC_BASE_URL` is unset.
      */
     ...(env.publicBaseUrl
-      ? [[{ text: t.openTerminal, url: terminalUrl(prefs.locale) }]]
+      ? [[{ text: t.openTerminal, url: terminalUrl(prefs.locale, symbol) }]]
       : []),
     [
       { text: t.statsButton, callback_data: 'stats' },

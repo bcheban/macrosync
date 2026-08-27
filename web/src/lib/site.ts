@@ -23,6 +23,16 @@ export const SITE = {
 export const LANG_PARAM = 'lang';
 
 /**
+ * The asset a deep link points at, e.g. `?symbol=BTCUSDT`.
+ *
+ * Deliberately absent from `localeUrl`, which is what feeds the canonical tag
+ * and the hreflang alternates. A link from an alert is a way in for one
+ * reader, not another page: every symbol would otherwise be a separate
+ * indexable URL serving identical markup.
+ */
+export const SYMBOL_PARAM = 'symbol';
+
+/**
  * The indexable URL for one locale.
  *
  * English is the canonical bare URL; other locales hang off `?lang=`. Keeping
