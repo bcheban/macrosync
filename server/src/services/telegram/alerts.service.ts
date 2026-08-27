@@ -8,7 +8,9 @@ import {
   telegramConfigured,
   type InlineKeyboard,
 } from './telegram.client.js';
-import { activeRecipients, unsubscribe, type Recipient } from './subscribers.service.js';
+import { activeRecipients, mutedUntil, unsubscribe, type Recipient } from './subscribers.service.js';
+import { takeTriggered } from './watches.service.js';
+import { getPrefs } from './preferences.service.js';
 import type { Channel, Locale, Prefs } from './preferences.service.js';
 import { dict } from './i18n/index.js';
 import { getAccount, mexcFuturesUrl, planPosition } from './sizing.service.js';
@@ -312,6 +314,57 @@ export function formatClose(trade: ClosedTrade, stats: TradeStats, locale: Local
  * strategy turned the per-run cap into a per-strategy one — three times the
  * messages intended — and let each strategy rank its calls in isolation.
  */
+/**
+ * Answers the watches this scan resolved.
+ *
+ * Sent per chat rather than broadcast, and deliberately without consulting the
+ * channel preferences: a watch is a question one person asked about one setup,
+ * and honouring a "no swing alerts" setting here would mean the Track button
+ * silently did nothing for most of the people who pressed it. Asking to be told
+ * about a specific setup is the stronger statement of the two.
+ *
+ * A mute is still respected. Somebody who asked for two hours of quiet asked
+ * for it about everything.
+ *
+ * `takeTriggered` removes each watch as it hands it over, so a send that fails
+ * costs one notification rather than leaving a watch to fire again on every
+ * scan for as long as the call stands.
+ */
+export async function notifyWatches(
+  signals: Signal[],
+  event: MacroEvent | undefined,
+): Promise<{ fired: number; failed: number }> {
+  if (!telegramConfigured()) return { fired: 0, failed: 0 };
+
+  const hits = await takeTriggered(signals);
+  if (!hits.length) return { fired: 0, failed: 0 };
+
+  const stats = await loadStats();
+  let fired = 0;
+  let failed = 0;
+
+  for (const { watch, signal } of hits) {
+    if (await mutedUntil(watch.chatId)) continue;
+
+    const prefs = await getPrefs(watch.chatId);
+    const t = dict(prefs.locale);
+    const label = STRATEGY_META[signal.strategy]?.label ?? signal.strategy;
+    const head = t.watchTriggered(signal.base, label);
+    const body = formatAlert(signal, signal.summary.text, event, stats, prefs.locale);
+
+    const result = await sendTelegramMessage(head + '\n\n' + body, {
+      chatId: watch.chatId,
+      keyboard: signalKeyboard(prefs, signal.symbol),
+    });
+
+    if (result.delivered) fired += 1;
+    else failed += 1;
+  }
+
+  if (fired || failed) console.info(`[watches] ${fired} answered, ${failed} failed`);
+  return { fired, failed };
+}
+
 export async function notifySignals(signals: Signal[], event: MacroEvent | undefined): Promise<AlertRun> {
   const empty: AlertRun = { sent: 0, failed: 0, dropped: 0, deliveries: 0, pruned: 0 };
   if (!telegramConfigured()) return empty;

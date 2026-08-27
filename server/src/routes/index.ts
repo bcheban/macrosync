@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { env } from '../config/env.js';
+import { round } from '../utils/indicators.js';
 import { ASSET_GROUPS } from '../data/assets.js';
 import { calendarStatus, getUpcomingEvents, getHeadlineEvent } from '../services/calendar.service.js';
 import { getNews, newsStatus } from '../services/news/news.service.js';
@@ -11,6 +12,7 @@ import {
   notifyBreakeven,
   notifyClosed,
   notifySignals,
+  notifyWatches,
   sendTestAlert,
 } from '../services/telegram/alerts.service.js';
 import { botStatus, handleUpdate, type TelegramUpdate } from '../services/telegram/webhook.service.js';
@@ -25,7 +27,7 @@ import {
 } from '../services/radar/universe.service.js';
 import { telegramStatus } from '../services/telegram/telegram.client.js';
 import { acquireLock, getJson, releaseLock, setJson, storeKey, storeStatus } from '../services/store/store.js';
-import { evaluateTrades, tradesStatus, winRate } from '../services/trades/trades.service.js';
+import { evaluateTrades, loadHistory, loadStats, tradesStatus, winRate } from '../services/trades/trades.service.js';
 
 /** Where the scheduled run records that it happened. */
 const CRON_KEY = storeKey('cron:last');
@@ -261,6 +263,17 @@ api.all(
      */
     const alerts = await notifySignals(board, headline);
 
+    /*
+     * Watches are answered from the same board, after the broadcast.
+     *
+     * After, so somebody who both subscribes to a strategy and watched one of
+     * its setups gets the ordinary call first and the "you asked about this"
+     * note second — which is the order that reads. Failures here are counted,
+     * never thrown: a scan that alerted forty people must not be marked failed
+     * because one watch could not be delivered.
+     */
+    const watches = await notifyWatches(board, headline);
+
     const { closed, movedToBreakeven, stats, open } = await evaluateTrades();
     // Announced before the closes, so a stop that moved is known before it fills.
     const protectedCount = await notifyBreakeven(movedToBreakeven);
@@ -284,6 +297,7 @@ api.all(
       radar: { offset: batch.offset, universeSize: batch.universeSize, runsPerSweep: batch.runsPerSweep },
       evaluated,
       alerts,
+      watches,
       closed: closed.map((trade) => ({ base: trade.base, strategy: trade.strategy, outcome: trade.outcome })),
       announced,
       breakeven: protectedCount,
@@ -346,6 +360,57 @@ api.post(
 
     const result = await handleUpdate((req.body ?? {}) as TelegramUpdate);
     res.json({ ok: true, ...result });
+  }),
+);
+
+/**
+ * The settled record, trade by trade.
+ *
+ * Open, unlike `/admin/analytics`, because nothing here is expensive or
+ * private: it is a bounded read of a list the ledger already keeps, and every
+ * number in it is one the dashboard publishes in aggregate anyway. A record
+ * quoted as a single percentage is a claim; the same record trade by trade is
+ * something a reader can check.
+ *
+ * `r` is what each trade actually returned in units of the risk it was opened
+ * with, computed from the levels rather than from the reward ratio the engine
+ * advertised — a trade that closed at breakeven returned zero however generous
+ * its target was, and a trade whose stop had moved risked less than its
+ * published stop implied. That distinction is the whole point of an equity
+ * curve: summing advertised ratios would draw the curve the strategy was
+ * supposed to have.
+ */
+api.get(
+  '/trades/history',
+  route(async (_req, res) => {
+    const [history, stats] = await Promise.all([loadHistory(), loadStats()]);
+
+    const trades = history
+      .filter((trade) => trade.outcome === 'win' || trade.outcome === 'loss' || trade.outcome === 'breakeven')
+      .map((trade) => {
+        const opened = trade.initialStopLoss ?? trade.stopLoss;
+        const risk = Math.abs(trade.entry - opened);
+        const long = trade.side === 'buy';
+        const exit =
+          trade.outcome === 'win' ? trade.takeProfit : trade.outcome === 'loss' ? trade.stopLoss : trade.entry;
+        const moved = long ? exit - trade.entry : trade.entry - exit;
+
+        return {
+          id: trade.id,
+          base: trade.base,
+          strategy: trade.strategy,
+          side: trade.side,
+          outcome: trade.outcome,
+          openedAt: trade.openedAt,
+          closedAt: trade.closedAt,
+          resultPct: trade.resultPct,
+          r: risk > 0 ? round(moved / risk, 3) : 0,
+        };
+      })
+      // Oldest first: an equity curve is read left to right.
+      .sort((a, b) => Date.parse(a.closedAt) - Date.parse(b.closedAt));
+
+    res.json({ trades, stats, count: trades.length });
   }),
 );
 

@@ -77,6 +77,17 @@ export const de: Dictionary = {
   closeExit: 'Ausstieg',
   closeResult: 'Ergebnis',
 
+  // --- tracked setups -------------------------------------------------------
+  watchAdded: (base, strategy) =>
+    `👁 Beobachte <b>${base}</b> auf ${strategy}.\n\nDu hörst von mir, sobald die Engine daraus einen Call macht — einmal, dann ist die Beobachtung beendet. Tippe erneut auf den Button, um sie neu zu setzen.`,
+  watchAlready: (base) => `👁 <b>${base}</b> wird auf diesem Zeitrahmen bereits beobachtet.`,
+  watchFull: '👁 Mehr Setups kann ein Chat nicht gleichzeitig beobachten. Sende /watching clear für einen Neustart.',
+  watchNone: '👁 Nichts in Beobachtung. Der Track-Button auf einer Karte fügt etwas hinzu.',
+  watchList: (rows) =>
+    `👁 <b>In Beobachtung</b>\n\n${rows.map((row) => `· ${row}`).join('\n')}\n\n<i>/watching clear entfernt alle.</i>`,
+  watchCleared: (n) => `👁 ${n} Beobachtung(en) entfernt.`,
+  watchTriggered: (base, strategy) =>
+    `👁 <b>${base}</b> — das beobachtete ${strategy}-Setup ist jetzt ein Call.`,
   statsNone: '📊 Noch keine Trades erfasst. Das erste bestätigte Signal eröffnet die Bilanz.',
   statsOnlyOpen: (open) =>
     `📊 Noch nichts abgeschlossen — ${open} laufen. Die Bilanz beginnt, wenn der erste Trade schließt.`,

@@ -82,6 +82,17 @@ export const en = {
   closeResult: 'Result',
 
   // --- stats ----------------------------------------------------------------
+  // --- tracked setups -------------------------------------------------------
+  watchAdded: (base: string, strategy: string) =>
+    `👁 Watching <b>${base}</b> on ${strategy}.\n\nYou will hear from me once the engine turns that setup into a call — once, and then the watch is done. Tap the button again to re-arm it.`,
+  watchAlready: (base: string) => `👁 Already watching <b>${base}</b> on that timeframe.`,
+  watchFull: '👁 That is as many setups as one chat can watch at a time. Send /watching clear to start over.',
+  watchNone: '👁 Nothing on watch. The Track button on a card adds one.',
+  watchList: (rows: string[]) =>
+    `👁 <b>On watch</b>\n\n${rows.map((row) => `· ${row}`).join('\n')}\n\n<i>/watching clear removes all of them.</i>`,
+  watchCleared: (n: number) => `👁 Cleared ${n} watch${n === 1 ? '' : 'es'}.`,
+  watchTriggered: (base: string, strategy: string) =>
+    `👁 <b>${base}</b> — the ${strategy} setup you were watching is now a call.`,
   statsNone: '📊 No trades on the record yet. The first confirmed call opens one.',
   statsOnlyOpen: (open: number) =>
     `📊 No settled trades yet — ${open} still open. The record starts when the first one closes.`,

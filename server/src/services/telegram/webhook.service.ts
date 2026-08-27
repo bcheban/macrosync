@@ -2,6 +2,7 @@ import type { Strategy } from '../../types/domain.js';
 import COMMAND_SPECS from '../../data/commands.json' with { type: 'json' };
 import { env } from '../../config/env.js';
 import { mute, mutedUntil, subscribe, subscribersStatus, unmute, unsubscribe } from './subscribers.service.js';
+import { addWatch, clearWatches, listWatches, parseTrackPayload } from './watches.service.js';
 import {
   answerCallbackQuery,
   editMessageReplyMarkup,
@@ -385,6 +386,16 @@ async function handleCommand(
 
   // `/start@SomeBot` in a group, and any argument, both trail the command.
   const command = line.trim().split(/[\s@]/)[0]?.toLowerCase() ?? '';
+  /*
+   * Everything after the command, kept verbatim.
+   *
+   * `/start` is the only command Telegram lets a link carry an argument for —
+   * `t.me/bot?start=<payload>` arrives as `/start <payload>` — which is what
+   * makes a deep link the whole of the web's side of this. No account, no
+   * session, nothing typed: the button on the card already knows which setup
+   * it is about, and the link carries it.
+   */
+  const payload = line.trim().split(/\s+/).slice(1).join(' ');
 
   switch (command) {
     case '/start': {
@@ -417,7 +428,52 @@ async function handleCommand(
         return;
       }
 
+      /*
+       * A tracked setup arrived with the link.
+       *
+       * Answered instead of the welcome, not after it. Somebody who pressed
+       * "Track" on a card asked one question, and replying with the full
+       * onboarding first would bury the answer under a page of text they have
+       * usually read before — the deep link is used most by people already
+       * subscribed.
+       */
+      const track = parseTrackPayload(payload);
+      if (track) {
+        const t = dict(prefs.locale);
+        const { added, full } = await addWatch({ chatId, ...track });
+        const base = track.symbol.replace(/USDT$/, '');
+
+        await sendTelegramMessage(
+          full
+            ? t.watchFull
+            : added
+              ? t.watchAdded(base, strategyLabels(prefs.locale)[track.strategy])
+              : t.watchAlready(base),
+          { chatId, replyKeyboard: hubKeyboard(prefs.locale) },
+        );
+        return;
+      }
+
       await sendTelegramMessage(welcome(prefs.locale), { chatId, replyKeyboard: hubKeyboard(prefs.locale) });
+      return;
+    }
+
+    case '/watching': {
+      const t = dict((await getPrefs(chatId)).locale);
+      const mine = await listWatches(chatId);
+
+      if (payload.trim().toLowerCase() === 'clear') {
+        const cleared = await clearWatches(chatId);
+        await sendTelegramMessage(t.watchCleared(cleared), { chatId });
+        return;
+      }
+
+      await sendTelegramMessage(
+        mine.length
+          ? t.watchList(mine.map((w) => `${w.symbol.replace(/USDT$/, '')} · ${w.strategy}`))
+          : t.watchNone,
+        { chatId },
+      );
       return;
     }
 
