@@ -271,12 +271,24 @@ export function SignalCard({
         target and stop are what somebody is looking for, and a paragraph above
         them pushes the figures to a different height on every card.
         
-        `grow` makes this the block that absorbs whatever height the row's
-        tallest card has over this one. The slack lands here rather than in an
-        auto margin because this box has a border — a reason panel of
-        consistent height reads as a grid, where a floating gap reads as a bug.
+        `grow` makes this the block that absorbs the height difference between
+        cards in a row, which is what keeps the numbers above it at the same
+        level everywhere. The slack lands in a bordered box rather than in an
+        auto margin because a reason panel of consistent height reads as a
+        grid, where a floating gap reads as a bug.
+
+        `max-h-40` is the ceiling on that, and it exists for one case: a
+        neighbour expanding its calculator adds two hundred pixels to the row,
+        and without a cap this box swallowed all of it — measured at 344px of
+        panel around 61px of text, which is the "massive empty space" this was
+        reported as. Past the cap the remainder goes to the footer's `mt-auto`
+        instead, where it reads as space rather than as a panel of nothing.
+
+        `min-h-fit` is what stops the cap ever clipping: when the two conflict
+        CSS takes the minimum, so a genuinely long summary sets its own height
+        and `max-h` is ignored. The cap can only ever limit *growth*.
       */}
-      <p className="mt-3.5 grow rounded-xl border border-white/8 bg-white/3 px-3 py-2.5 text-[12.5px] leading-relaxed text-white/75">
+      <p className="mt-3.5 max-h-40 min-h-fit grow rounded-xl border border-white/8 bg-white/3 px-3 py-2.5 text-[12.5px] leading-relaxed text-white/75">
         {text(signal.summary)}
       </p>
 
