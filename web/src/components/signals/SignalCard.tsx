@@ -146,8 +146,26 @@ export function SignalCard({
         </div>
       </div>
 
-      {/* Why, in one sentence — the card's conclusion rather than its inputs. */}
-      <p className="mt-3.5 rounded-xl border border-white/8 bg-white/3 px-3 py-2.5 text-[12.5px] leading-relaxed text-white/75">
+      {/*
+        Why, in one sentence — the card's conclusion rather than its inputs.
+
+        This paragraph is also where the card's slack goes. `grow` makes it the
+        one element that absorbs whatever height the row's tallest card has
+        over this one, which fixes everything below it in place: the confluence
+        meter, the plan and the sizing widget all end up the same distance from
+        the bottom on every card in the row.
+
+        The slack used to sit at the other end, on the sizing block. That
+        aligned the exchange button and nothing else — the meter and the plan
+        still rode on top of a summary that might be two lines or five, so
+        three cards side by side had their headings at three different heights.
+
+        The visible consequence is that this bordered box stretches rather than
+        a gap opening between two bordered blocks. That is the better of the
+        two: a panel of consistent height reads as a grid, where a floating gap
+        of varying size reads as a bug.
+      */}
+      <p className="mt-3.5 grow rounded-xl border border-white/8 bg-white/3 px-3 py-2.5 text-[12.5px] leading-relaxed text-white/75">
         {text(signal.summary)}
       </p>
 
@@ -205,16 +223,17 @@ export function SignalCard({
       </div>
 
       {/*
-        What the reader does about the card, pinned to its bottom edge.
+        What the reader does about the card.
 
-        `mt-auto` eats whatever slack the stretched card has, so the exchange
-        button sits the same distance from the bottom on every card in the row
-        however far the summary above it wrapped. That only holds while the
-        calculator is the last thing in here — which is why the event warning
-        now comes before it rather than after. It reads better in that order
-        anyway: the risk, and then the size to take given the risk.
+        No `mt-auto` here any more. With the summary growing there is no slack
+        left for a second absorber to claim, and two mechanisms competing for
+        the same free space is a thing to reason about every time this file is
+        touched rather than a thing that works.
+
+        The event warning still comes before the calculator: the risk, and then
+        the size to take given the risk.
       */}
-      <div className="mt-auto">
+      <div>
         {signal.eventWarning && (
           <m.div
             initial={{ opacity: 0 }}
