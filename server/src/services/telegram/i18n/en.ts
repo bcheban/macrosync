@@ -118,6 +118,7 @@ export const en = {
   unmuted: '🔔 Alerts are back on.',
   stopped: '👋 Unsubscribed. Send /start whenever you want them back.',
   muteButton: (hours: number) => `🔕 Mute ${hours}h`,
+  openTerminal: '🖥 Open terminal',
   statsButton: '📊 Stats',
 
   // --- guide ----------------------------------------------------------------

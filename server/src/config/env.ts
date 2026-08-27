@@ -147,6 +147,16 @@ export const env = {
    * authenticated POST is a foot-gun waiting for a mistyped curl.
    */
   adminSecret: process.env.ADMIN_SECRET ?? '',
+  /**
+   * Where the dashboard lives, for links the bot sends out.
+   *
+   * The webhook registration script has always read this name from the raw
+   * environment; this is the same value, surfaced so the running server can use
+   * it too. Empty is a valid state and means the terminal button is left off the
+   * message rather than pointed at a guess — a dead link under a live call is
+   * worse than one button fewer.
+   */
+  publicBaseUrl: (process.env.PUBLIC_BASE_URL ?? '').replace(/\/+$/, ''),
 
   /*
    * How far a trade must travel before its stop is pulled to entry.

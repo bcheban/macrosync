@@ -108,6 +108,9 @@ export const uk: Translation = {
   },
 
   liveTrades: {
+    filterStrategy: 'Фільтр за стратегією',
+    filterSide: 'Фільтр за напрямом',
+    emptyFilter: 'Немає відкритих угод за цим поєднанням. Послаб один із фільтрів.',
     showMore: 'Показати ще {{count}}',
     showLess: 'Згорнути',
     chartError: 'Не вдалося завантажити свічки',

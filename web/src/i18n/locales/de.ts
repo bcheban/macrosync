@@ -104,6 +104,9 @@ export const de: Translation = {
   },
 
   liveTrades: {
+    filterStrategy: 'Nach Strategie filtern',
+    filterSide: 'Nach Richtung filtern',
+    emptyFilter: 'Keine offenen Trades für diese Kombination. Lockere einen der Filter.',
     showMore: '{{count}} weitere anzeigen',
     showLess: 'Weniger anzeigen',
     chartError: 'Kerzen konnten nicht geladen werden',

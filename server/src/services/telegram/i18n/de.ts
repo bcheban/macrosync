@@ -109,6 +109,7 @@ export const de: Dictionary = {
   unmuted: '🔔 Meldungen sind wieder an.',
   stopped: '👋 Abgemeldet. Schick /start, wann immer du sie zurück willst.',
   muteButton: (hours) => `🔕 ${hours}h stumm`,
+  openTerminal: '🖥 Terminal öffnen',
   statsButton: '📊 Statistik',
 
   // --- guide ----------------------------------------------------------------

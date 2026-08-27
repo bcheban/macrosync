@@ -38,6 +38,59 @@ const ORDER: Strategy[] = ['scalping', 'day', 'swing'];
  */
 const MOBILE_LIMIT = 6;
 
+/** What the board can be narrowed to. `null` on either axis means everything. */
+type SideFilter = 'buy' | 'sell' | null;
+
+/**
+ * One row of filter chips.
+ *
+ * Rendered as real buttons with `aria-pressed` rather than a `<select>`: there
+ * are four options at most, they fit on one line, and a phone opening a native
+ * picker to choose between "Long" and "Short" is three taps for a decision that
+ * should be one.
+ */
+function Chips<T extends string | null>({
+  options,
+  value,
+  onChange,
+  label,
+}: {
+  options: { value: T; label: string; count?: number }[];
+  value: T;
+  onChange: (next: T) => void;
+  label: string;
+}) {
+  return (
+    <div role="group" aria-label={label} className="flex flex-wrap items-center gap-1">
+      {options.map((option) => {
+        const active = option.value === value;
+        return (
+          <button
+            key={String(option.value)}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(option.value)}
+            className={cn(
+              'rounded-lg px-2 py-1 text-[11px] font-medium transition-colors duration-150',
+              'focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:outline-none',
+              active
+                ? 'bg-white/12 text-white'
+                : 'text-white/40 hover:bg-white/6 hover:text-white/75',
+            )}
+          >
+            {option.label}
+            {option.count !== undefined && (
+              <span className={cn('tnum ml-1 font-mono', active ? 'text-white/50' : 'text-white/25')}>
+                {option.count}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 const COLUMN_ACCENT: Record<Strategy, string> = {
   scalping: 'from-warn/40',
   day: 'from-accent-soft/40',
@@ -181,6 +234,9 @@ export function LiveTrades({ data, loading }: LiveTradesProps) {
   const [openId, setOpenId] = useState<string>();
   /** Sections the reader has expanded on a phone. Ignored above `md`. */
   const [expanded, setExpanded] = useState<Set<Strategy>>(new Set());
+  /** Narrowing, on two independent axes. `null` means "everything" on each. */
+  const [strategyFilter, setStrategyFilter] = useState<Strategy | null>(null);
+  const [sideFilter, setSideFilter] = useState<SideFilter>(null);
 
   /*
    * Newest first, everywhere.
@@ -201,6 +257,40 @@ export function LiveTrades({ data, loading }: LiveTradesProps) {
       trades: signals.filter((signal) => signal.strategy === strategy),
     }));
   }, [data]);
+
+  /*
+   * Counts come off the unfiltered board, so a chip says how many it would
+   * show rather than how many survive the filter already applied. A "Long 4"
+   * that becomes "Long 0" the moment you pick Scalping is a label that changes
+   * as you read it.
+   */
+  const counts = useMemo(() => {
+    const all = data?.signals ?? [];
+    return {
+      byStrategy: Object.fromEntries(
+        ORDER.map((strategy) => [strategy, all.filter((s) => s.strategy === strategy).length]),
+      ) as Record<Strategy, number>,
+      buy: all.filter((s) => s.side === 'buy').length,
+      sell: all.filter((s) => s.side === 'sell').length,
+      all: all.length,
+    };
+  }, [data]);
+
+  /** The board after both filters, still grouped and still in section order. */
+  const shown = useMemo(
+    () =>
+      columns
+        .filter((column) => !strategyFilter || column.strategy === strategyFilter)
+        .map((column) => ({
+          ...column,
+          trades: sideFilter ? column.trades.filter((t) => t.side === sideFilter) : column.trades,
+        }))
+        .filter((column) => column.trades.length > 0),
+    [columns, strategyFilter, sideFilter],
+  );
+
+  const filtered = Boolean(strategyFilter || sideFilter);
+  const matched = shown.reduce((sum, column) => sum + column.trades.length, 0);
 
   const total = data?.signals.length ?? 0;
   const opened = data?.signals.find((signal) => signal.id === openId);
@@ -251,10 +341,47 @@ export function LiveTrades({ data, loading }: LiveTradesProps) {
             belongs on the vertical axis, where a heading costs one row, rather
             than on the horizontal one, where it costs two thirds of the width.
           */}
+          {/*
+            Two axes, one row. Strategy and direction are independent questions
+            — "show me swings" and "show me shorts" compose — so they are two
+            groups rather than one flat list where picking Long would silently
+            clear the strategy you had chosen.
+          */}
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-white/6 pb-3">
+            <Chips
+              label={t('liveTrades.filterStrategy')}
+              value={strategyFilter}
+              onChange={setStrategyFilter}
+              options={[
+                { value: null, label: t('common.all'), count: counts.all },
+                ...ORDER.map((strategy) => ({
+                  value: strategy as Strategy | null,
+                  label: t(`signals.strategies.${strategy}`),
+                  count: counts.byStrategy[strategy],
+                })),
+              ]}
+            />
+            <span aria-hidden className="hidden h-3 w-px bg-white/10 sm:block" />
+            <Chips
+              label={t('liveTrades.filterSide')}
+              value={sideFilter}
+              onChange={setSideFilter}
+              options={[
+                { value: null, label: t('common.all') },
+                { value: 'buy', label: t('liveTrades.long'), count: counts.buy },
+                { value: 'sell', label: t('liveTrades.short'), count: counts.sell },
+              ]}
+            />
+          </div>
+
+          {filtered && !matched && (
+            <p className="mt-4 px-1 py-6 text-center text-[11.5px] leading-relaxed text-white/40">
+              {t('liveTrades.emptyFilter')}
+            </p>
+          )}
+
           <div className="mt-4 space-y-5">
-            {columns
-              // An empty strategy is not information worth a heading and a box.
-              .filter((column) => column.trades.length > 0)
+            {shown
               .map((column) => (
                 <section key={column.strategy} className="min-w-0">
                   <header className="relative mb-2 flex items-baseline justify-between overflow-hidden rounded-lg px-2 py-1.5">

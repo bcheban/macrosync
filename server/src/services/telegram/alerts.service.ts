@@ -59,6 +59,16 @@ export interface AlertRun {
  * `callback_data` is capped at 64 bytes and stays English — it is an identifier
  * the bot parses, not text anybody sees.
  */
+/**
+ * The dashboard, in one language.
+ *
+ * English is the bare URL and the others hang off `?lang=`, which is exactly
+ * how the site's own hreflang alternates are built — so a link from here lands
+ * on the same indexable URL the reader would have reached from search.
+ */
+const terminalUrl = (locale: Locale): string =>
+  locale === 'en' ? `${env.publicBaseUrl}/` : `${env.publicBaseUrl}/?lang=${locale}`;
+
 const signalKeyboard = (prefs: Prefs, symbol?: string): InlineKeyboard => {
   const t = dict(prefs.locale);
 
@@ -70,6 +80,17 @@ const signalKeyboard = (prefs: Prefs, symbol?: string): InlineKeyboard => {
      * to do.
      */
     ...(symbol ? [[{ text: t.tradeOnMexc, url: mexcFuturesUrl(symbol) }]] : []),
+    /*
+     * The terminal, in the reader's own language.
+     *
+     * Second row rather than beside the exchange link: both are destinations,
+     * and a reader who wants the chart before the trade should not have to pick
+     * the right one of two adjacent blue buttons under a message they are
+     * skimming. Omitted entirely when `PUBLIC_BASE_URL` is unset.
+     */
+    ...(env.publicBaseUrl
+      ? [[{ text: t.openTerminal, url: terminalUrl(prefs.locale) }]]
+      : []),
     [
       { text: t.statsButton, callback_data: 'stats' },
       { text: t.muteButton(2), callback_data: 'mute:2' },

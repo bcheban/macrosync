@@ -103,6 +103,9 @@ export const en = {
   },
 
   liveTrades: {
+    filterStrategy: 'Filter by strategy',
+    filterSide: 'Filter by direction',
+    emptyFilter: 'No open trades match that combination. Widen one of the filters.',
     showMore: 'Show {{count}} more',
     showLess: 'Show less',
     chartError: 'Could not load the bars',
