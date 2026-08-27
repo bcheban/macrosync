@@ -99,6 +99,7 @@ export const en = {
     capped: 'Capped at your deposit — the full size needs more collateral than that holds.',
     stopNote: 'Sized so the stop, {{pct}}% away, costs exactly the risk above.',
     toggle: 'Size this trade',
+    trail: 'At {{at}} the trade is 1R ahead — trail the stop to {{to}}, one ATR ({{atr}}%) behind. Locks in profit without handing the position back to the noise it just survived.',
     tradeOn: 'Trade on MEXC',
   },
 
@@ -125,6 +126,11 @@ export const en = {
   },
 
   signals: {
+    zen: 'Focus',
+    zenOff: 'Focus mode — hide setups that are not calls yet',
+    zenOn: 'Focus mode on — showing calls only',
+    emptyZen: 'No calls right now',
+    emptyZenHint: 'Focus mode is hiding {{count}} setup(s) the engine is watching but not calling. Turn it off to see them.',
     title: 'Strategy Signals',
     showMore: 'Show {{count}} more',
     live: '{{count}} actionable',

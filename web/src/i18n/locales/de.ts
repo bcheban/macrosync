@@ -100,6 +100,7 @@ export const de: Translation = {
     capped: 'Auf deine Einlage begrenzt — die volle Größe braucht mehr Sicherheit, als sie hergibt.',
     stopNote: 'So bemessen, dass der Stop {{pct}}% entfernt genau das Risiko oben kostet.',
     toggle: 'Position berechnen',
+    trail: 'Bei {{at}} liegt der Trade 1R vorn — ziehe den Stop auf {{to}} nach, einen ATR ({{atr}}%) dahinter. Sichert Gewinn, ohne die Position dem Rauschen zurückzugeben, das sie gerade überstanden hat.',
     tradeOn: 'Auf MEXC handeln',
   },
 
@@ -126,6 +127,11 @@ export const de: Translation = {
   },
 
   signals: {
+    zen: 'Fokus',
+    zenOff: 'Fokusmodus — Setups ausblenden, die noch keine Calls sind',
+    zenOn: 'Fokusmodus an — nur Calls',
+    emptyZen: 'Gerade keine Calls',
+    emptyZenHint: 'Der Fokusmodus blendet {{count}} Setups aus, die die Engine beobachtet, aber nicht ruft. Schalte ihn aus, um sie zu sehen.',
     title: 'Strategie-Signale',
     showMore: '{{count}} weitere anzeigen',
     live: '{{count}} handelbar',

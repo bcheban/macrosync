@@ -1,4 +1,4 @@
-import { ChevronDown, ExternalLink, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, ExternalLink, SlidersHorizontal, TrendingUp } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/cn';
@@ -87,6 +87,26 @@ export function PositionCalculator({ signal }: { signal: Signal }) {
     const capped = wanted !== null && wanted > saved.balance;
     const sized = capped && leverage ? saved.balance * leverage : notional;
 
+    /*
+     * Where to drag the stop once the trade is one risk unit ahead.
+     *
+     * At 1R the position has earned the right to stop being a risk, and the
+     * usual answer — pull the stop to entry — throws that away by handing the
+     * trade back to the same noise it just survived. This trails one ATR
+     * behind the 1R mark instead: still locked in profit, but with the room
+     * the asset's own volatility says a move needs.
+     *
+     * Signed by side, so a short's trail sits above the price rather than
+     * below it. `atrPct` is the engine's own reading off the candles the
+     * levels came from, so this cannot disagree with the stop distance beside
+     * it about how volatile the asset is.
+     */
+    const long = signal.takeProfit > signal.entry;
+    const risk = Math.abs(signal.entry - signal.stopLoss);
+    const atr = (signal.indicators.atrPct / 100) * signal.entry;
+    const oneR = signal.entry + (long ? risk : -risk);
+    const trail = atr > 0 ? oneR - (long ? atr : -atr) : null;
+
     return {
       riskAmount,
       stopPct: stopFraction * 100,
@@ -95,6 +115,14 @@ export function PositionCalculator({ signal }: { signal: Signal }) {
       margin: capped ? saved.balance : wanted,
       leverage,
       capped,
+      oneR,
+      /*
+       * Only offered when it is actually an improvement. One ATR behind 1R can
+       * land below entry on an asset whose ATR is wider than its own stop, and
+       * a trailing stop that locks in a loss is not one — a number that looks
+       * like advice is worse than no number.
+       */
+      trail: trail !== null && (long ? trail > signal.entry : trail < signal.entry) ? trail : null,
     };
   }, [signal, saved]);
 
@@ -180,6 +208,19 @@ export function PositionCalculator({ signal }: { signal: Signal }) {
               </dd>
             </div>
           </dl>
+        )}
+
+        {plan?.trail != null && (
+          <div className="mt-2.5 flex items-start gap-1.5 rounded-lg border border-bull/20 bg-bull/6 px-2.5 py-2">
+            <TrendingUp className="mt-px size-3.5 shrink-0 text-bull" />
+            <p className="min-w-0 text-[10.5px] leading-snug text-white/55">
+              {t('calc.trail', {
+                at: formatPrice(plan.oneR),
+                to: formatPrice(plan.trail),
+                atr: signal.indicators.atrPct.toFixed(2),
+              })}
+            </p>
+          </div>
         )}
 
         <p className="mt-2.5 text-[10.5px] leading-snug text-white/30">

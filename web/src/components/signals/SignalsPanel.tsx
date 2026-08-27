@@ -14,6 +14,7 @@ import { AssetFocusTabs, type AssetFocus } from './AssetFocusTabs';
 import { SignalCard } from './SignalCard';
 import { SignalCardSkeleton } from './SignalCardSkeleton';
 import { StrategyTabs } from './StrategyTabs';
+import { ZenToggle, useZenMode } from './ZenToggle';
 
 /**
  * How many signal cards a phone shows before asking.
@@ -44,6 +45,7 @@ export function SignalsPanel() {
   const { selected, bySymbol, loading: scopeLoading } = useAssetScope();
   const [strategy, setStrategy] = useState<Strategy>('day');
   const [focus, setFocus] = useState<AssetFocus>(null);
+  const [zen, setZen] = useZenMode();
   /** Whether the reader has asked for the rest, on a phone. Ignored above `md`. */
   const [expanded, setExpanded] = useState(false);
 
@@ -100,13 +102,22 @@ export function SignalsPanel() {
    * what must not happen is those four all being `wait` — the reader would
    * scroll the whole panel without meeting one call they could act on.
    */
-  const visible = useMemo(() => {
+  const { visible, hiddenByZen } = useMemo(() => {
     const scoped = focus ? signals.filter((item) => item.base === focus) : signals;
-    return [
-      ...scoped.filter((item) => item.verdict !== 'wait'),
-      ...scoped.filter((item) => item.verdict === 'wait'),
-    ];
-  }, [signals, focus]);
+    const actionable = scoped.filter((item) => item.verdict !== 'wait');
+    const setups = scoped.filter((item) => item.verdict === 'wait');
+
+    /*
+     * The ordering above already splits the board on exactly the line zen mode
+     * cares about, so the mode is not a second filter — it is the decision not
+     * to append the second half. Keeping it as one expression means the sort
+     * and the mode cannot drift into disagreeing about what "actionable" is.
+     */
+    return {
+      visible: zen ? actionable : [...actionable, ...setups],
+      hiddenByZen: setups.length,
+    };
+  }, [signals, focus, zen]);
   // Counts actionable calls, which is what the badge implies — a `forming`
   // long is a watch item, and counting it made the header overstate the tape.
   const liveCount = visible.filter((item) => item.verdict !== 'wait').length;
@@ -129,6 +140,7 @@ export function SignalsPanel() {
                 {timeAgo(new Date(lastUpdated).toISOString())}
               </span>
             )}
+            <ZenToggle value={zen} onChange={setZen} hidden={hiddenByZen} />
             <Badge tone={liveCount ? 'bull' : 'neutral'}>{t('signals.live', { count: liveCount })}</Badge>
           </div>
         }
@@ -157,10 +169,23 @@ export function SignalsPanel() {
           </span>
 
           <p className="text-[14px] font-semibold text-white/85">
-            {focus ? t('signals.emptyFocus', { asset: focus }) : t('signals.empty')}
+            {zen && hiddenByZen > 0
+              ? t('signals.emptyZen')
+              : focus
+                ? t('signals.emptyFocus', { asset: focus })
+                : t('signals.empty')}
           </p>
           <p className="max-w-md text-[12px] leading-relaxed text-white/45">
-            {focus ? t('signals.emptyFocusHint') : t('signals.onboarding')}
+            {/*
+              A board emptied by the mode is not an empty board. Telling
+              somebody to pick an asset when they already have twelve would
+              read as the panel having lost them.
+            */}
+            {zen && hiddenByZen > 0
+              ? t('signals.emptyZenHint', { count: hiddenByZen })
+              : focus
+                ? t('signals.emptyFocusHint')
+                : t('signals.onboarding')}
           </p>
 
           {focus ? (
