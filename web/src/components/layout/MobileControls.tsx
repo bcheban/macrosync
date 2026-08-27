@@ -155,6 +155,20 @@ export function MobileControls({ context, live, streaming = false, className }: 
                       dashboard visit into an ongoing subscription. */}
                   <TelegramCta variant="banner" />
 
+                  {/*
+                    Language first, above the asset list.
+                    
+                    It used to sit last, which put it under sixteen assets and
+                    a group filter — a setting somebody opens this panel
+                    specifically to change, reachable only by scrolling past
+                    everything they did not come for. The asset picker is the
+                    long block, so anything below it is effectively hidden.
+                  */}
+                  <section className="space-y-2">
+                    <h3 className="text-[10px] tracking-[0.16em] text-white/35 uppercase">{t('language.label')}</h3>
+                    <LanguageSwitcher variant="list" />
+                  </section>
+
                   <section className="space-y-2">
                     <h3 className="text-[10px] tracking-[0.16em] text-white/35 uppercase">{t('topbar.status')}</h3>
                     <MarketStatus context={context} live={live} streaming={streaming} variant="stacked" />
@@ -164,13 +178,6 @@ export function MobileControls({ context, live, streaming = false, className }: 
                     <AssetPicker listClassName="max-h-[46vh]" />
                   </section>
 
-                  <section className="space-y-2">
-                    <h3 className="text-[10px] tracking-[0.16em] text-white/35 uppercase">{t('language.label')}</h3>
-                    {/* A list, not a dropdown: the sheet is already a menu,
-                        and its scroll container would clip one opening from
-                        the last block in it. */}
-                    <LanguageSwitcher variant="list" />
-                  </section>
                 </div>
               </m.div>
             </div>

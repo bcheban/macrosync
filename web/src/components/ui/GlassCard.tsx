@@ -45,15 +45,15 @@ export function GlassCard({
       className={cn(
         'group glass edge-light relative overflow-hidden rounded-card',
         /*
-         * Column, but no `h-full`.
+         * A full-height column.
          *
-         * `height: 100%` resolves against the grid *area*, which is still the
-         * full row height even under `items-start` — so leaving it in would
-         * stretch the card straight back and quietly cancel the one class the
-         * grid sets to stop it. The column and the `flex-1` below are what
-         * `mt-auto` needs; the height is what it must not have.
+         * `height: 100%` resolves against the grid area, which is the row's
+         * height — so this is what makes a short card as tall as its tallest
+         * neighbour. It only works while the grid is stretching: an
+         * `items-start` on the container cancels it, and the two have been
+         * swapped back and forth here, so they are worth reading together.
          */
-        fill && 'flex flex-col',
+        fill && 'flex h-full flex-col',
         interactive && 'transition-colors duration-300 hover:border-white/15',
         className,
       )}

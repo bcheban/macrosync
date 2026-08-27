@@ -44,6 +44,7 @@ export function InsightCard({ insight, index }: { insight: AiInsight; index: num
   return (
     <GlassCard
       interactive
+      fill
       glow={insight.sentiment === 'bearish' ? 'bear' : insight.sentiment === 'bullish' ? 'bull' : 'cyber'}
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
@@ -158,7 +159,20 @@ export function InsightCard({ insight, index }: { insight: AiInsight; index: num
         )}
       </AnimatePresence>
 
-      <div className="mt-4 flex items-center gap-3 border-t border-white/6 pt-3">
+      {/*
+        The footer, on the bottom edge.
+        
+        `mt-auto` rather than growing the scenarios above it, which is what the
+        signal cards do — the difference is what the slack would look like. A
+        list of scenarios stretched to fill leaves a gap *inside* the list,
+        between the last scenario and nothing; here the slack sits above a
+        rule, where extra room reads as the space before a footer.
+        
+        Cards in a row are the same height because the grid stretches them and
+        `fill` gives this column something to fill. Take either away and the
+        meters go back to floating at three different heights.
+      */}
+      <div className="mt-auto flex items-center gap-3 border-t border-white/6 pt-3">
         <Meter value={insight.confidence} tone="accent" className="min-w-0 flex-1" />
         <span className="tnum shrink-0 font-mono text-[11px] whitespace-nowrap text-white/40">
           {t('insights.conviction', { value: String(insight.confidence) })}

@@ -161,7 +161,16 @@ export function SignalCard({
       </div>
 
       {/* Why, in one sentence — the card's conclusion rather than its inputs. */}
-      <p className="mt-3.5 rounded-xl border border-white/8 bg-white/3 px-3 py-2.5 text-[12.5px] leading-relaxed text-white/75">
+      {/*
+        This paragraph takes up whatever height the row's tallest card has over
+        this one, which fixes everything below it in place — the meter, the
+        plan and the sizing block all land the same distance from the bottom.
+        
+        The slack goes here rather than into an auto margin at the foot of the
+        card because this box has a border: a reason panel of consistent height
+        reads as a grid, where a floating gap of varying size reads as a bug.
+      */}
+      <p className="mt-3.5 grow rounded-xl border border-white/8 bg-white/3 px-3 py-2.5 text-[12.5px] leading-relaxed text-white/75">
         {text(signal.summary)}
       </p>
 

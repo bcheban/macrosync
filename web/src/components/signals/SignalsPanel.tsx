@@ -210,22 +210,15 @@ export function SignalsPanel() {
       )}
 
       {/*
-        `items-start`: every card is as tall as its own contents.
+        Stretching, and the slack has somewhere to go.
         
-        A grid stretches its items by default, so one card carrying a sizing
-        widget and an event warning made every other card in its row that tall
-        — and the shorter ones paid for it in dead space they had nothing to
-        put in. Cards of honest height and a ragged bottom edge is the better
-        of the two: the ragged edge is information about the cards, where the
-        empty space was information about nothing.
-        
-        The cost, and it is a real one: the exchange buttons no longer line up
-        across a row. That alignment is what the stretching bought.
+        This grid was on `items-start` for a while, because pinning only the
+        sizing block with `mt-auto` left every short card with one dead gap
+        above it. The fix is not to stop stretching — it is to put the slack
+        somewhere that looks deliberate: the summary below grows, so a short
+        card gets a taller reason panel rather than a hole.
       */}
-      <m.div
-        layout
-        className="grid min-w-0 items-start gap-4 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-4"
-      >
+      <m.div layout className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-4">
         {/* As many placeholders as signals are expected, so the grid does not
             change height when the payload lands. */}
         {waiting
