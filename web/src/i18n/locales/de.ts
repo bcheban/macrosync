@@ -42,7 +42,6 @@ export const de: Translation = {
     breadth: 'Marktbreite {{value}}%',
     streaming: 'MEXC-Livestream',
     exchangeData: 'MEXC-Daten',
-    connecting: 'Verbinde…',
     disconnected: 'Börse nicht erreichbar',
     atr: 'ATR {{value}}%',
     status: 'Marktstatus',

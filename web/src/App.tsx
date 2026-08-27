@@ -92,13 +92,6 @@ function Dashboard() {
         context={insights.data?.context}
         tickers={market.tickers}
         streaming={market.streaming}
-        /*
-         * The first ticker request, still open. `loading` alone is not enough:
-         * it is also true on the refresh that follows a tab coming back into
-         * view, and the header should not re-announce "connecting" over data
-         * that is already on screen.
-         */
-        connecting={tickers.loading && !tickers.data}
         refreshing={refreshing}
         onRefresh={refreshAll}
       />

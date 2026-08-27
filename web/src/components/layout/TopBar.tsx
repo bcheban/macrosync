@@ -16,8 +16,6 @@ interface TopBarProps {
   tickers: Ticker[];
   /** True while the exchange WebSocket is delivering ticks. */
   streaming?: boolean;
-  /** The first ticker request has not settled. Suppresses the "down" reading. */
-  connecting?: boolean;
   refreshing: boolean;
   onRefresh: () => void;
 }
@@ -31,14 +29,7 @@ interface TopBarProps {
  * Nothing is dropped on the way down — what leaves the bar moves into the
  * mobile sheet, so a phone reaches every control the desktop has.
  */
-export function TopBar({
-  context,
-  tickers,
-  streaming = false,
-  connecting = false,
-  refreshing,
-  onRefresh,
-}: TopBarProps) {
+export function TopBar({ context, tickers, streaming = false, refreshing, onRefresh }: TopBarProps) {
   const { t } = useTranslation();
   /*
    * "Live" means the exchange is actually answering — either the socket is
@@ -97,7 +88,7 @@ export function TopBar({
           </div>
 
           <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
-            <MarketStatus context={context} live={live} streaming={streaming} connecting={connecting} />
+            <MarketStatus context={context} live={live} streaming={streaming} />
 
             <TelegramCta className="hidden sm:flex" />
             <AssetSelector className="hidden md:block" />
@@ -113,13 +104,7 @@ export function TopBar({
               <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
             </button>
 
-            <MobileControls
-              context={context}
-              live={live}
-              streaming={streaming}
-              connecting={connecting}
-              className="md:hidden"
-            />
+            <MobileControls context={context} live={live} streaming={streaming} className="md:hidden" />
           </div>
         </div>
       </div>
