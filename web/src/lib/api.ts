@@ -1,4 +1,5 @@
 import type {
+  TradeHistoryResponse,
   ActiveSignalsResponse,
   AssetsResponse,
   CandlesResponse,
@@ -28,6 +29,9 @@ const query = (...parts: string[]): string => {
 
 export const api = {
   assets: (signal?: AbortSignal) => get<AssetsResponse>('/assets', signal),
+
+  /** The settled record, trade by trade, for the journal. */
+  tradeHistory: (signal?: AbortSignal) => get<TradeHistoryResponse>('/trades/history', signal),
 
   tickers: (symbols: string[], signal?: AbortSignal) =>
     get<TickersResponse>(`/market/tickers${query(symbolsParam(symbols))}`, signal),

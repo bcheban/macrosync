@@ -126,12 +126,22 @@ export const de: Translation = {
       'Keine offenen Trades. Der Scanner geht die liquiden MEXC-Paare alle paar Minuten durch und eröffnet hier einen, sobald ein Signal bestätigt ist.',
   },
 
+  journal: {
+    title: 'Handelsjournal',
+    bySetup: 'Nach Strategie',
+    thin: 'Noch zu wenige abgeschlossene Trades für eine Kurve. Die ersten schließen ein bis zwei Tage nach einem Scan.',
+    footnote: 'Kumulierte Rendite in R — eine Einheit ist das Risiko, mit dem ein Trade eröffnet wurde. {{count}} abgeschlossene Trades. Breakeven zählt als null und bleibt in der Kurve; verfallene und ersetzte Calls sind keine Trades und fehlen.',
+  },
+
   signals: {
     zen: 'Fokus',
     zenOff: 'Fokusmodus — Setups ausblenden, die noch keine Calls sind',
     zenOn: 'Fokusmodus an — nur Calls',
     emptyZen: 'Gerade keine Calls',
     emptyZenHint: 'Der Fokusmodus blendet {{count}} Setups aus, die die Engine beobachtet, aber nicht ruft. Schalte ihn aus, um sie zu sehen.',
+    track: 'Verfolgen',
+    chartShow: 'Chart',
+    chartHide: 'Chart ausblenden',
     title: 'Strategie-Signale',
     showMore: '{{count}} weitere anzeigen',
     live: '{{count}} handelbar',

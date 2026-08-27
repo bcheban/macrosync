@@ -1,6 +1,18 @@
 import { PositionCalculator } from '@/components/signals/PositionCalculator';
+import { Suspense, lazy, useState } from 'react';
+import { trackEvent } from '@/lib/analytics';
+import { trackUrl } from '@/lib/telegram';
+
+/*
+ * The chart renderer is the heaviest import this app has and most sessions
+ * never expand a card, so it is fetched on the first click rather than shipped
+ * in the entry bundle.
+ */
+const MiniChart = lazy(() =>
+  import('@/components/signals/MiniChart').then((module) => ({ default: module.MiniChart })),
+);
 import { m } from 'framer-motion';
-import { ArrowDownRight, ArrowUpRight, Hourglass, ShieldAlert } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, CandlestickChart, Eye, Hourglass, ShieldAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge, LiveDot } from '@/components/ui/Badge';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -95,6 +107,8 @@ export function SignalCard({
 
   const verdict = VERDICT[signal.verdict];
   const Icon = verdict.icon;
+  const [chartOpen, setChartOpen] = useState(false);
+  const track = trackUrl(signal.symbol, signal.strategy);
 
   return (
     <GlassCard
@@ -203,6 +217,46 @@ export function SignalCard({
           {t('signals.volume')} <span className="text-white/60">{signal.indicators.volumeRatio}×</span>
         </span>
       </div>
+
+      {/*
+        Two ways to act on the card without leaving the page: check it, or hand
+        it to the bot.
+
+        `Track` is offered on every verdict, not only on `wait`. A standing call
+        is the case where somebody most wants to be told if it flips — and the
+        button says the same thing either way, which is one fewer rule for a
+        reader to work out.
+      */}
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setChartOpen((open) => !open)}
+          aria-expanded={chartOpen}
+          className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/3 px-2.5 py-1.5 text-[11px] font-medium text-white/55 transition-colors duration-200 hover:border-white/20 hover:text-white/85"
+        >
+          <CandlestickChart className="size-3.5" />
+          {t(chartOpen ? 'signals.chartHide' : 'signals.chartShow')}
+        </button>
+
+        {track && (
+          <a
+            href={track}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => trackEvent('track_click', { strategy: signal.strategy })}
+            className="flex items-center gap-1.5 rounded-lg border border-[#229ED9]/40 bg-[#229ED9]/12 px-2.5 py-1.5 text-[11px] font-medium text-white/80 transition-colors duration-200 hover:bg-[#229ED9]/20 hover:text-white"
+          >
+            <Eye className="size-3.5" />
+            {t('signals.track')}
+          </a>
+        )}
+      </div>
+
+      {chartOpen && (
+        <Suspense fallback={<div className="mt-3 h-40 animate-pulse rounded-xl bg-white/4 sm:h-48" />}>
+          <MiniChart signal={signal} />
+        </Suspense>
+      )}
 
       {/*
         What the reader does about the card.

@@ -6,6 +6,7 @@ import { CountdownRadar } from '@/components/countdown/CountdownRadar';
 import { EventQueue } from '@/components/countdown/EventQueue';
 import { CardSkeleton } from '@/components/ui/Skeleton';
 import { BackgroundFX } from '@/components/layout/BackgroundFX';
+import { Journal } from '@/components/insights/Journal';
 import { TopBar } from '@/components/layout/TopBar';
 import { TickerStrip } from '@/components/market/TickerStrip';
 import { Watchlist } from '@/components/market/Watchlist';
@@ -53,6 +54,7 @@ function Dashboard() {
   const market = useMarketTickers(tickers.data?.tickers ?? []);
   // Low-impact calendar noise is hidden by default; the queue can reveal it.
   const [showLowImpact, setShowLowImpact] = useState(false);
+  const [journalOpen, setJournalOpen] = useState(false);
   const events = usePolling((signal) => api.events(showLowImpact, signal), 30_000, [showLowImpact]);
   // Re-fetched on a language switch: model-written insights come back translated.
   /*
@@ -88,12 +90,15 @@ function Dashboard() {
     <div className="min-h-screen">
       <BackgroundFX />
 
+      {journalOpen && <Journal onClose={() => setJournalOpen(false)} />}
+
       <TopBar
         context={insights.data?.context}
         tickers={market.tickers}
         streaming={market.streaming}
         refreshing={refreshing}
         onRefresh={refreshAll}
+        onOpenJournal={() => setJournalOpen(true)}
       />
       <TickerStrip tickers={market.tickers} />
 

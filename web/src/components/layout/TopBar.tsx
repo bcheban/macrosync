@@ -1,5 +1,5 @@
 import { m } from 'framer-motion';
-import { RefreshCw } from 'lucide-react';
+import { LineChart, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
 import { MarketStatus } from '@/components/layout/MarketStatus';
@@ -18,6 +18,8 @@ interface TopBarProps {
   streaming?: boolean;
   refreshing: boolean;
   onRefresh: () => void;
+  /** Opens the trade journal. */
+  onOpenJournal: () => void;
 }
 
 /**
@@ -29,7 +31,14 @@ interface TopBarProps {
  * Nothing is dropped on the way down — what leaves the bar moves into the
  * mobile sheet, so a phone reaches every control the desktop has.
  */
-export function TopBar({ context, tickers, streaming = false, refreshing, onRefresh }: TopBarProps) {
+export function TopBar({
+  context,
+  tickers,
+  streaming = false,
+  refreshing,
+  onRefresh,
+  onOpenJournal,
+}: TopBarProps) {
   const { t } = useTranslation();
   /*
    * "Live" means the exchange is actually answering — either the socket is
@@ -93,6 +102,21 @@ export function TopBar({ context, tickers, streaming = false, refreshing, onRefr
             <TelegramCta className="hidden sm:flex" />
             <AssetSelector className="hidden md:block" />
             <LanguageSwitcher className="hidden md:flex" />
+
+            {/*
+              The record, one tap from anywhere. Beside refresh rather than
+              inside the panels below: it is about the whole board's history,
+              not about whatever happens to be on screen.
+            */}
+            <button
+              type="button"
+              onClick={onOpenJournal}
+              aria-label={t('journal.title')}
+              title={t('journal.title')}
+              className="glass-soft hidden size-9 shrink-0 items-center justify-center rounded-xl text-white/60 transition-all duration-200 hover:border-white/20 hover:bg-white/6 hover:text-white focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none active:scale-95 sm:flex"
+            >
+              <LineChart className="size-4" />
+            </button>
 
             <button
               type="button"

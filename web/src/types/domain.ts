@@ -265,3 +265,28 @@ export interface InsightsResponse {
   insights: AiInsight[];
   context: MarketContext;
 }
+
+/** One settled trade, as `/api/trades/history` reports it. */
+export interface JournalTrade {
+  id: string;
+  base: string;
+  strategy: Strategy;
+  side: 'buy' | 'sell';
+  outcome: 'win' | 'loss' | 'breakeven';
+  openedAt: string;
+  closedAt: string;
+  resultPct: number;
+  /**
+   * What the trade returned in units of the risk it was opened with.
+   *
+   * Computed by the server from the published levels rather than from the
+   * advertised reward ratio, so a breakeven close is zero however generous its
+   * target was.
+   */
+  r: number;
+}
+
+export interface TradeHistoryResponse {
+  trades: JournalTrade[];
+  count: number;
+}

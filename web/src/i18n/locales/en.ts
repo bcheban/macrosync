@@ -125,12 +125,22 @@ export const en = {
       'No trades open. The scanner sweeps the liquid MEXC pairs every few minutes and opens one here the moment a call is confirmed.',
   },
 
+  journal: {
+    title: 'Trade journal',
+    bySetup: 'By setup',
+    thin: 'Not enough settled trades yet to draw a curve. The first few close within a day or two of a scan.',
+    footnote: 'Cumulative return in R — one unit is the risk each trade was opened with. {{count}} settled trades. Breakeven closes count as zero and stay in the curve; expired and superseded calls are not trades and are left out.',
+  },
+
   signals: {
     zen: 'Focus',
     zenOff: 'Focus mode — hide setups that are not calls yet',
     zenOn: 'Focus mode on — showing calls only',
     emptyZen: 'No calls right now',
     emptyZenHint: 'Focus mode is hiding {{count}} setup(s) the engine is watching but not calling. Turn it off to see them.',
+    track: 'Track',
+    chartShow: 'Chart',
+    chartHide: 'Hide chart',
     title: 'Strategy Signals',
     showMore: 'Show {{count}} more',
     live: '{{count}} actionable',
