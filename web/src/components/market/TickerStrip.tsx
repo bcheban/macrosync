@@ -2,6 +2,7 @@ import { TrendingDown, TrendingUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/cn';
+import { displayTicker } from '@/lib/ticker';
 import { formatPct, formatPrice } from '@/lib/format';
 import type { Ticker } from '@/types/domain';
 
@@ -79,7 +80,7 @@ export function TickerStrip({ tickers }: { tickers: Ticker[] }) {
           const Icon = up ? TrendingUp : TrendingDown;
           return (
             <div key={`${ticker.symbol}-${index}`} className="flex items-center gap-2 text-xs whitespace-nowrap">
-              <span className="font-semibold tracking-wide text-white/80">{ticker.base}</span>
+              <span className="font-semibold tracking-wide text-white/80">{displayTicker(ticker.base)}</span>
               <span className="tnum font-mono text-white/55">{formatPrice(ticker.price)}</span>
               <span className={cn('tnum inline-flex items-center gap-1 font-mono', up ? 'text-bull' : 'text-bear')}>
                 <Icon className="size-3" />

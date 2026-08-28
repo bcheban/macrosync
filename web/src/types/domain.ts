@@ -277,6 +277,12 @@ export interface JournalTrade {
   closedAt: string;
   resultPct: number;
   /**
+   * The confluence reading the call was made on, or `null` for trades opened
+   * before the ledger stored it. Never defaulted — an invented figure would
+   * land in a band and bias its win rate.
+   */
+  confidence: number | null;
+  /**
    * What the trade returned in units of the risk it was opened with.
    *
    * Computed by the server from the published levels rather than from the

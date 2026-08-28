@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { usePolling } from '@/hooks/usePolling';
 import { api } from '@/lib/api';
+import { bandOf, BANDS, type Band } from '@/lib/confidence';
 import { cn } from '@/lib/cn';
 import { timeAgo } from '@/lib/format';
 import { useAssetScope } from '@/state/AssetScope';
@@ -13,6 +14,7 @@ import type { Strategy } from '@/types/domain';
 import { AssetFocusTabs, type AssetFocus } from './AssetFocusTabs';
 import { SignalCard } from './SignalCard';
 import { SignalCardSkeleton } from './SignalCardSkeleton';
+import { ConfidenceFilter } from './ConfidenceFilter';
 import { StrategyTabs } from './StrategyTabs';
 import { ZenToggle, useZenMode } from './ZenToggle';
 
@@ -46,6 +48,17 @@ export function SignalsPanel() {
   const [strategy, setStrategy] = useState<Strategy>('day');
   const [focus, setFocus] = useState<AssetFocus>(null);
   const [zen, setZen] = useZenMode();
+  const [band, setBand] = useState<Band | null>(null);
+
+  /*
+   * The settled record, for the win rate beside the band filter.
+   *
+   * Its own request on its own clock: the history changes when a trade closes,
+   * which is minutes to days apart, where the board re-reads every fifteen to
+   * sixty seconds. Polling them together would fetch the ledger dozens of
+   * times for every change in it.
+   */
+  const history = usePolling((signal) => api.tradeHistory(signal), 180_000);
   /** Whether the reader has asked for the rest, on a phone. Ignored above `md`. */
   const [expanded, setExpanded] = useState(false);
 
@@ -102,8 +115,17 @@ export function SignalsPanel() {
    * what must not happen is those four all being `wait` — the reader would
    * scroll the whole panel without meeting one call they could act on.
    */
+  /* Band counts come off the unfiltered board, so a chip says how many it
+     would show rather than how many survive a filter already applied. */
+  const bandCounts = useMemo(() => {
+    const tally = Object.fromEntries(BANDS.map((key) => [key, 0])) as Record<Band, number>;
+    for (const item of signals) tally[bandOf(item.confidence)] += 1;
+    return tally;
+  }, [signals]);
+
   const { visible, hiddenByZen } = useMemo(() => {
-    const scoped = focus ? signals.filter((item) => item.base === focus) : signals;
+    const byFocus = focus ? signals.filter((item) => item.base === focus) : signals;
+    const scoped = band ? byFocus.filter((item) => bandOf(item.confidence) === band) : byFocus;
     const actionable = scoped.filter((item) => item.verdict !== 'wait');
     const setups = scoped.filter((item) => item.verdict === 'wait');
 
@@ -117,7 +139,7 @@ export function SignalsPanel() {
       visible: zen ? actionable : [...actionable, ...setups],
       hiddenByZen: setups.length,
     };
-  }, [signals, focus, zen]);
+  }, [signals, focus, zen, band]);
   // Counts actionable calls, which is what the badge implies — a `forming`
   // long is a watch item, and counting it made the header overstate the tape.
   const liveCount = visible.filter((item) => item.verdict !== 'wait').length;
@@ -149,6 +171,12 @@ export function SignalsPanel() {
       <div className="space-y-2.5">
         <StrategyTabs value={strategy} onChange={setStrategy} />
         <AssetFocusTabs bases={bases} value={focus} onChange={setFocus} counts={counts} />
+        <ConfidenceFilter
+          value={band}
+          onChange={setBand}
+          counts={bandCounts}
+          trades={history.data?.trades ?? []}
+        />
       </div>
 
       {error && !signals.length && (

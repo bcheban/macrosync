@@ -6,6 +6,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { cn } from '@/lib/cn';
+import { displayTicker } from '@/lib/ticker';
 import { consumeDeepLink, deepLinkSymbol } from '@/lib/deep-link';
 import { formatPrice, timeAgo } from '@/lib/format';
 import { useAssetScope } from '@/state/AssetScope';
@@ -165,7 +166,7 @@ function TradeCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
-            <span className="truncate text-[14px] leading-none font-semibold text-white">{trade.base}</span>
+            <span className="truncate text-[14px] leading-none font-semibold text-white">{displayTicker(trade.base)}</span>
             {trade.breakevenAt && (
               <ShieldCheck className="size-3.5 shrink-0 text-bull" aria-label={t('liveTrades.protected')} />
             )}
@@ -492,7 +493,7 @@ export function LiveTrades({ data, loading }: LiveTradesProps) {
             <div ref={chartRef} className="mt-5 rounded-xl border border-white/10 bg-black/25 p-3 sm:p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold text-white">
-                  {opened.base}
+                  {displayTicker(opened.base)}
                   <span className="ml-2 text-[11px] font-normal text-white/40">
                     {t(`signals.strategies.${opened.strategy}`)} · {opened.timeframe}
                   </span>

@@ -91,14 +91,14 @@ export const en = {
 
   calc: {
     deposit: 'Deposit',
-    risk: 'Risk',
-    atRisk: 'At risk',
-    size: 'Position',
+    risk: 'Risk per trade',
+    atRisk: 'Amount at risk',
+    size: 'Position size',
     quantity: 'Quantity',
     margin: 'Margin',
     capped: 'Capped at your deposit — the full size needs more collateral than that holds.',
-    stopNote: 'Sized so the stop, {{pct}}% away, costs exactly the risk above.',
-    toggle: 'Size this trade',
+    stopNote: 'Sized so the stop, {{pct}}% away, costs exactly the amount at risk above.',
+    toggle: 'Position size',
     trail: 'At {{at}} the trade is 1R ahead — trail the stop to {{to}}, one ATR ({{atr}}%) behind. Locks in profit without handing the position back to the noise it just survived.',
     tradeOn: 'Trade on MEXC',
   },
@@ -141,6 +141,10 @@ export const en = {
     track: 'Track',
     chartShow: 'Chart',
     chartHide: 'Hide chart',
+    confidence: 'Confidence',
+    confidenceLabel: 'Filter by confidence',
+    winRateAt: 'win rate here',
+    bands: { high: 'High', medium: 'Medium', low: 'Low' },
     title: 'Strategy Signals',
     showMore: 'Show {{count}} more',
     live: '{{count}} actionable',
@@ -161,7 +165,7 @@ export const en = {
     confluence: 'Confluence',
     plan: 'Trade plan',
     entry: 'Entry',
-    stop: 'Stop',
+    stop: 'Stop loss',
     target: 'Target',
     riskReward: 'R:R',
     risk: 'Risk',
@@ -268,6 +272,8 @@ export const en = {
 
   /** Plain-language explanations for the terms a first-time visitor will stall on. */
   glossary: {
+    confidenceBands:
+      'How strongly the four reads agreed when the call was made. The engine only publishes above 62, so Low here means confirmed but barely — not weak. The figure beside the filter is the settled win rate at whatever band is selected, with its sample size, because a rate over nine trades is not the same kind of number as a rate over two hundred.',
     leverage:
       'The highest leverage at which the liquidation price still sits comfortably beyond the stop — computed from this contract’s own maintenance margin, which varies from 0.04% to 5% across the board. It says liquidation will not be what closes the trade. It says nothing about whether the position is sensibly sized.',
     liveTrades:

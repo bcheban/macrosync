@@ -404,6 +404,17 @@ api.get(
           openedAt: trade.openedAt,
           closedAt: trade.closedAt,
           resultPct: trade.resultPct,
+          /*
+           * The engine's confluence reading at the moment the call was made,
+           * carried through so a reader can ask what the record looks like at
+           * each level of it rather than only in aggregate.
+           *
+           * Optional because trades opened before the ledger stored it have
+           * none. Reported as `null` rather than a default: a made-up
+           * confidence would land in whichever band it was invented into and
+           * quietly bias that band's win rate.
+           */
+          confidence: typeof trade.confidence === 'number' ? trade.confidence : null,
           r: risk > 0 ? round(moved / risk, 3) : 0,
         };
       })

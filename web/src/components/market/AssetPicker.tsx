@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { useTx } from '@/i18n/useTx';
 import { trackEvent } from '@/lib/analytics';
 import { cn } from '@/lib/cn';
+import { displayTicker } from '@/lib/ticker';
 import { useAssetScope } from '@/state/AssetScope';
 import type { AssetGroup } from '@/types/domain';
 
@@ -157,7 +158,7 @@ export function AssetPicker({ listClassName = 'max-h-72', className }: AssetPick
                 </span>
 
                 <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-                  <span className="shrink-0 text-[12.5px] font-semibold text-white/90">{asset.base}</span>
+                  <span className="shrink-0 text-[12.5px] font-semibold text-white/90">{displayTicker(asset.base)}</span>
                   <span className="min-w-0 truncate text-[11px] text-white/35">{assetName(asset)}</span>
                 </span>
 

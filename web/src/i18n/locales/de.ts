@@ -92,9 +92,9 @@ export const de: Translation = {
 
   calc: {
     deposit: 'Einlage',
-    risk: 'Risiko',
-    atRisk: 'Im Risiko',
-    size: 'Position',
+    risk: 'Risiko pro Trade',
+    atRisk: 'Betrag im Risiko',
+    size: 'Positionsgröße',
     quantity: 'Menge',
     margin: 'Margin',
     capped: 'Auf deine Einlage begrenzt — die volle Größe braucht mehr Sicherheit, als sie hergibt.',
@@ -142,6 +142,10 @@ export const de: Translation = {
     track: 'Verfolgen',
     chartShow: 'Chart',
     chartHide: 'Chart ausblenden',
+    confidence: 'Konfidenz',
+    confidenceLabel: 'Nach Konfidenz filtern',
+    winRateAt: 'Trefferquote hier',
+    bands: { high: 'Hoch', medium: 'Mittel', low: 'Niedrig' },
     title: 'Strategie-Signale',
     showMore: '{{count}} weitere anzeigen',
     live: '{{count}} handelbar',
@@ -162,7 +166,7 @@ export const de: Translation = {
     confluence: 'Konfluenz',
     plan: 'Trade-Plan',
     entry: 'Einstieg',
-    stop: 'Stop',
+    stop: 'Stop-Loss',
     target: 'Ziel',
     riskReward: 'CRV',
     risk: 'Risiko',
@@ -273,6 +277,8 @@ export const de: Translation = {
   },
 
   glossary: {
+    confidenceBands:
+      'Wie stark die vier Messwerte übereinstimmten, als der Call entstand. Die Engine veröffentlicht erst ab 62, „Niedrig“ heißt hier also bestätigt, aber knapp — nicht schwach. Die Zahl neben dem Filter ist die abgeschlossene Trefferquote im gewählten Band samt Stichprobengröße, denn eine Quote über neun Trades ist nicht dieselbe Art von Zahl wie eine über zweihundert.',
     leverage:
       'Der höchste Hebel, bei dem der Liquidationspreis noch deutlich hinter dem Stop liegt — berechnet aus der Erhaltungsmarge dieses Kontrakts, die auf der Börse zwischen 0,04% und 5% schwankt. Er sagt, dass nicht die Liquidation den Trade beendet. Über eine sinnvolle Positionsgröße sagt er nichts.',
     liveTrades:

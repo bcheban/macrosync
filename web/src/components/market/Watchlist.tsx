@@ -6,6 +6,7 @@ import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Sparkline } from '@/components/ui/Sparkline';
 import { cn } from '@/lib/cn';
+import { displayTicker } from '@/lib/ticker';
 import { formatCompact, formatPct, formatPrice } from '@/lib/format';
 import type { Ticker } from '@/types/domain';
 
@@ -47,7 +48,7 @@ export function Watchlist({ tickers, loading, expected = 4 }: WatchlistProps) {
                 >
                   <div className="min-w-0">
                     <div className="flex items-baseline gap-2">
-                      <span className="text-sm font-semibold text-white">{ticker.base}</span>
+                      <span className="text-sm font-semibold text-white">{displayTicker(ticker.base)}</span>
                       <span className="text-[10px] tracking-wider text-white/30 uppercase">{ticker.quote}</span>
                     </div>
                     <div className="mt-0.5 flex items-baseline gap-2">

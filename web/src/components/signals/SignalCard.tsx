@@ -31,6 +31,7 @@ import { InfoTip } from '@/components/ui/InfoTip';
 import { Meter } from '@/components/ui/Meter';
 import { useTx } from '@/i18n/useTx';
 import { cn } from '@/lib/cn';
+import { displayTicker } from '@/lib/ticker';
 import { formatPrice } from '@/lib/format';
 import { mexcFuturesUrl } from '@/lib/mexc';
 import type { Signal } from '@/types/domain';
@@ -186,7 +187,7 @@ export function SignalCard({
       <div className="flex items-start justify-between gap-2.5">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <h3 className="text-base font-semibold tracking-tight text-white">{signal.base}</h3>
+            <h3 className="text-base font-semibold tracking-tight text-white">{displayTicker(signal.base)}</h3>
             <Badge tone="neutral">{signal.timeframe}</Badge>
             {signal.status === 'live' && <LiveDot tone={verdict.dot} />}
           </div>
@@ -233,9 +234,14 @@ export function SignalCard({
           </InfoTip>
         </div>
         <div className="grid grid-cols-3 gap-3">
+          {/*
+            Entry, target, stop — the order a trade is thought about rather
+            than the order it might end in. Entry is the decision, the target
+            is why it is worth taking, and the stop is the cost of being wrong.
+          */}
           <Level label={t('signals.entry')} value={signal.entry} tone="text-white" emphasis />
-          <Level label={t('signals.stop')} value={signal.stopLoss} tone="text-bear" />
           <Level label={t('signals.target')} value={signal.takeProfit} tone="text-bull" />
+          <Level label={t('signals.stop')} value={signal.stopLoss} tone="text-bear" />
         </div>
       </div>
 
