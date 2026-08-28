@@ -115,6 +115,13 @@ export const uk: Dictionary = {
     `${label} — <b>${rate}%</b> · ${wins}П / ${losses}З`,
   statsExpired: (n) => ` · ${n} протерміновано`,
   statsOpen: (n) => `📈 Зараз відкрито угод: ${n}`,
+  statsByConfidence: '<b>За впевненістю</b>',
+  statsConfidenceRow: (label, rate, wins, decided, r, thin) =>
+    thin
+      ? `<code>${label}</code>  <i>${rate}% · ${wins}/${decided} · ${r}</i> ⚠️`
+      : `<code>${label}</code>  <b>${rate}%</b> · ${wins}/${decided} · ${r}`,
+  statsThinNote: (n) =>
+    `<i>⚠️ менше ніж ${n} закритих угод — це ще не доказ.</i>`,
   statsFootnote:
     '<i>Рахуються лише ціль і стоп. Протерміновані, заміщені та нульові сигнали лишаються поза знаменником.</i>',
 

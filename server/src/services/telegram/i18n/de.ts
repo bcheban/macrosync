@@ -121,6 +121,13 @@ export const de: Dictionary = {
     `${label} — <b>${rate}%</b> · ${wins}G / ${losses}V`,
   statsExpired: (n) => ` · ${n} verfallen`,
   statsOpen: (n) => `📈 ${n} Trade${n === 1 ? '' : 's'} gerade offen`,
+  statsByConfidence: '<b>Nach Konfidenz</b>',
+  statsConfidenceRow: (label, rate, wins, decided, r, thin) =>
+    thin
+      ? `<code>${label}</code>  <i>${rate}% · ${wins}/${decided} · ${r}</i> ⚠️`
+      : `<code>${label}</code>  <b>${rate}%</b> · ${wins}/${decided} · ${r}`,
+  statsThinNote: (n) =>
+    `<i>⚠️ weniger als ${n} abgeschlossene Trades — noch kein Beleg.</i>`,
   statsFootnote:
     '<i>Gezählt werden nur Ziel und Stop. Verfallene, ersetzte und auf Break-even geschlossene Signale bleiben außerhalb des Nenners.</i>',
 

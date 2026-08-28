@@ -36,7 +36,8 @@ import {
   parseBalanceCommand,
   setAccount,
 } from './sizing.service.js';
-import { loadActive, loadStats, winRate } from '../trades/trades.service.js';
+import { loadActive, loadHistory, loadStats, winRate } from '../trades/trades.service.js';
+import { recordByBucket, THIN_SAMPLE } from '../trades/confidence.js';
 import { maxSafeLeverage } from '../signal.engine.js';
 import { getContractSpecs } from '../market.service.js';
 
@@ -220,7 +221,7 @@ const STATS_ORDER: Strategy[] = ['scalping', 'day', 'swing'];
  */
 async function statsLine(locale: Locale): Promise<string> {
   const t = dict(locale);
-  const [stats, active] = await Promise.all([loadStats(), loadActive()]);
+  const [stats, active, history] = await Promise.all([loadStats(), loadActive(), loadHistory()]);
   const decided = stats.wins + stats.losses;
 
   if (!decided) return active.length ? t.statsOnlyOpen(active.length) : t.statsNone;
@@ -240,6 +241,38 @@ async function statsLine(locale: Locale): Promise<string> {
       const n = row.wins + row.losses;
       lines.push(t.statsStrategyRow(row.label, Math.round((row.wins / n) * 100), row.wins, row.losses));
     }
+  }
+
+  /*
+   * The record cut by the reading each call was made on.
+   *
+   * The same brackets, the same arithmetic and the same small-sample threshold
+   * as the dashboard, so the bot and the site cannot quote different numbers
+   * for the same question. Brackets with nothing settled are dropped rather
+   * than printed as a dash — a row of them is noise in a chat message, where
+   * on a web grid it is at least a column that holds its place.
+   *
+   * The warning is a mark, not a colour: a chat has no greying, and a
+   * percentage over four trades that looks exactly like one over forty is the
+   * thing this is guarding against.
+   */
+  const buckets = recordByBucket(history).filter((bucket) => bucket.decided > 0);
+
+  if (buckets.length) {
+    lines.push('', t.statsByConfidence);
+    for (const bucket of buckets) {
+      lines.push(
+        t.statsConfidenceRow(
+          bucket.label,
+          bucket.rate ?? 0,
+          bucket.wins,
+          bucket.decided,
+          `${bucket.r >= 0 ? '+' : ''}${bucket.r.toFixed(1)}R`,
+          bucket.thin,
+        ),
+      );
+    }
+    if (buckets.some((bucket) => bucket.thin)) lines.push(t.statsThinNote(THIN_SAMPLE));
   }
 
   lines.push('', t.statsFootnote);

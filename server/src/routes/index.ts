@@ -28,6 +28,7 @@ import {
 import { telegramStatus } from '../services/telegram/telegram.client.js';
 import { acquireLock, getJson, releaseLock, setJson, storeKey, storeStatus } from '../services/store/store.js';
 import { evaluateTrades, loadHistory, loadStats, tradesStatus, winRate } from '../services/trades/trades.service.js';
+import { realisedR } from '../services/trades/confidence.js';
 
 /** Where the scheduled run records that it happened. */
 const CRON_KEY = storeKey('cron:last');
@@ -388,13 +389,6 @@ api.get(
     const trades = history
       .filter((trade) => trade.outcome === 'win' || trade.outcome === 'loss' || trade.outcome === 'breakeven')
       .map((trade) => {
-        const opened = trade.initialStopLoss ?? trade.stopLoss;
-        const risk = Math.abs(trade.entry - opened);
-        const long = trade.side === 'buy';
-        const exit =
-          trade.outcome === 'win' ? trade.takeProfit : trade.outcome === 'loss' ? trade.stopLoss : trade.entry;
-        const moved = long ? exit - trade.entry : trade.entry - exit;
-
         return {
           id: trade.id,
           base: trade.base,
@@ -415,7 +409,9 @@ api.get(
            * quietly bias that band's win rate.
            */
           confidence: typeof trade.confidence === 'number' ? trade.confidence : null,
-          r: risk > 0 ? round(moved / risk, 3) : 0,
+          // The same function the bot's /stats sums, so the two cannot
+          // quote different returns for the same bracket.
+          r: round(realisedR(trade), 3),
         };
       })
       // Oldest first: an equity curve is read left to right.

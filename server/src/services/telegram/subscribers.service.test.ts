@@ -121,7 +121,68 @@ const signal = (base: string, verdict: 'buy' | 'sell' = 'buy', strategy = 'day')
 
 const recipients = () => posted.map(([chatId]) => chatId);
 
+/** A settled trade at a given confidence. Long from 100, risking 10, target 120. */
+const closed = (confidence: number, outcome: 'win' | 'loss', id: string) => ({
+  id,
+  symbol: 'XUSDT',
+  base: 'X',
+  strategy: 'day',
+  side: 'buy',
+  entry: 100,
+  stopLoss: 90,
+  initialStopLoss: 90,
+  takeProfit: 120,
+  confidence,
+  timeframe: '1h',
+  openedAt: new Date(Date.now() - 86_400_000).toISOString(),
+  closedAt: new Date().toISOString(),
+  outcome,
+  resultPct: outcome === 'win' ? 20 : -10,
+});
+
 describe('the published record', () => {
+  it('marks a confidence bracket that has too few trades to mean anything', async () => {
+    /*
+     * The dashboard greys a rate under ten settled trades; a chat has no
+     * greying, so the bot marks the row instead. Same threshold on both sides,
+     * because the two must not disagree about which rows are worth acting on.
+     *
+     * 80–90 gets twelve trades and 90+ gets two, so one row carries the mark
+     * and the other does not — which is the only arrangement that proves the
+     * threshold is being read rather than the mark being printed always.
+     */
+    const store = await import('../store/store.js');
+    const history = [
+      ...Array.from({ length: 7 }, (_, i) => closed(85, 'win', `w${i}`)),
+      ...Array.from({ length: 5 }, (_, i) => closed(85, 'loss', `l${i}`)),
+      closed(95, 'win', 'h1'),
+      closed(95, 'loss', 'h2'),
+      // Under 60: belongs to no bracket and must not appear anywhere.
+      closed(40, 'win', 'x1'),
+    ];
+    await store.setJson(store.storeKey('trades:history'), history);
+    await store.setJson(store.storeKey('trades:stats'), {
+      wins: 9, losses: 6, expired: 0, superseded: 0, voided: 0, breakeven: 0,
+      byStrategy: { day: { wins: 9, losses: 6 } },
+      updatedAt: new Date().toISOString(),
+    });
+
+    await start(901, 'en');
+    posted = [];
+    await webhook.handleUpdate({ message: { chat: { id: 901 }, text: '/stats' } });
+    const text = posted.map(([, body]) => body).join(' ');
+
+    // Twelve trades: a plain row.
+    assert.match(text, /80–90/);
+    assert.match(text, /58%/);
+    // Two trades: marked, and the note explaining the mark is present.
+    assert.match(text, /90\+/);
+    assert.match(text, /⚠/);
+    assert.match(text, /fewer than 10 settled trades/);
+    // The 40-confidence trade belongs to no bracket.
+    assert.ok(!/60–70/.test(text), 'an empty bracket should not be printed');
+  });
+
   it('breaks the win rate down by setup, and omits setups with nothing settled', async () => {
     /*
      * `byStrategy` has always been written when a trade closes; what was

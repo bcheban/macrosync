@@ -127,6 +127,21 @@ export const en = {
     `${label} — <b>${rate}%</b> · ${wins}W / ${losses}L`,
   statsExpired: (n: number) => ` · ${n} expired`,
   statsOpen: (n: number) => `📈 ${n} trade${n === 1 ? '' : 's'} open right now`,
+  /** The record cut by the confluence reading each call was made on. */
+  statsByConfidence: '<b>By confidence</b>',
+  statsConfidenceRow: (
+    label: string,
+    rate: number,
+    wins: number,
+    decided: number,
+    r: string,
+    thin: boolean,
+  ) =>
+    thin
+      ? `<code>${label}</code>  <i>${rate}% · ${wins}/${decided} · ${r}</i> ⚠️`
+      : `<code>${label}</code>  <b>${rate}%</b> · ${wins}/${decided} · ${r}`,
+  statsThinNote: (n: number) =>
+    `<i>⚠️ fewer than ${n} settled trades — not yet evidence.</i>`,
   statsFootnote:
     '<i>Counts target and stop only. Expired, superseded and breakeven calls stay out of the denominator.</i>',
 
