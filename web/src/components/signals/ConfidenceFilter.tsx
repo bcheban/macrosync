@@ -39,14 +39,19 @@ export function ConfidenceFilter({
 
   return (
     <div className={cn('flex flex-wrap items-center gap-x-3 gap-y-2', className)}>
-      <div role="group" aria-label={t('signals.confidenceLabel')} className="flex flex-wrap items-center gap-1">
-        <span className="mr-1 flex items-center gap-1 text-[10px] tracking-[0.14em] text-white/35 uppercase">
-          {t('signals.confidence')}
-          <InfoTip label={t('signals.confidenceLabel')} align="start">
-            {t('glossary.confidenceBands')}
-          </InfoTip>
-        </span>
+      {/*
+        The label and its tip sit outside the group. The tip is a button, and
+        inside a `role="group"` of filter chips it reads to a screen reader as
+        a fourth option that does nothing.
+      */}
+      <span className="flex items-center gap-1 text-[10px] tracking-[0.14em] text-white/35 uppercase">
+        {t('signals.confidence')}
+        <InfoTip label={t('signals.confidenceLabel')} align="start">
+          {t('glossary.confidenceBands')}
+        </InfoTip>
+      </span>
 
+      <div role="group" aria-label={t('signals.confidenceLabel')} className="flex flex-wrap items-center gap-1">
         <Chip active={value === null} onClick={() => onChange(null)} label={t('common.all')} />
         {BANDS.map((band) => (
           <Chip
