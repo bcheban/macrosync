@@ -143,9 +143,7 @@ export const de: Translation = {
     chartShow: 'Chart',
     chartHide: 'Chart ausblenden',
     confidence: 'Konfidenz',
-    confidenceLabel: 'Nach Konfidenz filtern',
-    winRateAt: 'Trefferquote hier',
-    bands: { high: 'Hoch', medium: 'Mittel', low: 'Niedrig' },
+    confidenceLabel: 'Nach Konfidenz filtern',
     title: 'Strategie-Signale',
     showMore: '{{count}} weitere anzeigen',
     live: '{{count}} handelbar',
@@ -278,7 +276,7 @@ export const de: Translation = {
 
   glossary: {
     confidenceBands:
-      'Wie stark die vier Messwerte übereinstimmten, als der Call entstand. Die Engine veröffentlicht erst ab 62, „Niedrig“ heißt hier also bestätigt, aber knapp — nicht schwach. Die Zahl neben dem Filter ist die abgeschlossene Trefferquote im gewählten Band samt Stichprobengröße, denn eine Quote über neun Trades ist nicht dieselbe Art von Zahl wie eine über zweihundert.',
+      'Der Konfluenzwert hinter jedem Call, 0–100: wie stark Trend, Momentum, Mean Reversion und Volumen übereinstimmten. Die Bereiche sind halboffen, 70 gehört also zu 70–80 und nie zu beiden. Die Zeile darunter zeigt, womit jeder Bereich tatsächlich abgeschlossen hat, samt Stichprobengröße — eine Quote über neun Trades ist nicht dieselbe Art von Zahl wie eine über zweihundert, und genau darauf würde eine Neukalibrierung fußen. Werte unter 60 gehören zu keinem Bereich und werden nicht in den untersten gezählt.',
     leverage:
       'Der höchste Hebel, bei dem der Liquidationspreis noch deutlich hinter dem Stop liegt — berechnet aus der Erhaltungsmarge dieses Kontrakts, die auf der Börse zwischen 0,04% und 5% schwankt. Er sagt, dass nicht die Liquidation den Trade beendet. Über eine sinnvolle Positionsgröße sagt er nichts.',
     liveTrades:

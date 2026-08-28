@@ -142,9 +142,7 @@ export const en = {
     chartShow: 'Chart',
     chartHide: 'Hide chart',
     confidence: 'Confidence',
-    confidenceLabel: 'Filter by confidence',
-    winRateAt: 'win rate here',
-    bands: { high: 'High', medium: 'Medium', low: 'Low' },
+    confidenceLabel: 'Filter by confidence',
     title: 'Strategy Signals',
     showMore: 'Show {{count}} more',
     live: '{{count}} actionable',
@@ -273,7 +271,7 @@ export const en = {
   /** Plain-language explanations for the terms a first-time visitor will stall on. */
   glossary: {
     confidenceBands:
-      'How strongly the four reads agreed when the call was made. The engine only publishes above 62, so Low here means confirmed but barely — not weak. The figure beside the filter is the settled win rate at whatever band is selected, with its sample size, because a rate over nine trades is not the same kind of number as a rate over two hundred.',
+      'The confluence reading behind each call, on 0–100: how strongly trend, momentum, mean reversion and volume agreed. The brackets are half-open, so 70 belongs to 70–80 and never to both. The row beneath shows what each bracket has actually settled at, with its sample size — a rate over nine trades is not the same kind of number as a rate over two hundred, and this is the figure a recalibration would rest on. Readings under 60 belong to no bracket and are left out rather than folded into the lowest.',
     leverage:
       'The highest leverage at which the liquidation price still sits comfortably beyond the stop — computed from this contract’s own maintenance margin, which varies from 0.04% to 5% across the board. It says liquidation will not be what closes the trade. It says nothing about whether the position is sensibly sized.',
     liveTrades:

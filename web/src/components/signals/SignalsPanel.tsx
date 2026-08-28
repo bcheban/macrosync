@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { usePolling } from '@/hooks/usePolling';
 import { api } from '@/lib/api';
-import { bandOf, BANDS, type Band } from '@/lib/confidence';
+import { bucketOf, BUCKET_IDS, type Bucket } from '@/lib/confidence';
 import { cn } from '@/lib/cn';
 import { timeAgo } from '@/lib/format';
 import { useAssetScope } from '@/state/AssetScope';
@@ -48,7 +48,7 @@ export function SignalsPanel() {
   const [strategy, setStrategy] = useState<Strategy>('day');
   const [focus, setFocus] = useState<AssetFocus>(null);
   const [zen, setZen] = useZenMode();
-  const [band, setBand] = useState<Band | null>(null);
+  const [bucket, setBucket] = useState<Bucket | null>(null);
 
   /*
    * The settled record, for the win rate beside the band filter.
@@ -117,15 +117,19 @@ export function SignalsPanel() {
    */
   /* Band counts come off the unfiltered board, so a chip says how many it
      would show rather than how many survive a filter already applied. */
-  const bandCounts = useMemo(() => {
-    const tally = Object.fromEntries(BANDS.map((key) => [key, 0])) as Record<Band, number>;
-    for (const item of signals) tally[bandOf(item.confidence)] += 1;
+  const bucketCounts = useMemo(() => {
+    const tally = Object.fromEntries(BUCKET_IDS.map((key) => [key, 0])) as Record<Bucket, number>;
+    for (const item of signals) {
+      const found = bucketOf(item.confidence);
+      // `null` is a reading under 60, which belongs to none of the brackets.
+      if (found) tally[found] += 1;
+    }
     return tally;
   }, [signals]);
 
   const { visible, hiddenByZen } = useMemo(() => {
     const byFocus = focus ? signals.filter((item) => item.base === focus) : signals;
-    const scoped = band ? byFocus.filter((item) => bandOf(item.confidence) === band) : byFocus;
+    const scoped = bucket ? byFocus.filter((item) => bucketOf(item.confidence) === bucket) : byFocus;
     const actionable = scoped.filter((item) => item.verdict !== 'wait');
     const setups = scoped.filter((item) => item.verdict === 'wait');
 
@@ -139,7 +143,7 @@ export function SignalsPanel() {
       visible: zen ? actionable : [...actionable, ...setups],
       hiddenByZen: setups.length,
     };
-  }, [signals, focus, zen, band]);
+  }, [signals, focus, zen, bucket]);
   // Counts actionable calls, which is what the badge implies — a `forming`
   // long is a watch item, and counting it made the header overstate the tape.
   const liveCount = visible.filter((item) => item.verdict !== 'wait').length;
@@ -172,9 +176,9 @@ export function SignalsPanel() {
         <StrategyTabs value={strategy} onChange={setStrategy} />
         <AssetFocusTabs bases={bases} value={focus} onChange={setFocus} counts={counts} />
         <ConfidenceFilter
-          value={band}
-          onChange={setBand}
-          counts={bandCounts}
+          value={bucket}
+          onChange={setBucket}
+          counts={bucketCounts}
           trades={history.data?.trades ?? []}
         />
       </div>
