@@ -235,7 +235,12 @@ export function SignalsPanel() {
               onClick={() => setZen(false)}
               className="glass-soft mt-1 rounded-lg px-3.5 py-2 text-[12px] text-white/75 transition-all duration-200 hover:bg-white/8 hover:text-white active:scale-95"
             >
-              {t('signals.zenOff')}
+              {/*
+                An action, not a description. `zenOff` is the toggle's tooltip
+                — "Focus mode: hide setups that are not calls yet" — which on a
+                button offering the way out reads exactly backwards.
+              */}
+              {t('signals.zenShowAll')}
             </button>
           ) : focus ? (
             <button

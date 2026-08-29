@@ -134,6 +134,7 @@ export const en = {
 
   signals: {
     zen: 'Focus',
+    zenShowAll: 'Show all setups',
     zenOff: 'Focus mode — hide setups that are not calls yet',
     zenOn: 'Focus mode on — showing calls only',
     emptyZen: 'No calls right now',

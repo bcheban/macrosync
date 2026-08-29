@@ -135,6 +135,7 @@ export const de: Translation = {
 
   signals: {
     zen: 'Fokus',
+    zenShowAll: 'Alle Setups anzeigen',
     zenOff: 'Fokusmodus — Setups ausblenden, die noch keine Calls sind',
     zenOn: 'Fokusmodus an — nur Calls',
     emptyZen: 'Gerade keine Calls',
