@@ -94,3 +94,23 @@ export function recordForBucket(trades: JournalTrade[], bucket: Bucket | null): 
 export function recordByBucket(trades: JournalTrade[]): BucketRecord[] {
   return BUCKET_IDS.map((bucket) => ({ ...recordForBucket(trades, bucket), bucket }));
 }
+
+/**
+ * The unleveraged move, summed across every settled trade.
+ *
+ * `resultPct` is written by the server at close as `((exit - entry) / entry)
+ * * 100`, signed by side — the raw price movement a one-unit position in each
+ * call would have captured.
+ *
+ * A different question from R, and neither replaces the other. R normalises by
+ * the risk each trade was opened with, so a wide-stop swing and a tight scalp
+ * weigh the same; this does not, so one volatile call can dominate it. Summed
+ * rather than compounded: compounding would imply the whole account rode every
+ * trade in sequence, and would make the answer depend on their order.
+ */
+export function cumulativeRoiPct(trades: JournalTrade[]): number {
+  return trades.reduce(
+    (sum, trade) => sum + (Number.isFinite(trade.resultPct) ? trade.resultPct : 0),
+    0,
+  );
+}

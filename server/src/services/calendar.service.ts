@@ -18,6 +18,9 @@ import { cache } from '../utils/cache.js';
  */
 const FEED_URL = 'https://nfs.faireconomy.media/ff_calendar_thisweek.json';
 
+/** The default horizon: seven days from now, not the rest of the week. */
+const WEEK_MS = 7 * 24 * 60 * 60_000;
+
 interface RawEvent {
   title: string;
   /** Currency code, e.g. `USD` — the feed's stand-in for a region. */
@@ -186,6 +189,8 @@ export interface CalendarQuery {
   /** Low-impact prints are noise for a crypto desk and are hidden by default. */
   includeLow?: boolean;
   from?: number;
+  /** How far ahead to look. Defaults to seven days. */
+  horizonMs?: number;
 }
 
 export interface CalendarPage {
@@ -203,8 +208,28 @@ export interface CalendarPage {
  * the caller is told how many were hidden.
  */
 export async function getUpcomingEvents(query: CalendarQuery = {}): Promise<CalendarPage> {
-  const { limit = 8, includeLow = false, from = Date.now() } = query;
-  const upcoming = (await safeCalendar()).filter((event) => Date.parse(event.startsAt) > from);
+  const { limit = 8, includeLow = false, from = Date.now(), horizonMs = WEEK_MS } = query;
+
+  /*
+   * A rolling week from now, rather than "the rest of this calendar week".
+   *
+   * The distinction only matters at the edges, and it is the edge that bites:
+   * the feed is one file covering Sunday to Friday, so on a Saturday every
+   * event in it is already past and the board reads "nothing left this week" —
+   * which sounds like no news is coming rather than like the file has not
+   * rolled over yet.
+   *
+   * This bound cannot fix that on its own, because there is no next-week feed
+   * to widen into: `ff_calendar_nextweek.json` is a 404 and the CDN host does
+   * not resolve. What it does is make the intent explicit and correct, so the
+   * day a second source is added the horizon is already right. The Saturday
+   * gap is handled where it is visible, in the empty state's wording.
+   */
+  const until = from + horizonMs;
+  const upcoming = (await safeCalendar()).filter((event) => {
+    const at = Date.parse(event.startsAt);
+    return at > from && at <= until;
+  });
 
   const counts = {
     high: upcoming.filter((event) => event.importance === 'high').length,

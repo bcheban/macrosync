@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { usePolling } from '@/hooks/usePolling';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { cumulativeRoiPct } from '@/lib/confidence';
+import { simulatedUsd } from '@/lib/money';
 import type { Strategy } from '@/types/domain';
 
 const ORDER: Strategy[] = ['scalping', 'day', 'swing'];
@@ -79,6 +81,7 @@ function EquityCurve({ points }: { points: { r: number; at: string }[] }) {
         <Figure label="net" value={`${path.final >= 0 ? '+' : ''}${path.final.toFixed(2)}R`} tone={up ? 'text-bull' : 'text-bear'} />
         <Figure label="peak" value={`${path.peak.toFixed(2)}R`} />
         <Figure label="max drawdown" value={`−${path.drawdown.toFixed(2)}R`} tone="text-warn" />
+        <Figure label="at $100 risk" value={simulatedUsd(path.final)} />
       </div>
     </div>
   );
@@ -156,6 +159,26 @@ export function Journal({ onClose }: { onClose: () => void }) {
           {trades.length >= 2 && (
             <>
               <EquityCurve points={trades.map((trade) => ({ r: trade.r, at: trade.closedAt }))} />
+
+              {/*
+                The raw move, beside the risk-normalised one. R says whether
+                the sizing works; this says whether the direction did — the two
+                can disagree, and a reader deserves both rather than whichever
+                one flatters.
+              */}
+              <p className="mt-2 flex items-baseline gap-1.5 text-[11px]">
+                <span className="text-white/30">{t('journal.roi')}</span>
+                <span
+                  className={cn(
+                    'tnum font-mono text-[13px] font-semibold',
+                    cumulativeRoiPct(trades) >= 0 ? 'text-bull' : 'text-bear',
+                  )}
+                >
+                  {cumulativeRoiPct(trades) >= 0 ? '+' : ''}
+                  {cumulativeRoiPct(trades).toFixed(2)}%
+                </span>
+                <span className="text-white/25">{t('journal.roiNote')}</span>
+              </p>
 
               <p className="mt-4 text-[10px] tracking-[0.16em] text-white/35 uppercase">{t('journal.bySetup')}</p>
               <div className="mt-2 space-y-1.5">

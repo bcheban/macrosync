@@ -127,6 +127,8 @@ export const en = {
 
   journal: {
     title: 'Trade journal',
+    roi: 'Cumulative ROI',
+    roiNote: 'unleveraged price movement',
     bySetup: 'By setup',
     thin: 'Not enough settled trades yet to draw a curve. The first few close within a day or two of a scan.',
     footnote: 'Cumulative return in R — one unit is the risk each trade was opened with. {{count}} settled trades. Breakeven closes count as zero and stay in the curve; expired and superseded calls are not trades and are left out.',
@@ -251,7 +253,7 @@ export const en = {
     summary: '{{currency}} · {{region}} · {{level}} expected impact',
     scheduleSource: 'Economic calendar',
     noEvent: 'No scheduled catalyst',
-    noEventHint: 'The calendar has nothing left this week. Technical setups carry their usual weight until the next print is published.',
+    noEventHint: 'No scheduled catalyst in the next seven days. The calendar feed publishes one week at a time and rolls over on Sunday, so a quiet Saturday usually means next week’s schedule has not landed yet. Technical setups carry their usual weight until it does.',
     riskWindow: 'Risk window open',
     importance: '{{level}} impact · {{region}}',
     warning:

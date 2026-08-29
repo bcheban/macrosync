@@ -110,6 +110,8 @@ export const uk: Dictionary = {
     `📊 Закритих угод ще немає — ${open} у роботі. Запис почнеться, коли закриється перша.`,
   statsNet: (r, usd, settled) =>
     `📊 <b>Чистий результат ${r}</b> <i>(${usd}) за ${settled} закритих угод</i>`,
+  statsRoi: (pct) =>
+    `📈 <b>Сукупний ROI ${pct}</b> <i>рух ціни без плеча</i>`,
   statsRate: (rate, wins, losses, expired) =>
     `📊 <b>Вінрейт ${rate}%</b> — ${wins}П / ${losses}З${expired}`,
   statsByStrategy: '<b>За стратегіями</b>',

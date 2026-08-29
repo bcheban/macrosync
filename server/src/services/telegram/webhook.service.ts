@@ -37,7 +37,14 @@ import {
   setAccount,
 } from './sizing.service.js';
 import { loadActive, loadHistory, loadStats, winRate } from '../trades/trades.service.js';
-import { netR, recordByBucket, simulatedUsd, RISK_PER_TRADE_USD, THIN_SAMPLE } from '../trades/confidence.js';
+import {
+  cumulativeRoiPct,
+  netR,
+  recordByBucket,
+  simulatedUsd,
+  RISK_PER_TRADE_USD,
+  THIN_SAMPLE,
+} from '../trades/confidence.js';
 import { maxSafeLeverage } from '../signal.engine.js';
 import { getContractSpecs } from '../market.service.js';
 
@@ -238,8 +245,15 @@ async function statsLine(locale: Locale): Promise<string> {
    * detail of a known outcome rather than as the outcome.
    */
   const net = netR(history);
+  /*
+   * The raw move alongside the risk-normalised one. R says whether the sizing
+   * works; this says whether the direction did — a wide-stop swing and a tight
+   * scalp weigh the same in R and very differently here.
+   */
+  const roi = cumulativeRoiPct(history);
   const lines = [
     t.statsNet(`${net.r >= 0 ? '+' : ''}${net.r.toFixed(1)}R`, simulatedUsd(net.r), net.settled),
+    t.statsRoi(`${roi >= 0 ? '+' : ''}${roi.toFixed(2)}%`),
     '',
     t.statsRate(winRate(stats), stats.wins, stats.losses, expired),
     t.statsOpen(active.length),

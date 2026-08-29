@@ -116,6 +116,8 @@ export const de: Dictionary = {
     `📊 Noch nichts abgeschlossen — ${open} laufen. Die Bilanz beginnt, wenn der erste Trade schließt.`,
   statsNet: (r, usd, settled) =>
     `📊 <b>Nettoergebnis ${r}</b> <i>(${usd}) über ${settled} abgeschlossene Trades</i>`,
+  statsRoi: (pct) =>
+    `📈 <b>Kumulierter ROI ${pct}</b> <i>Kursbewegung ohne Hebel</i>`,
   statsRate: (rate, wins, losses, expired) =>
     `📊 <b>Trefferquote ${rate}%</b> — ${wins}G / ${losses}V${expired}`,
   statsByStrategy: '<b>Nach Strategie</b>',

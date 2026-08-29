@@ -128,6 +128,8 @@ export const de: Translation = {
 
   journal: {
     title: 'Handelsjournal',
+    roi: 'Kumulierter ROI',
+    roiNote: 'Kursbewegung ohne Hebel',
     bySetup: 'Nach Strategie',
     thin: 'Noch zu wenige abgeschlossene Trades für eine Kurve. Die ersten schließen ein bis zwei Tage nach einem Scan.',
     footnote: 'Kumulierte Rendite in R — eine Einheit ist das Risiko, mit dem ein Trade eröffnet wurde. {{count}} abgeschlossene Trades. Breakeven zählt als null und bleibt in der Kurve; verfallene und ersetzte Calls sind keine Trades und fehlen.',
@@ -256,8 +258,7 @@ export const de: Translation = {
     summary: '{{currency}} · {{region}} · erwartete Wirkung {{level}}',
     scheduleSource: 'Wirtschaftskalender',
     noEvent: 'Kein geplanter Auslöser',
-    noEventHint:
-      'Diese Woche steht im Kalender nichts mehr an. Technische Setups behalten ihr übliches Gewicht, bis die nächste Zahl veröffentlicht wird.',
+    noEventHint: 'In den nächsten sieben Tagen kein geplanter Katalysator. Der Kalender-Feed veröffentlicht eine Woche am Stück und wechselt sonntags, ein stiller Samstag heißt also meist, dass der Plan für nächste Woche noch nicht da ist. Bis dahin zählen technische Setups wie gewohnt.',
     riskWindow: 'Risikofenster offen',
     importance: 'Wirkung {{level}} · {{region}}',
     warning:

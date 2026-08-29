@@ -102,6 +102,29 @@ export function simulatedUsd(r: number): string {
   return `${sign}$${Math.abs(amount).toLocaleString('en-US')}`;
 }
 
+/**
+ * The unleveraged move, summed across every settled trade.
+ *
+ * `resultPct` is written at close as `((exit - entry) / entry) * 100`, signed
+ * by side, so this is the raw price movement a one-unit position in each call
+ * would have captured — no leverage, no position sizing, no compounding.
+ *
+ * It answers a different question from R and neither replaces the other. R
+ * normalises by the risk each trade was opened with, so a wide-stop swing and
+ * a tight scalp weigh the same; this does not, so a single volatile call can
+ * dominate it. Read together they say whether the engine picks direction and
+ * whether it sizes the risk of picking it.
+ *
+ * Summed rather than compounded, deliberately. Compounding would imply the
+ * whole account rode every trade in sequence, which is not what happened and
+ * would make the figure depend on their order.
+ */
+export function cumulativeRoiPct(history: ClosedTrade[]): number {
+  return history
+    .filter((trade) => SETTLED.has(trade.outcome))
+    .reduce((sum, trade) => sum + (Number.isFinite(trade.resultPct) ? trade.resultPct : 0), 0);
+}
+
 export function netR(history: ClosedTrade[]): { r: number; settled: number } {
   const settled = history.filter((trade) => SETTLED.has(trade.outcome));
   return {
