@@ -181,6 +181,20 @@ describe('the published record', () => {
     assert.match(text, /fewer than 10 settled trades/);
     // The 40-confidence trade belongs to no bracket.
     assert.ok(!/60–70/.test(text), 'an empty bracket should not be printed');
+
+    /*
+     * The net result counts it anyway, and that is the point of the assertion.
+     *
+     * Brackets exclude a trade with no attributable confidence; the total does
+     * not, because it happened and its result is part of what the engine did.
+     * The two therefore do not sum to each other by design.
+     *
+     * Risk is 10 on every trade here and every win pays 2R: 9 wins at +2R and
+     * 6 losses at -1R is +12R across 15 settled. Nine, not eight — the
+     * 40-confidence win is one of them, which is the whole point.
+     */
+    assert.match(text, /Net result \+12\.0R/);
+    assert.match(text, /over 15 settled trades/);
   });
 
   it('breaks the win rate down by setup, and omits setups with nothing settled', async () => {

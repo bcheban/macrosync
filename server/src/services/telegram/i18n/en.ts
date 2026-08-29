@@ -119,6 +119,9 @@ export const en = {
   statsNone: '📊 No trades on the record yet. The first confirmed call opens one.',
   statsOnlyOpen: (open: number) =>
     `📊 No settled trades yet — ${open} still open. The record starts when the first one closes.`,
+  /** The headline: what every settled trade adds up to, in units of risk. */
+  statsNet: (r: string, settled: number) =>
+    `📊 <b>Net result ${r}</b> <i>over ${settled} settled trades</i>`,
   statsRate: (rate: number, wins: number, losses: number, expired: string) =>
     `📊 <b>Win rate ${rate}%</b> — ${wins}W / ${losses}L${expired}`,
   /** Heading for the per-setup split. Only rendered when a setup has a record. */

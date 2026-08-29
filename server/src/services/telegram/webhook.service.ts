@@ -37,7 +37,7 @@ import {
   setAccount,
 } from './sizing.service.js';
 import { loadActive, loadHistory, loadStats, winRate } from '../trades/trades.service.js';
-import { recordByBucket, THIN_SAMPLE } from '../trades/confidence.js';
+import { netR, recordByBucket, THIN_SAMPLE } from '../trades/confidence.js';
 import { maxSafeLeverage } from '../signal.engine.js';
 import { getContractSpecs } from '../market.service.js';
 
@@ -228,7 +228,22 @@ async function statsLine(locale: Locale): Promise<string> {
 
   const expired = stats.expired ? t.statsExpired(stats.expired) : '';
   const labels = strategyLabels(locale);
-  const lines = [t.statsRate(winRate(stats), stats.wins, stats.losses, expired), t.statsOpen(active.length)];
+
+  /*
+   * The net result leads, above the win rate.
+   *
+   * A percentage cannot say whether this makes money: the rate and the reward
+   * ratio move independently, and 40% at 2R is a business where 60% at 0.4R is
+   * not. Putting the total first means the rate underneath it is read as a
+   * detail of a known outcome rather than as the outcome.
+   */
+  const net = netR(history);
+  const lines = [
+    t.statsNet(`${net.r >= 0 ? '+' : ''}${net.r.toFixed(1)}R`, net.settled),
+    '',
+    t.statsRate(winRate(stats), stats.wins, stats.losses, expired),
+    t.statsOpen(active.length),
+  ];
 
   const split = STATS_ORDER.map((strategy) => ({
     label: labels[strategy],

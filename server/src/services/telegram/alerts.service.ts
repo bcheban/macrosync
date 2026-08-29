@@ -258,9 +258,14 @@ export function formatAlert(
     `${emoji} <b>${escapeHtml(signal.base)}</b> — <b>${long ? t.alertLong : t.alertShort}</b>`,
     `${meta.label} · <i>${escapeHtml(signal.timeframe)} · ${t.alertConfidence} ${signal.confidence}/100</i>`,
     '',
+    /*
+     * Entry, target, stop — the order a trade is thought about rather than the
+     * order it might end in, and the same order the card uses on the site. A
+     * reader moving between the two should not have to re-find the line.
+     */
     `🎯 <b>${t.alertEntry}</b>   <code>${money(signal.entry)}</code>`,
-    `🛑 <b>${t.alertStop}</b>    <code>${money(signal.stopLoss)}</code>`,
     `🏁 <b>${t.alertTarget}</b>  <code>${money(signal.takeProfit)}</code>`,
+    `🛑 <b>${t.alertStop}</b>    <code>${money(signal.stopLoss)}</code>`,
     `⚖️ ${t.alertRiskReward} <b>${signal.riskReward}</b> · ${t.alertRisk(String(signal.suggestedRiskPct))}`,
     `🧮 ${t.alertLeverage}: <b>${signal.maxSafeLeverage}x</b> <i>(${t.alertLeverageNote})</i>`,
     '',

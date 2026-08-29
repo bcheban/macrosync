@@ -65,6 +65,31 @@ export function realisedR(trade: ClosedTrade): number {
   return moved / risk;
 }
 
+/** Only outcomes that say something about the call. */
+const SETTLED = new Set(['win', 'loss', 'breakeven']);
+
+/**
+ * What every settled trade adds up to, in units of risk.
+ *
+ * The one number a win rate cannot give. Rates and reward ratios move
+ * independently — 40% at 2R is a business and 60% at 0.4R is not — so a
+ * percentage on its own cannot say whether the engine is making money. This
+ * can, and it is the figure to read first.
+ *
+ * Counts every settled trade, including the ones with no stored confidence.
+ * Those are excluded from the brackets because they cannot be attributed to
+ * one, but they are still trades that happened and their result is still part
+ * of the total. The bracket rows and this line therefore do not have to sum to
+ * each other, which is correct and worth knowing before someone checks.
+ */
+export function netR(history: ClosedTrade[]): { r: number; settled: number } {
+  const settled = history.filter((trade) => SETTLED.has(trade.outcome));
+  return {
+    r: settled.reduce((sum, trade) => sum + realisedR(trade), 0),
+    settled: settled.length,
+  };
+}
+
 export interface BucketRecord {
   id: BucketId;
   label: string;
@@ -78,9 +103,6 @@ export interface BucketRecord {
   /** Fewer settled trades than the threshold, so the rate is not yet evidence. */
   thin: boolean;
 }
-
-/** Only outcomes that say something about the call. */
-const SETTLED = new Set(['win', 'loss', 'breakeven']);
 
 /**
  * Every bracket, in ascending order.

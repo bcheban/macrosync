@@ -114,6 +114,8 @@ export const de: Dictionary = {
   statsNone: '📊 Noch keine Trades erfasst. Das erste bestätigte Signal eröffnet die Bilanz.',
   statsOnlyOpen: (open) =>
     `📊 Noch nichts abgeschlossen — ${open} laufen. Die Bilanz beginnt, wenn der erste Trade schließt.`,
+  statsNet: (r, settled) =>
+    `📊 <b>Nettoergebnis ${r}</b> <i>über ${settled} abgeschlossene Trades</i>`,
   statsRate: (rate, wins, losses, expired) =>
     `📊 <b>Trefferquote ${rate}%</b> — ${wins}G / ${losses}V${expired}`,
   statsByStrategy: '<b>Nach Strategie</b>',

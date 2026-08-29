@@ -108,6 +108,8 @@ export const uk: Dictionary = {
   statsNone: '📊 Записів ще немає. Перший підтверджений сигнал відкриє їх.',
   statsOnlyOpen: (open) =>
     `📊 Закритих угод ще немає — ${open} у роботі. Запис почнеться, коли закриється перша.`,
+  statsNet: (r, settled) =>
+    `📊 <b>Чистий результат ${r}</b> <i>за ${settled} закритих угод</i>`,
   statsRate: (rate, wins, losses, expired) =>
     `📊 <b>Вінрейт ${rate}%</b> — ${wins}П / ${losses}З${expired}`,
   statsByStrategy: '<b>За стратегіями</b>',
