@@ -144,6 +144,7 @@ export const de: Translation = {
     chartHide: 'Chart ausblenden',
     confidence: 'Konfidenz',
     confidenceLabel: 'Nach Konfidenz filtern',
+    riskSimNote: 'Dollarwerte simulieren konstant ${{usd}} Risiko pro Trade.',
     title: 'Strategie-Signale',
     showMore: '{{count}} weitere anzeigen',
     live: '{{count}} handelbar',

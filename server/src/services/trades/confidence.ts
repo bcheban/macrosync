@@ -82,6 +82,26 @@ const SETTLED = new Set(['win', 'loss', 'breakeven']);
  * of the total. The bracket rows and this line therefore do not have to sum to
  * each other, which is correct and worth knowing before someone checks.
  */
+/**
+ * The risk per trade a simulated dollar figure is quoted against.
+ *
+ * R is the honest unit — it is what the engine controls and it compares across
+ * readers who size differently — but it is also abstract, and "-13.5R" does not
+ * land the way "-$1,350" does. So the dollars are shown beside it rather than
+ * instead of it: a round number nobody actually risks, stated as a simulation,
+ * so it is read as a scale rather than as somebody's account.
+ *
+ * Mirrored in the web's `lib/money.ts`. Change one and the two disagree.
+ */
+export const RISK_PER_TRADE_USD = 100;
+
+/** `-$1,350`. Whole dollars: the cents of a hypothetical are noise. */
+export function simulatedUsd(r: number): string {
+  const amount = Math.round(r * RISK_PER_TRADE_USD);
+  const sign = amount >= 0 ? '+' : '-';
+  return `${sign}$${Math.abs(amount).toLocaleString('en-US')}`;
+}
+
 export function netR(history: ClosedTrade[]): { r: number; settled: number } {
   const settled = history.filter((trade) => SETTLED.has(trade.outcome));
   return {

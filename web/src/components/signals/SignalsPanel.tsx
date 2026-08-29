@@ -220,7 +220,24 @@ export function SignalsPanel() {
                 : t('signals.onboarding')}
           </p>
 
-          {focus ? (
+          {/*
+            An escape hatch, not just an explanation.
+            
+            Focus mode persists, so somebody who turned it on days ago comes
+            back to a board that is empty whenever every setup is a `wait` —
+            and from the outside that reads as the signals having disappeared,
+            not as a filter doing its job. Telling them is half of it; the
+            button that undoes it has to be here, where they are looking.
+          */}
+          {zen && hiddenByZen > 0 ? (
+            <button
+              type="button"
+              onClick={() => setZen(false)}
+              className="glass-soft mt-1 rounded-lg px-3.5 py-2 text-[12px] text-white/75 transition-all duration-200 hover:bg-white/8 hover:text-white active:scale-95"
+            >
+              {t('signals.zenOff')}
+            </button>
+          ) : focus ? (
             <button
               type="button"
               onClick={() => setFocus(null)}

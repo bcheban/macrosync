@@ -108,8 +108,8 @@ export const uk: Dictionary = {
   statsNone: '📊 Записів ще немає. Перший підтверджений сигнал відкриє їх.',
   statsOnlyOpen: (open) =>
     `📊 Закритих угод ще немає — ${open} у роботі. Запис почнеться, коли закриється перша.`,
-  statsNet: (r, settled) =>
-    `📊 <b>Чистий результат ${r}</b> <i>за ${settled} закритих угод</i>`,
+  statsNet: (r, usd, settled) =>
+    `📊 <b>Чистий результат ${r}</b> <i>(${usd}) за ${settled} закритих угод</i>`,
   statsRate: (rate, wins, losses, expired) =>
     `📊 <b>Вінрейт ${rate}%</b> — ${wins}П / ${losses}З${expired}`,
   statsByStrategy: '<b>За стратегіями</b>',
@@ -118,10 +118,12 @@ export const uk: Dictionary = {
   statsExpired: (n) => ` · ${n} протерміновано`,
   statsOpen: (n) => `📈 Зараз відкрито угод: ${n}`,
   statsByConfidence: '<b>За впевненістю</b>',
-  statsConfidenceRow: (label, rate, wins, decided, r, thin) =>
+  statsConfidenceRow: (label, rate, wins, decided, r, usd, thin) =>
     thin
-      ? `<code>${label}</code>  <i>${rate}% · ${wins}/${decided} · ${r}</i> ⚠️`
-      : `<code>${label}</code>  <b>${rate}%</b> · ${wins}/${decided} · ${r}`,
+      ? `<code>${label}</code>  <i>${rate}% · ${wins}/${decided} · ${r} (${usd})</i> ⚠️`
+      : `<code>${label}</code>  <b>${rate}%</b> · ${wins}/${decided} · ${r} (${usd})`,
+  statsRiskNote: (usd) =>
+    `<i>Суми в доларах — симуляція за умови рівно $${usd} ризику на кожну угоду.</i>`,
   statsThinNote: (n) =>
     `<i>⚠️ менше ніж ${n} закритих угод — це ще не доказ.</i>`,
   statsFootnote:

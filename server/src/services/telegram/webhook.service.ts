@@ -37,7 +37,7 @@ import {
   setAccount,
 } from './sizing.service.js';
 import { loadActive, loadHistory, loadStats, winRate } from '../trades/trades.service.js';
-import { netR, recordByBucket, THIN_SAMPLE } from '../trades/confidence.js';
+import { netR, recordByBucket, simulatedUsd, RISK_PER_TRADE_USD, THIN_SAMPLE } from '../trades/confidence.js';
 import { maxSafeLeverage } from '../signal.engine.js';
 import { getContractSpecs } from '../market.service.js';
 
@@ -239,7 +239,7 @@ async function statsLine(locale: Locale): Promise<string> {
    */
   const net = netR(history);
   const lines = [
-    t.statsNet(`${net.r >= 0 ? '+' : ''}${net.r.toFixed(1)}R`, net.settled),
+    t.statsNet(`${net.r >= 0 ? '+' : ''}${net.r.toFixed(1)}R`, simulatedUsd(net.r), net.settled),
     '',
     t.statsRate(winRate(stats), stats.wins, stats.losses, expired),
     t.statsOpen(active.length),
@@ -283,11 +283,13 @@ async function statsLine(locale: Locale): Promise<string> {
           bucket.wins,
           bucket.decided,
           `${bucket.r >= 0 ? '+' : ''}${bucket.r.toFixed(1)}R`,
+          simulatedUsd(bucket.r),
           bucket.thin,
         ),
       );
     }
     if (buckets.some((bucket) => bucket.thin)) lines.push(t.statsThinNote(THIN_SAMPLE));
+    lines.push(t.statsRiskNote(RISK_PER_TRADE_USD));
   }
 
   lines.push('', t.statsFootnote);

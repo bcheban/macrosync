@@ -143,6 +143,7 @@ export const en = {
     chartHide: 'Hide chart',
     confidence: 'Confidence',
     confidenceLabel: 'Filter by confidence',
+    riskSimNote: 'Dollar figures simulate a flat ${{usd}} risked on every trade.',
     title: 'Strategy Signals',
     showMore: 'Show {{count}} more',
     live: '{{count}} actionable',

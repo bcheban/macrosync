@@ -43,7 +43,17 @@ const ALIASES: Record<string, string> = {};
  * every watchlist row and every tab — a wrong answer here renames an asset
  * across the whole interface.
  */
-export function displayTicker(base: string): string {
+export function displayTicker(base: string | null | undefined): string {
+  /*
+   * Tolerates a missing name rather than throwing.
+   *
+   * This runs on every card header, every watchlist row and every tab, so an
+   * unguarded `base.trim()` turns one malformed payload — a cached response
+   * from an older shape, a symbol the catalogue has since dropped — into a
+   * blank page. An empty string renders as nothing, which is a bad card; an
+   * exception renders as no cards at all.
+   */
+  if (typeof base !== 'string') return '';
   const upper = base.trim().toUpperCase();
   if (!upper) return base;
 
@@ -67,8 +77,9 @@ export function displayTicker(base: string): string {
  * The quote is split off the symbol rather than assumed, because the board is
  * not all USDT and a hardcoded quote would be wrong the first time it is not.
  */
-export function displayPair(base: string, symbol: string): string {
+export function displayPair(base: string | null | undefined, symbol: string | null | undefined): string {
   const stem = displayTicker(base);
-  const quote = symbol.toUpperCase().replace(base.toUpperCase(), '');
+  if (typeof symbol !== 'string' || !stem) return stem;
+  const quote = symbol.toUpperCase().replace(stem, '').replace(String(base).toUpperCase(), '');
   return quote ? `${stem}/${quote}` : stem;
 }

@@ -148,6 +148,7 @@ export const uk: Translation = {
     chartHide: 'Сховати графік',
     confidence: 'Впевненість',
     confidenceLabel: 'Фільтр за впевненістю',
+    riskSimNote: 'Суми в доларах — симуляція за умови рівно ${{usd}} ризику на кожну угоду.',
     title: 'Сигнали стратегій',
     showMore: 'Показати ще {{count}}',
     live: 'До дії: {{count}}',

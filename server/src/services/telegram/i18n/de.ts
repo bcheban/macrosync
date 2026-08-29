@@ -114,8 +114,8 @@ export const de: Dictionary = {
   statsNone: '📊 Noch keine Trades erfasst. Das erste bestätigte Signal eröffnet die Bilanz.',
   statsOnlyOpen: (open) =>
     `📊 Noch nichts abgeschlossen — ${open} laufen. Die Bilanz beginnt, wenn der erste Trade schließt.`,
-  statsNet: (r, settled) =>
-    `📊 <b>Nettoergebnis ${r}</b> <i>über ${settled} abgeschlossene Trades</i>`,
+  statsNet: (r, usd, settled) =>
+    `📊 <b>Nettoergebnis ${r}</b> <i>(${usd}) über ${settled} abgeschlossene Trades</i>`,
   statsRate: (rate, wins, losses, expired) =>
     `📊 <b>Trefferquote ${rate}%</b> — ${wins}G / ${losses}V${expired}`,
   statsByStrategy: '<b>Nach Strategie</b>',
@@ -124,10 +124,12 @@ export const de: Dictionary = {
   statsExpired: (n) => ` · ${n} verfallen`,
   statsOpen: (n) => `📈 ${n} Trade${n === 1 ? '' : 's'} gerade offen`,
   statsByConfidence: '<b>Nach Konfidenz</b>',
-  statsConfidenceRow: (label, rate, wins, decided, r, thin) =>
+  statsConfidenceRow: (label, rate, wins, decided, r, usd, thin) =>
     thin
-      ? `<code>${label}</code>  <i>${rate}% · ${wins}/${decided} · ${r}</i> ⚠️`
-      : `<code>${label}</code>  <b>${rate}%</b> · ${wins}/${decided} · ${r}`,
+      ? `<code>${label}</code>  <i>${rate}% · ${wins}/${decided} · ${r} (${usd})</i> ⚠️`
+      : `<code>${label}</code>  <b>${rate}%</b> · ${wins}/${decided} · ${r} (${usd})`,
+  statsRiskNote: (usd) =>
+    `<i>Dollarwerte simulieren konstant $${usd} Risiko pro Trade.</i>`,
   statsThinNote: (n) =>
     `<i>⚠️ weniger als ${n} abgeschlossene Trades — noch kein Beleg.</i>`,
   statsFootnote:

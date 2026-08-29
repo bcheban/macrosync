@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { BUCKET_IDS, BUCKET_LABEL, recordByBucket, type Bucket } from '@/lib/confidence';
 import { cn } from '@/lib/cn';
+import { RISK_PER_TRADE_USD, simulatedUsd } from '@/lib/money';
 import type { JournalTrade } from '@/types/domain';
 
 /**
@@ -76,6 +77,7 @@ export function ConfidenceFilter({
         a table saying nothing, and it takes the room the board needs.
       */}
       {settled && (
+        <>
         <div className="flex flex-wrap gap-1.5">
           {rows.map((row) => {
             const decided = row.wins + row.losses;
@@ -124,6 +126,11 @@ export function ConfidenceFilter({
                   </span>
                 </span>
 
+                {/*
+                  R first, dollars in brackets. R is what the engine controls
+                  and what compares across readers who size differently; the
+                  dollars are the same fact at a scale people feel.
+                */}
                 <span
                   className={cn(
                     'tnum font-mono text-[10px]',
@@ -132,11 +139,16 @@ export function ConfidenceFilter({
                 >
                   {row.r >= 0 ? '+' : ''}
                   {row.r.toFixed(1)}R
+                  <span className="text-white/30"> ({simulatedUsd(row.r)})</span>
                 </span>
               </button>
             );
           })}
         </div>
+        <p className="text-[10px] text-white/25">
+          {t('signals.riskSimNote', { usd: String(RISK_PER_TRADE_USD) })}
+        </p>
+        </>
       )}
     </div>
   );

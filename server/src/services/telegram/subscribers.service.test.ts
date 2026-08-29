@@ -195,6 +195,14 @@ describe('the published record', () => {
      */
     assert.match(text, /Net result \+12\.0R/);
     assert.match(text, /over 15 settled trades/);
+
+    /*
+     * And the same figure in dollars, at the simulated $100 per trade. Pinned
+     * because the multiplier lives in two repositories that do not compile
+     * against each other — if one drifts, this is what notices.
+     */
+    assert.match(text, /\+\$1,200/);
+    assert.match(text, /simulate a flat \$100/);
   });
 
   it('breaks the win rate down by setup, and omits setups with nothing settled', async () => {
