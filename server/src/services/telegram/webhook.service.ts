@@ -231,19 +231,19 @@ async function statsLine(locale: Locale): Promise<string> {
   const [stats, active, history] = await Promise.all([loadStats(), loadActive(), loadHistory()]);
 
   /*
-   * Two scopes, each stated with its own count, because they answer different
-   * questions and only one of them can be answered completely.
+   * The record, and the one figure that cannot reach all of it.
    *
-   * The lifetime counters remember every decided call. The detailed log keeps
-   * the most recent closes and rolls the rest out, taking their entry and exit
-   * prices with them — and R cannot be recomputed without those. So the win
-   * rate is the whole record and R covers the tail of it.
+   * Wins, losses and net R all come from counters that are added to at close
+   * and never roll out, so all three describe every decided trade. ROI is the
+   * exception: it is a sum of per-trade price moves, and the detailed log
+   * keeps prices for the most recent closes only. R survives because it does
+   * not need them — a loss is one risk unit and a win is the ratio the engine
+   * targeted, both known from the outcome alone.
    *
-   * Presenting only the log was the previous mistake in the other direction:
-   * it said 52 settled when 119 calls had been decided, which reads as though
-   * the bot had traded a fifth of what it had. Presenting only the counters
-   * was the mistake before that. Both figures, each labelled, is the honest
-   * shape — and `settled` here is still exactly wins + losses.
+   * So one line carries a narrower count, and says so. The alternative was
+   * putting every figure on the log, which is what this message did before:
+   * it read 52 settled when 119 calls had been decided, describing two days as
+   * though it were the record.
    */
   const led = ledgerSummary(history);
   const record = { wins: stats.wins, losses: stats.losses, settled: stats.wins + stats.losses };
@@ -260,22 +260,36 @@ async function statsLine(locale: Locale): Promise<string> {
    * not. Putting the total first means the rate underneath it is read as a
    * detail of a known outcome rather than as the outcome.
    */
-  const net = { r: led.r, settled: led.settled };
+  /*
+   * The reconstruction is a fallback, not the first answer.
+   *
+   * Where the log still holds every decided trade, it can be summed per trade
+   * from the levels each one actually closed at — including stops that trailed
+   * before they were hit, which no ratio knows about. The counter is what
+   * remains when the log no longer reaches that far back.
+   */
+  const netR = led.settled === record.settled ? led.r : stats.sums.r;
   /*
    * The raw move alongside the risk-normalised one. R says whether the sizing
    * works; this says whether the direction did — a wide-stop swing and a tight
    * scalp weigh the same in R and very differently here.
    */
   const roi = led.roiPct;
+  const roiPct = `${roi >= 0 ? '+' : ''}${roi.toFixed(2)}%`;
+  const partial = led.settled > 0 && led.settled < record.settled;
+
   const lines = [
-    t.statsNet(`${net.r >= 0 ? '+' : ''}${net.r.toFixed(1)}R`, simulatedUsd(net.r)),
-    t.statsRoi(`${roi >= 0 ? '+' : ''}${roi.toFixed(2)}%`),
+    t.statsNet(`${netR >= 0 ? '+' : ''}${netR.toFixed(1)}R`, simulatedUsd(netR)),
+    t.statsRate(rate, record.wins, record.losses),
+    t.statsSettled(record.settled),
+    '',
+    partial ? t.statsRoiScoped(roiPct, led.settled) : t.statsRoi(roiPct),
   ];
 
-  // Only when the log falls short of the record. Otherwise it is noise.
-  if (net.settled && net.settled < record.settled) lines.push(t.statsLogged(net.settled));
+  // Why one line counts fewer trades than the two above it.
+  if (partial) lines.push(t.statsLogged(led.settled));
 
-  lines.push('', t.statsRate(rate, record.wins, record.losses, record.settled), t.statsOpen(active.length));
+  lines.push(t.statsOpen(active.length));
 
   /*
    * The split reads the counters, because the win rate above it does.

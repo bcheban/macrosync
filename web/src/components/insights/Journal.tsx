@@ -111,6 +111,8 @@ export function Journal({ onClose }: { onClose: () => void }) {
    * moved; only the denominator did, and that was enough for the footnote to
    * quote a total the wins and losses above it did not add up to.
    */
+  const record = data?.record;
+
   const trades = useMemo(
     () => (data?.trades ?? []).filter((trade) => trade.outcome === 'win' || trade.outcome === 'loss'),
     [data],
@@ -181,6 +183,37 @@ export function Journal({ onClose }: { onClose: () => void }) {
 
           {trades.length >= 2 && (
             <>
+              {/*
+                The whole record, above the part of it that can be drawn.
+                The curve needs each trade's levels and the log keeps the most
+                recent closes, so it covers a window; this line does not, and
+                putting it first stops the window being read as the record.
+              */}
+              {record && record.settled > 0 && (
+                <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-white/8 pb-3">
+                  <span
+                    className={cn(
+                      'tnum font-mono text-[18px] font-semibold',
+                      record.r >= 0 ? 'text-bull' : 'text-bear',
+                    )}
+                  >
+                    {record.r >= 0 ? '+' : ''}
+                    {record.r.toFixed(1)}R
+                  </span>
+                  <span className="tnum font-mono text-[12px] text-white/50">{simulatedUsd(record.r)}</span>
+                  <span className="text-[11.5px] text-white/40">
+                    {t('journal.fullRecord', {
+                      wins: String(record.wins),
+                      losses: String(record.losses),
+                      count: record.settled,
+                    })}
+                  </span>
+                </div>
+              )}
+
+              <p className="mb-1.5 text-[10px] tracking-[0.16em] text-white/35 uppercase">
+                {t('journal.recentWindow', { count: trades.length })}
+              </p>
               <EquityCurve points={trades.map((trade) => ({ r: trade.r, at: trade.closedAt }))} />
 
               {/*

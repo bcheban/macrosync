@@ -133,6 +133,9 @@ export const en = {
   /** Raw price movement summed across settled trades — no leverage, no sizing. */
   statsRoi: (pct: string) =>
     `📈 <b>Cumulative ROI ${pct}</b> <i>(1x, unleveraged price movement)</i>`,
+  /** Same figure when it cannot reach the whole record, with its own count. */
+  statsRoiScoped: (pct: string, n: number) =>
+    `📈 <b>Cumulative ROI ${pct}</b> <i>(1x, unleveraged — the ${n} most recent trades)</i>`,
   /**
    * The complete record, and the count it is over.
    *
@@ -141,8 +144,10 @@ export const en = {
    * rest out, so this count can exceed the one the R figures cover, and the
    * number beside it is always exactly wins + losses.
    */
-  statsRate: (rate: number, wins: number, losses: number, settled: number) =>
-    `📊 <b>Win rate ${rate}%</b> — ${wins}W / ${losses}L\n<i>over ${settled} settled trades, the full record</i>`,
+  statsRate: (rate: number, wins: number, losses: number) =>
+    `📊 <b>Win rate ${rate}%</b> — ${wins}W / ${losses}L`,
+  /** The count both figures above it are over. Said once, not twice. */
+  statsSettled: (n: number) => `<i>over ${n} settled trades — the full record</i>`,
   /** Heading for the per-setup split. Only rendered when a setup has a record. */
   statsByStrategy: '<b>By setup</b>',
   statsStrategyRow: (label: string, rate: number, wins: number, losses: number) =>
@@ -155,7 +160,7 @@ export const en = {
    * only being clear about which trades the ones on screen describe.
    */
   statsLogged: (n: number) =>
-    `<i>Net result and ROI cover the ${n} most recent trades — the only ones the log still prices. The win rate below covers every one.</i>`,
+    `<i>ROI needs the entry and exit price of each trade, and the log keeps those for the ${n} most recent. R does not, so the net result above covers every trade.</i>`,
   statsOpen: (n: number) => `📈 ${n} trade${n === 1 ? '' : 's'} open right now`,
   /** The record cut by the confluence reading each call was made on. */
   statsByConfidence: '<b>By confidence</b>',

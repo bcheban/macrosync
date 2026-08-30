@@ -131,6 +131,8 @@ export const en = {
     whatIsR: 'What is R?',
     roiNote: '(1x, unleveraged price movement)',
     bySetup: 'By setup',
+    fullRecord: '{{wins}}W / {{losses}}L over {{count}} settled trades — the full record',
+    recentWindow: 'The {{count}} most recent, trade by trade',
     thin: 'Not enough settled trades yet to draw a curve. The first few close within a day or two of a scan.',
     footnote: 'Cumulative return in R — one unit is the risk each trade was opened with. Covers the {{count}} most recent settled trades, the ones the log still holds prices for; R cannot be recomputed for older closes. The full win/loss record is the figure beside the live board. A call that ends without reaching its target or its stop is neither a win nor a loss and is left out.',
   },

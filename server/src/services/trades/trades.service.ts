@@ -2,6 +2,8 @@ import { env } from '../../config/env.js';
 import { getKlines, type Interval } from '../market.service.js';
 import type { Signal, Strategy } from '../../types/domain.js';
 import { getJson, setJson, storeKey } from '../store/store.js';
+import { STRATEGIES, STRATEGY_PROFILES } from '../signal.engine.js';
+import { realisedR } from './confidence.js';
 
 /**
  * Outcome tracking for the calls the bot publishes.
@@ -88,6 +90,19 @@ export interface TradeStats {
   voided: number;
   breakeven: number;
   byStrategy: Record<string, { wins: number; losses: number }>;
+  /**
+   * Net R over every decided trade, carried forward rather than recomputed.
+   *
+   * The detailed log holds the most recent closes and rolls the rest out,
+   * taking the prices R is derived from with them — so a sum over the log
+   * describes a window, not the record, and the window shrinks as the bot gets
+   * busier. Two days, at the rate it currently closes trades. Accumulating at
+   * close is the only way the figure keeps meaning what it says.
+   *
+   * `settled` is what `r` covers, and it tracks wins + losses exactly once the
+   * seed below has run.
+   */
+  sums: { r: number; settled: number };
   updatedAt: string;
 }
 
@@ -115,6 +130,7 @@ const EMPTY_STATS: TradeStats = {
   voided: 0,
   breakeven: 0,
   byStrategy: {},
+  sums: { r: 0, settled: 0 },
   updatedAt: new Date(0).toISOString(),
 };
 
@@ -147,7 +163,36 @@ export const winRate = (stats: TradeStats): number => {
   return decided ? Math.round((stats.wins / decided) * 100) : 0;
 };
 
-export const loadStats = (): Promise<TradeStats> => getJson<TradeStats>(STATS_KEY, EMPTY_STATS);
+/**
+ * What the record already decided was worth, before anything accumulated it.
+ *
+ * A loss is exactly one risk unit: it means the stop was hit at the price the
+ * trade was opened against, and a stop that had moved would have closed the
+ * trade as breakeven instead. A win is the ratio the engine targets, taken
+ * from the profile rather than written here, so this cannot quietly disagree
+ * with what the engine actually publishes.
+ *
+ * Approximate in one direction only. Every profile targets 1.5 today, but two
+ * of them targeted 2.2 and 3 for the first day the bot ran, and nothing
+ * records which of those early calls this is valuing. Those wins were worth
+ * more than they are credited here, so the seed understates the record and
+ * never flatters it — the safe direction for a figure nobody can re-derive.
+ */
+const seedSums = (stats: TradeStats): { r: number; settled: number } => ({
+  r: Number(
+    STRATEGIES.reduce((sum, strategy) => {
+      const row = stats.byStrategy[strategy] ?? { wins: 0, losses: 0 };
+      return sum + row.wins * STRATEGY_PROFILES[strategy].rewardRatio - row.losses;
+    }, 0).toFixed(2),
+  ),
+  settled: stats.wins + stats.losses,
+});
+
+export const loadStats = async (): Promise<TradeStats> => {
+  const stats = await getJson<TradeStats>(STATS_KEY, EMPTY_STATS);
+  // Written before the accumulator existed: value it once, from the counters.
+  return stats.sums ? stats : { ...stats, sums: seedSums(stats) };
+};
 export const loadActive = (): Promise<ActiveTrade[]> => getJson<ActiveTrade[]>(ACTIVE_KEY, []);
 
 const tradeKey = (trade: { symbol: string; strategy: Strategy }): string =>
@@ -407,6 +452,20 @@ async function record(closed: ClosedTrade[]): Promise<TradeStats> {
     voided: stats.voided + closed.filter((trade) => trade.outcome === 'voided').length,
     breakeven: stats.breakeven + closed.filter((trade) => trade.outcome === 'breakeven').length,
     byStrategy: { ...stats.byStrategy },
+    /*
+     * Summed from the trade itself, not from the profile. A stop that trailed
+     * before it was hit risked less than the one the call was published with,
+     * and `realisedR` reads the levels to see that; the seed above cannot,
+     * which is the whole difference between the two.
+     */
+    sums: {
+      r: Number(
+        (stats.sums.r + closed.reduce((sum, trade) => sum + realisedR(trade), 0)).toFixed(2),
+      ),
+      settled:
+        stats.sums.settled +
+        closed.filter((trade) => trade.outcome === 'win' || trade.outcome === 'loss').length,
+    },
     updatedAt: new Date().toISOString(),
   };
 

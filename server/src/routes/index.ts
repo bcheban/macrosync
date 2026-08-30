@@ -417,7 +417,19 @@ api.get(
       // Oldest first: an equity curve is read left to right.
       .sort((a, b) => Date.parse(a.closedAt) - Date.parse(b.closedAt));
 
-    res.json({ trades, stats, count: trades.length });
+    /*
+     * The whole record beside the part of it that can be drawn. `sums.r`
+     * accumulates at close and outlives the log, so the panel can name what
+     * every decided trade is worth while the curve covers what it still holds.
+     */
+    const record = {
+      wins: stats.wins,
+      losses: stats.losses,
+      settled: stats.wins + stats.losses,
+      r: stats.sums.r,
+    };
+
+    res.json({ trades, stats, record, count: trades.length });
   }),
 );
 

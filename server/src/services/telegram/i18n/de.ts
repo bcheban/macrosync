@@ -120,13 +120,16 @@ export const de: Dictionary = {
     `📊 <b>Nettoergebnis ${r}</b> <i>(${usd} bei $100 Risiko pro Trade)</i>`,
   statsRoi: (pct) =>
     `📈 <b>Kumulierter ROI ${pct}</b> <i>(1x, Kursbewegung ohne Hebel)</i>`,
-  statsRate: (rate, wins, losses, settled) =>
-    `📊 <b>Trefferquote ${rate}%</b> — ${wins}G / ${losses}V\n<i>über ${settled} abgeschlossene Trades — die gesamte Bilanz</i>`,
+  statsRoiScoped: (pct, n) =>
+    `📈 <b>Kumulierter ROI ${pct}</b> <i>(1x, ohne Hebel — die ${n} jüngsten Trades)</i>`,
+  statsRate: (rate, wins, losses) =>
+    `📊 <b>Trefferquote ${rate}%</b> — ${wins}G / ${losses}V`,
+  statsSettled: (n) => `<i>über ${n} abgeschlossene Trades — die gesamte Bilanz</i>`,
   statsByStrategy: '<b>Nach Strategie</b>',
   statsStrategyRow: (label, rate, wins, losses) =>
     `${label} — <b>${rate}%</b> · ${wins}G / ${losses}V`,
   statsLogged: (n) =>
-    `<i>Nettoergebnis und ROI umfassen die ${n} jüngsten Trades — nur für diese hält das Protokoll noch Preise. Die Trefferquote darunter umfasst alle.</i>`,
+    `<i>ROI braucht Ein- und Ausstiegspreis jedes Trades; das Protokoll hält sie für die ${n} jüngsten. R braucht sie nicht, das Nettoergebnis oben umfasst also alle Trades.</i>`,
   statsOpen: (n) => `📈 ${n} Trade${n === 1 ? '' : 's'} gerade offen`,
   statsByConfidence: '<b>Nach Konfidenz</b>',
   statsConfidenceRow: (label, rate, wins, decided, r, usd, thin) =>

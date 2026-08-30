@@ -292,7 +292,26 @@ export interface JournalTrade {
   r: number;
 }
 
+/**
+ * The record, and the priced tail of it.
+ *
+ * `trades` is what the log still holds — enough to draw a curve from, and the
+ * only thing per-trade figures can be computed over. `record` is every decided
+ * trade, from counters that are added to at close and never roll out, so a
+ * panel can say what the whole thing is worth without pretending the curve
+ * covers it.
+ */
+export interface TradeRecord {
+  wins: number;
+  losses: number;
+  /** Always exactly wins + losses. */
+  settled: number;
+  /** Net R across every decided trade, not only the logged ones. */
+  r: number;
+}
+
 export interface TradeHistoryResponse {
   trades: JournalTrade[];
   count: number;
+  record: TradeRecord;
 }
