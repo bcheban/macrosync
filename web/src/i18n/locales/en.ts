@@ -128,10 +128,11 @@ export const en = {
   journal: {
     title: 'Trade journal',
     roi: 'Cumulative ROI',
-    roiNote: 'unleveraged price movement',
+    whatIsR: 'What is R?',
+    roiNote: '(1x, unleveraged price movement)',
     bySetup: 'By setup',
     thin: 'Not enough settled trades yet to draw a curve. The first few close within a day or two of a scan.',
-    footnote: 'Cumulative return in R — one unit is the risk each trade was opened with. {{count}} settled trades. Breakeven closes count as zero and stay in the curve; expired and superseded calls are not trades and are left out.',
+    footnote: 'Cumulative return in R — one unit is the risk each trade was opened with. {{count}} settled trades. Breakeven closes count as zero and stay in the curve; expired calls and ones replaced by a newer setup are not trades and are left out.',
   },
 
   signals: {
@@ -147,6 +148,7 @@ export const en = {
     confidence: 'Confidence',
     confidenceLabel: 'Filter by confidence',
     riskSimNote: 'Dollar figures simulate a flat ${{usd}} risked on every trade.',
+    toTarget: 'To TP',
     title: 'Strategy Signals',
     showMore: 'Show {{count}} more',
     live: '{{count}} actionable',
@@ -167,8 +169,8 @@ export const en = {
     confluence: 'Confluence',
     plan: 'Trade plan',
     entry: 'Entry',
-    stop: 'Stop loss',
-    target: 'Target',
+    stop: 'SL',
+    target: 'TP',
     riskReward: 'R:R',
     risk: 'Risk',
     details: 'Details',
@@ -274,6 +276,8 @@ export const en = {
 
   /** Plain-language explanations for the terms a first-time visitor will stall on. */
   glossary: {
+    rMultiple:
+      '1R is your fixed risk on a trade — the amount you lose if the stop loss is hit. A trade that made twice what it risked is +2R; one that hit its stop is -1R. Quoting results this way makes a wide-stop swing and a tight scalp comparable, and keeps the record independent of how much any particular reader stakes.',
     confidenceBands:
       'The confluence reading behind each call, on 0–100: how strongly trend, momentum, mean reversion and volume agreed. The brackets are half-open, so 70 belongs to 70–80 and never to both. The row beneath shows what each bracket has actually settled at, with its sample size — a rate over nine trades is not the same kind of number as a rate over two hundred, and this is the figure a recalibration would rest on. Readings under 60 belong to no bracket and are left out rather than folded into the lowest.',
     leverage:

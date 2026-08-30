@@ -202,7 +202,11 @@ describe('the published record', () => {
      * against each other — if one drifts, this is what notices.
      */
     assert.match(text, /\+\$1,200/);
-    assert.match(text, /simulate a flat \$100/);
+    // The simulation has to name its assumption and define R in the same
+    // breath — that pairing is what stops a first-time reader treating the
+    // dollars as an account balance.
+    assert.match(text, /exactly \$100 is put at risk/);
+    assert.match(text, /1R = that risk/);
   });
 
   it('breaks the win rate down by setup, and omits setups with nothing settled', async () => {

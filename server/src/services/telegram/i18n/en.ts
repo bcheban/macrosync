@@ -78,10 +78,12 @@ export const en = {
   alertLong: 'LONG',
   alertShort: 'SHORT',
   alertEntry: 'Entry',
-  alertStop: 'Stop',
-  alertTarget: 'Target',
+  alertStop: 'SL',
+  alertTarget: 'TP',
   alertRiskReward: 'Risk / reward',
   alertConfidence: 'Confidence',
+  alertToTarget: 'Move to TP',
+  alertUnleveraged: '1x, before leverage',
   alertLeverage: 'Max safe leverage',
   alertLeverageNote: 'liquidation stays past the stop',
   alertRisk: (pct: string) => `Risk ${pct}% of book`,
@@ -121,10 +123,10 @@ export const en = {
     `📊 No settled trades yet — ${open} still open. The record starts when the first one closes.`,
   /** The headline: what every settled trade adds up to, in units of risk. */
   statsNet: (r: string, usd: string, settled: number) =>
-    `📊 <b>Net result ${r}</b> <i>(${usd}) over ${settled} settled trades</i>`,
+    `📊 <b>Net result ${r}</b> <i>(${usd} if risking $100 per trade)</i>\n<i>over ${settled} settled trades</i>`,
   /** Raw price movement summed across settled trades — no leverage, no sizing. */
   statsRoi: (pct: string) =>
-    `📈 <b>Cumulative ROI ${pct}</b> <i>unleveraged price movement</i>`,
+    `📈 <b>Cumulative ROI ${pct}</b> <i>(1x, unleveraged price movement)</i>`,
   statsRate: (rate: number, wins: number, losses: number, expired: string) =>
     `📊 <b>Win rate ${rate}%</b> — ${wins}W / ${losses}L${expired}`,
   /** Heading for the per-setup split. Only rendered when a setup has a record. */
@@ -148,11 +150,11 @@ export const en = {
       ? `<code>${label}</code>  <i>${rate}% · ${wins}/${decided} · ${r} (${usd})</i> ⚠️`
       : `<code>${label}</code>  <b>${rate}%</b> · ${wins}/${decided} · ${r} (${usd})`,
   statsRiskNote: (usd: number) =>
-    `<i>Dollar figures simulate a flat $${usd} risked on every trade.</i>`,
+    `💡 <i>Dollar figures are a simulation assuming exactly $${usd} is put at risk — the amount lost if SL is hit — on every single trade. 1R = that risk.</i>`,
   statsThinNote: (n: number) =>
     `<i>⚠️ fewer than ${n} settled trades — not yet evidence.</i>`,
   statsFootnote:
-    '<i>Counts target and stop only. Expired, superseded and breakeven calls stay out of the denominator.</i>',
+    '<i>Counts TP and SL only. Expired calls, ones replaced by a newer setup and breakeven closes stay out of the denominator.</i>',
 
   // --- balance --------------------------------------------------------------
   balanceInvalid: '⚠️ <b>Invalid format.</b>',

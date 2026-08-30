@@ -76,10 +76,12 @@ export const de: Dictionary = {
   alertLong: 'LONG',
   alertShort: 'SHORT',
   alertEntry: 'Einstieg',
-  alertStop: 'Stop',
-  alertTarget: 'Ziel',
+  alertStop: 'SL',
+  alertTarget: 'TP',
   alertRiskReward: 'Chance / Risiko',
   alertConfidence: 'Konfidenz',
+  alertToTarget: 'Weg zum TP',
+  alertUnleveraged: '1x, vor Hebel',
   alertLeverage: 'Max. sicherer Hebel',
   alertLeverageNote: 'Liquidation bleibt hinter dem Stop',
   alertRisk: (pct) => `Risiko ${pct}% des Depots`,
@@ -115,9 +117,9 @@ export const de: Dictionary = {
   statsOnlyOpen: (open) =>
     `📊 Noch nichts abgeschlossen — ${open} laufen. Die Bilanz beginnt, wenn der erste Trade schließt.`,
   statsNet: (r, usd, settled) =>
-    `📊 <b>Nettoergebnis ${r}</b> <i>(${usd}) über ${settled} abgeschlossene Trades</i>`,
+    `📊 <b>Nettoergebnis ${r}</b> <i>(${usd} bei $100 Risiko pro Trade)</i>\n<i>über ${settled} abgeschlossene Trades</i>`,
   statsRoi: (pct) =>
-    `📈 <b>Kumulierter ROI ${pct}</b> <i>Kursbewegung ohne Hebel</i>`,
+    `📈 <b>Kumulierter ROI ${pct}</b> <i>(1x, Kursbewegung ohne Hebel)</i>`,
   statsRate: (rate, wins, losses, expired) =>
     `📊 <b>Trefferquote ${rate}%</b> — ${wins}G / ${losses}V${expired}`,
   statsByStrategy: '<b>Nach Strategie</b>',
@@ -131,11 +133,11 @@ export const de: Dictionary = {
       ? `<code>${label}</code>  <i>${rate}% · ${wins}/${decided} · ${r} (${usd})</i> ⚠️`
       : `<code>${label}</code>  <b>${rate}%</b> · ${wins}/${decided} · ${r} (${usd})`,
   statsRiskNote: (usd) =>
-    `<i>Dollarwerte simulieren konstant $${usd} Risiko pro Trade.</i>`,
+    `💡 <i>Dollarwerte sind eine Simulation: genau $${usd} Risiko pro Trade — der Betrag, der bei SL verloren geht. 1R = dieses Risiko.</i>`,
   statsThinNote: (n) =>
     `<i>⚠️ weniger als ${n} abgeschlossene Trades — noch kein Beleg.</i>`,
   statsFootnote:
-    '<i>Gezählt werden nur Ziel und Stop. Verfallene, ersetzte und auf Break-even geschlossene Signale bleiben außerhalb des Nenners.</i>',
+    '<i>Gezählt werden nur TP und SL. Verfallene Calls, durch ein neueres Setup ersetzte und auf Break-even geschlossene bleiben außerhalb des Nenners.</i>',
 
   balanceInvalid: '⚠️ <b>Ungültiges Format.</b>',
   balanceHowTo:

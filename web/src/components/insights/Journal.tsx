@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePolling } from '@/hooks/usePolling';
 import { api } from '@/lib/api';
+import { InfoTip } from '@/components/ui/InfoTip';
 import { cn } from '@/lib/cn';
 import { cumulativeRoiPct } from '@/lib/confidence';
 import { simulatedUsd } from '@/lib/money';
@@ -137,6 +138,14 @@ export function Journal({ onClose }: { onClose: () => void }) {
           <h2 className="flex items-center gap-2 text-[15px] font-semibold text-white">
             <LineChart className="size-4 text-accent-soft" />
             {t('journal.title')}
+            {/*
+              R is the one unit on this panel a newcomer cannot guess, and every
+              figure here is quoted in it. The explanation belongs at the top,
+              beside the title, not in a footnote under the numbers it defines.
+            */}
+            <InfoTip label={t('journal.whatIsR')} align="start">
+              {t('glossary.rMultiple')}
+            </InfoTip>
           </h2>
           <button
             type="button"

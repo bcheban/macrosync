@@ -253,6 +253,24 @@ export function SignalCard({
         <span className="tnum font-mono">
           {t('signals.risk')} <span className="text-white/60">{signal.suggestedRiskPct}%</span>
         </span>
+        {/*
+          How far TP is, at 1x. Without it the leverage ceiling beside it
+          multiplies nothing the reader can see — "45x" is a limit on an
+          unstated quantity. Signed toward the trade, so a short reads positive
+          when it is right.
+        */}
+        {signal.verdict !== 'wait' && (
+          <span className="tnum font-mono">
+            {t('signals.toTarget')}{' '}
+            <span className="text-white/60">
+              {(() => {
+                const move =
+                  ((signal.takeProfit - signal.entry) / signal.entry) * 100 * (signal.verdict === 'sell' ? -1 : 1);
+                return `${move >= 0 ? '+' : ''}${move.toFixed(2)}%`;
+              })()}
+            </span>
+          </span>
+        )}
         {/* Perpetuals only: the leverage at which liquidation still clears the stop. */}
         {signal.maxSafeLeverage > 0 && (
           <span className="tnum font-mono">

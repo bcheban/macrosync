@@ -10,6 +10,7 @@ import {
 } from './telegram.client.js';
 import { activeRecipients, mutedUntil, unsubscribe, type Recipient } from './subscribers.service.js';
 import { takeTriggered } from './watches.service.js';
+import { displayTicker } from '../../utils/ticker.js';
 import { getPrefs } from './preferences.service.js';
 import type { Channel, Locale, Prefs } from './preferences.service.js';
 import { dict } from './i18n/index.js';
@@ -254,8 +255,11 @@ export function formatAlert(
   const long = signal.verdict === 'buy';
   const emoji = SIDE_EMOJI[long ? 'buy' : 'sell'];
 
+  // Signed toward the trade, so a short reads positive when it is right.
+  const targetPct = ((signal.takeProfit - signal.entry) / signal.entry) * 100 * (long ? 1 : -1);
+
   const lines = [
-    `${emoji} <b>${escapeHtml(signal.base)}</b> — <b>${long ? t.alertLong : t.alertShort}</b>`,
+    `${emoji} <b>${escapeHtml(displayTicker(signal.base))}</b> — <b>${long ? t.alertLong : t.alertShort}</b>`,
     `${meta.label} · <i>${escapeHtml(signal.timeframe)} · ${t.alertConfidence} ${signal.confidence}/100</i>`,
     '',
     /*
@@ -267,6 +271,18 @@ export function formatAlert(
     `🏁 <b>${t.alertTarget}</b>  <code>${money(signal.takeProfit)}</code>`,
     `🛑 <b>${t.alertStop}</b>    <code>${money(signal.stopLoss)}</code>`,
     `⚖️ ${t.alertRiskReward} <b>${signal.riskReward}</b> · ${t.alertRisk(String(signal.suggestedRiskPct))}`,
+    /*
+     * The move to TP in percent, at 1x, next to the leverage ceiling.
+     *
+     * Without it the ceiling multiplies nothing a reader can see: 45x is a
+     * limit on an unstated quantity. With it the arithmetic is theirs to do.
+     *
+     * The two are kept apart deliberately. `maxSafeLeverage` is the highest
+     * leverage at which liquidation still sits past the SL — a ceiling, not a
+     * recommendation — and printing it as "Leverage: 45x" would turn a
+     * safety limit into an instruction.
+     */
+    `📈 ${t.alertToTarget}: <b>${targetPct >= 0 ? '+' : ''}${targetPct.toFixed(2)}%</b> <i>(${t.alertUnleveraged})</i>`,
     `🧮 ${t.alertLeverage}: <b>${signal.maxSafeLeverage}x</b> <i>(${t.alertLeverageNote})</i>`,
     '',
     `💡 ${escapeHtml(summary)}`,
@@ -298,7 +314,7 @@ export function formatClose(trade: ClosedTrade, stats: TradeStats, locale: Local
   const expired = stats.expired ? t.statsExpired(stats.expired) : '';
 
   return [
-    `${headline} — <b>${escapeHtml(trade.base)}</b>`,
+    `${headline} — <b>${escapeHtml(displayTicker(trade.base))}</b>`,
     `${meta.label} · <i>${trade.side === 'buy' ? t.alertLong : t.alertShort}</i>`,
     '',
     `🎯 ${t.alertEntry}   <code>${money(trade.entry)}</code>`,
@@ -354,7 +370,7 @@ export async function notifyWatches(
     const prefs = await getPrefs(watch.chatId);
     const t = dict(prefs.locale);
     const label = STRATEGY_META[signal.strategy]?.label ?? signal.strategy;
-    const head = t.watchTriggered(signal.base, label);
+    const head = t.watchTriggered(displayTicker(signal.base), label);
     const body = formatAlert(signal, signal.summary.text, event, stats, prefs.locale);
 
     const result = await sendTelegramMessage(head + '\n\n' + body, {
@@ -506,7 +522,7 @@ export async function notifyBreakeven(moved: ActiveTrade[]): Promise<number> {
         const side = trade.side === 'buy' ? t.alertLong : t.alertShort;
 
         return [
-          t.breakevenTitle(escapeHtml(trade.base)),
+          t.breakevenTitle(escapeHtml(displayTicker(trade.base))),
           `${STRATEGY_META[trade.strategy].label} · ${t.breakevenFrom(side, money(trade.entry))}`,
           '',
           t.breakevenMoved(money(trade.entry)),
@@ -565,7 +581,7 @@ export function resultCard(trade: ClosedTrade, locale: Locale): string {
     '<pre>',
     `┌─ ${headline}`,
     `│`,
-    `│ ${trade.base}  ${long ? t.alertLong : t.alertShort}`,
+    `│ ${displayTicker(trade.base)}  ${long ? t.alertLong : t.alertShort}`,
     `│`,
     `│ ${pad(t.cardRoi, roi)}`,
     `│ ${pad(t.cardRR, rr)}`,

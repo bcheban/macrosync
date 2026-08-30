@@ -70,10 +70,12 @@ export const uk: Dictionary = {
   alertLong: 'ЛОНГ',
   alertShort: 'ШОРТ',
   alertEntry: 'Вхід',
-  alertStop: 'Стоп',
-  alertTarget: 'Ціль',
+  alertStop: 'SL',
+  alertTarget: 'TP',
   alertRiskReward: 'Ризик / прибуток',
   alertConfidence: 'Впевненість',
+  alertToTarget: 'Хід до TP',
+  alertUnleveraged: '1x, до плеча',
   alertLeverage: 'Макс. безпечне плече',
   alertLeverageNote: 'ліквідація лишається за стопом',
   alertRisk: (pct) => `Ризик ${pct}% депозиту`,
@@ -109,9 +111,9 @@ export const uk: Dictionary = {
   statsOnlyOpen: (open) =>
     `📊 Закритих угод ще немає — ${open} у роботі. Запис почнеться, коли закриється перша.`,
   statsNet: (r, usd, settled) =>
-    `📊 <b>Чистий результат ${r}</b> <i>(${usd}) за ${settled} закритих угод</i>`,
+    `📊 <b>Чистий результат ${r}</b> <i>(${usd}, якщо ризикувати $100 на угоду)</i>\n<i>за ${settled} закритих угод</i>`,
   statsRoi: (pct) =>
-    `📈 <b>Сукупний ROI ${pct}</b> <i>рух ціни без плеча</i>`,
+    `📈 <b>Сукупний ROI ${pct}</b> <i>(1x, рух ціни без плеча)</i>`,
   statsRate: (rate, wins, losses, expired) =>
     `📊 <b>Вінрейт ${rate}%</b> — ${wins}П / ${losses}З${expired}`,
   statsByStrategy: '<b>За стратегіями</b>',
@@ -125,11 +127,11 @@ export const uk: Dictionary = {
       ? `<code>${label}</code>  <i>${rate}% · ${wins}/${decided} · ${r} (${usd})</i> ⚠️`
       : `<code>${label}</code>  <b>${rate}%</b> · ${wins}/${decided} · ${r} (${usd})`,
   statsRiskNote: (usd) =>
-    `<i>Суми в доларах — симуляція за умови рівно $${usd} ризику на кожну угоду.</i>`,
+    `💡 <i>Суми в доларах — симуляція за умови, що на кожну угоду ставиться рівно $${usd} — стільки втрачається, якщо спрацює SL. 1R = цей ризик.</i>`,
   statsThinNote: (n) =>
     `<i>⚠️ менше ніж ${n} закритих угод — це ще не доказ.</i>`,
   statsFootnote:
-    '<i>Рахуються лише ціль і стоп. Протерміновані, заміщені та нульові сигнали лишаються поза знаменником.</i>',
+    '<i>Рахуються лише TP і SL. Протерміновані виклики, замінені новішим сетапом і виходи в беззбиток лишаються поза знаменником.</i>',
 
   balanceInvalid: '⚠️ <b>Невірний формат.</b>',
   balanceHowTo:

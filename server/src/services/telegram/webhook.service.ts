@@ -3,6 +3,7 @@ import COMMAND_SPECS from '../../data/commands.json' with { type: 'json' };
 import { env } from '../../config/env.js';
 import { mute, mutedUntil, subscribe, subscribersStatus, unmute, unsubscribe } from './subscribers.service.js';
 import { addWatch, clearWatches, listWatches, parseTrackPayload } from './watches.service.js';
+import { displayTicker } from '../../utils/ticker.js';
 import {
   answerCallbackQuery,
   editMessageReplyMarkup,
@@ -548,7 +549,8 @@ async function handleCommand(
       if (track) {
         const t = dict(prefs.locale);
         const { added, full } = await addWatch({ chatId, ...track });
-        const base = track.symbol.replace(/USDT$/, '');
+        // The same name the site shows, so a deep link and its card agree.
+        const base = displayTicker(track.symbol.replace(/USDT$/, ''));
 
         await sendTelegramMessage(
           full
@@ -577,7 +579,7 @@ async function handleCommand(
 
       await sendTelegramMessage(
         mine.length
-          ? t.watchList(mine.map((w) => `${w.symbol.replace(/USDT$/, '')} · ${w.strategy}`))
+          ? t.watchList(mine.map((w) => `${displayTicker(w.symbol.replace(/USDT$/, ''))} · ${w.strategy}`))
           : t.watchNone,
         { chatId },
       );

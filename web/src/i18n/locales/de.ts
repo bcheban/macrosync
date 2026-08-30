@@ -129,10 +129,11 @@ export const de: Translation = {
   journal: {
     title: 'Handelsjournal',
     roi: 'Kumulierter ROI',
-    roiNote: 'Kursbewegung ohne Hebel',
+    whatIsR: 'Was ist R?',
+    roiNote: '(1x, Kursbewegung ohne Hebel)',
     bySetup: 'Nach Strategie',
     thin: 'Noch zu wenige abgeschlossene Trades für eine Kurve. Die ersten schließen ein bis zwei Tage nach einem Scan.',
-    footnote: 'Kumulierte Rendite in R — eine Einheit ist das Risiko, mit dem ein Trade eröffnet wurde. {{count}} abgeschlossene Trades. Breakeven zählt als null und bleibt in der Kurve; verfallene und ersetzte Calls sind keine Trades und fehlen.',
+    footnote: 'Kumulierte Rendite in R — eine Einheit ist das Risiko, mit dem ein Trade eröffnet wurde. {{count}} abgeschlossene Trades. Breakeven zählt als null und bleibt in der Kurve; verfallene Calls und solche, die ein neueres Setup ersetzt hat, sind keine Trades und fehlen.',
   },
 
   signals: {
@@ -148,6 +149,7 @@ export const de: Translation = {
     confidence: 'Konfidenz',
     confidenceLabel: 'Nach Konfidenz filtern',
     riskSimNote: 'Dollarwerte simulieren konstant ${{usd}} Risiko pro Trade.',
+    toTarget: 'Zum TP',
     title: 'Strategie-Signale',
     showMore: '{{count}} weitere anzeigen',
     live: '{{count}} handelbar',
@@ -168,8 +170,8 @@ export const de: Translation = {
     confluence: 'Konfluenz',
     plan: 'Trade-Plan',
     entry: 'Einstieg',
-    stop: 'Stop-Loss',
-    target: 'Ziel',
+    stop: 'SL',
+    target: 'TP',
     riskReward: 'CRV',
     risk: 'Risiko',
     details: 'Details',
@@ -278,6 +280,8 @@ export const de: Translation = {
   },
 
   glossary: {
+    rMultiple:
+      '1R ist dein fester Einsatz pro Trade — der Betrag, den du verlierst, wenn der Stop-Loss auslöst. Ein Trade, der das Doppelte seines Risikos verdient hat, ist +2R; einer, der den Stop erwischt, −1R. So werden ein Swing mit weitem Stop und ein Scalp mit engem vergleichbar, unabhängig davon, wie viel jemand tatsächlich einsetzt.',
     confidenceBands:
       'Der Konfluenzwert hinter jedem Call, 0–100: wie stark Trend, Momentum, Mean Reversion und Volumen übereinstimmten. Die Bereiche sind halboffen, 70 gehört also zu 70–80 und nie zu beiden. Die Zeile darunter zeigt, womit jeder Bereich tatsächlich abgeschlossen hat, samt Stichprobengröße — eine Quote über neun Trades ist nicht dieselbe Art von Zahl wie eine über zweihundert, und genau darauf würde eine Neukalibrierung fußen. Werte unter 60 gehören zu keinem Bereich und werden nicht in den untersten gezählt.',
     leverage:
