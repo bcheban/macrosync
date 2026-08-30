@@ -231,12 +231,24 @@ async function statsLine(locale: Locale): Promise<string> {
   const [stats, active, history] = await Promise.all([loadStats(), loadActive(), loadHistory()]);
 
   /*
-   * One array, one pass, every figure. The header count, the win rate and both
-   * sums now come from the same trades, so `settled` equals wins + losses by
-   * construction rather than by coincidence.
+   * Two scopes, each stated with its own count, because they answer different
+   * questions and only one of them can be answered completely.
+   *
+   * The lifetime counters remember every decided call. The detailed log keeps
+   * the most recent closes and rolls the rest out, taking their entry and exit
+   * prices with them — and R cannot be recomputed without those. So the win
+   * rate is the whole record and R covers the tail of it.
+   *
+   * Presenting only the log was the previous mistake in the other direction:
+   * it said 52 settled when 119 calls had been decided, which reads as though
+   * the bot had traded a fifth of what it had. Presenting only the counters
+   * was the mistake before that. Both figures, each labelled, is the honest
+   * shape — and `settled` here is still exactly wins + losses.
    */
   const led = ledgerSummary(history);
-  if (!led.settled) return active.length ? t.statsOnlyOpen(active.length) : t.statsNone;
+  const record = { wins: stats.wins, losses: stats.losses, settled: stats.wins + stats.losses };
+  const rate = record.settled ? Math.round((record.wins / record.settled) * 100) : 0;
+  if (!record.settled) return active.length ? t.statsOnlyOpen(active.length) : t.statsNone;
 
   const labels = strategyLabels(locale);
 
@@ -256,39 +268,27 @@ async function statsLine(locale: Locale): Promise<string> {
    */
   const roi = led.roiPct;
   const lines = [
-    t.statsNet(`${net.r >= 0 ? '+' : ''}${net.r.toFixed(1)}R`, simulatedUsd(net.r), net.settled),
+    t.statsNet(`${net.r >= 0 ? '+' : ''}${net.r.toFixed(1)}R`, simulatedUsd(net.r)),
     t.statsRoi(`${roi >= 0 ? '+' : ''}${roi.toFixed(2)}%`),
-    '',
-    t.statsRate(led.rate ?? 0, led.wins, led.losses),
-    t.statsOpen(active.length),
   ];
 
-  /*
-   * Said out loud when the detailed log no longer reaches the whole record.
-   *
-   * The lifetime counters remember closes the log has rolled out, and there is
-   * no way to recompute their R — the per-trade prices went with them. So the
-   * figures above describe the recent record, and a reader comparing them with
-   * a number they saw last month deserves to know which set they are looking
-   * at rather than being left to assume it is all of them.
-   */
-  const lifetime = stats.wins + stats.losses;
-  if (lifetime > led.settled) lines.push(t.statsScopeNote(led.settled, lifetime));
+  // Only when the log falls short of the record. Otherwise it is noise.
+  if (net.settled && net.settled < record.settled) lines.push(t.statsLogged(net.settled));
+
+  lines.push('', t.statsRate(rate, record.wins, record.losses, record.settled), t.statsOpen(active.length));
 
   /*
-   * The split reads the same log as everything above it.
+   * The split reads the counters, because the win rate above it does.
    *
-   * It used to read `stats.byStrategy`, which counts for all time — so its rows
-   * would have summed to the lifetime total while the header counted the recent
-   * window. Two thirds of a fix is not a fix: if the parts do not add to the
-   * whole a reader is right to distrust both.
+   * Its rows have to add up to the number in the header — a reader who totals
+   * them and lands somewhere else is right to distrust both. That pins it to
+   * whichever source the header uses, and the header uses the one that
+   * remembers everything.
    */
-  const settledRows = history.filter((trade) => trade.outcome === 'win' || trade.outcome === 'loss');
-  const split = STATS_ORDER.map((strategy) => {
-    const mine = settledRows.filter((trade) => trade.strategy === strategy);
-    const wins = mine.filter((trade) => trade.outcome === 'win').length;
-    return { label: labels[strategy], wins, losses: mine.length - wins };
-  }).filter((row) => row.wins + row.losses > 0);
+  const split = STATS_ORDER.map((strategy) => ({
+    label: labels[strategy],
+    ...(stats.byStrategy[strategy] ?? { wins: 0, losses: 0 }),
+  })).filter((row) => row.wins + row.losses > 0);
 
   if (split.length) {
     lines.push('', t.statsByStrategy);

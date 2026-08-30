@@ -1,5 +1,21 @@
 import type { Dictionary } from './en.js';
 
+/**
+ * Відмінок іменника після числівника.
+ *
+ * Українська вимагає трьох форм, і кожне з цих чисел приходить із живих даних,
+ * тому обрати одну наперед не можна: «52 останні угоди», але «119 угод» і
+ * «1 угода». Англійська тут обходиться `s`, тож помічник потрібен лише тут.
+ */
+const plural = (n: number, one: string, few: string, many: string): string => {
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 14) return many;
+  const mod10 = n % 10;
+  if (mod10 === 1) return one;
+  if (mod10 >= 2 && mod10 <= 4) return few;
+  return many;
+};
+
 /** Українська. Терміни лишаються ті, якими торгують, а не кальковані. */
 export const uk: Dictionary = {
   chooseLanguage: '🌍 <b>Обери мову</b>\n\nУсі сповіщення й меню будуть нею.',
@@ -110,17 +126,17 @@ export const uk: Dictionary = {
   statsNone: '📊 Записів ще немає. Перший підтверджений сигнал відкриє їх.',
   statsOnlyOpen: (open) =>
     `📊 Закритих угод ще немає — ${open} у роботі. Запис почнеться, коли закриється перша.`,
-  statsNet: (r, usd, settled) =>
-    `📊 <b>Чистий результат ${r}</b> <i>(${usd}, якщо ризикувати $100 на угоду)</i>\n<i>закритих угод — ${settled}</i>`,
+  statsNet: (r, usd) =>
+    `📊 <b>Чистий результат ${r}</b> <i>(${usd}, якщо ризикувати $100 на угоду)</i>`,
   statsRoi: (pct) =>
     `📈 <b>Сукупний ROI ${pct}</b> <i>(1x, рух ціни без плеча)</i>`,
-  statsRate: (rate, wins, losses) =>
-    `📊 <b>Вінрейт ${rate}%</b> — ${wins}П / ${losses}З`,
+  statsRate: (rate, wins, losses, settled) =>
+    `📊 <b>Вінрейт ${rate}%</b> — ${wins}П / ${losses}З\n<i>за весь запис — закритих угод ${settled}</i>`,
   statsByStrategy: '<b>За стратегіями</b>',
   statsStrategyRow: (label, rate, wins, losses) =>
     `${label} — <b>${rate}%</b> · ${wins}П / ${losses}З`,
-  statsScopeNote: (shown, lifetime) =>
-    `<i>Числа охоплюють ${shown} останніх вирішених угод. Від початку записів їх ${lifetime}; давніші випали з докладного журналу.</i>`,
+  statsLogged: (n) =>
+    `<i>Чистий результат і ROI охоплюють ${n} ${plural(n, 'останню угоду', 'останні угоди', 'останніх угод')} — лише для них журнал ще зберігає ціни. Вінрейт нижче враховує всі.</i>`,
   statsOpen: (n) => `📈 Зараз відкрито угод: ${n}`,
   statsByConfidence: '<b>За впевненістю</b>',
   statsConfidenceRow: (label, rate, wins, decided, r, usd, thin) =>

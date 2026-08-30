@@ -116,17 +116,17 @@ export const de: Dictionary = {
   statsNone: '📊 Noch keine Trades erfasst. Das erste bestätigte Signal eröffnet die Bilanz.',
   statsOnlyOpen: (open) =>
     `📊 Noch nichts abgeschlossen — ${open} laufen. Die Bilanz beginnt, wenn der erste Trade schließt.`,
-  statsNet: (r, usd, settled) =>
-    `📊 <b>Nettoergebnis ${r}</b> <i>(${usd} bei $100 Risiko pro Trade)</i>\n<i>über ${settled} abgeschlossene Trades</i>`,
+  statsNet: (r, usd) =>
+    `📊 <b>Nettoergebnis ${r}</b> <i>(${usd} bei $100 Risiko pro Trade)</i>`,
   statsRoi: (pct) =>
     `📈 <b>Kumulierter ROI ${pct}</b> <i>(1x, Kursbewegung ohne Hebel)</i>`,
-  statsRate: (rate, wins, losses) =>
-    `📊 <b>Trefferquote ${rate}%</b> — ${wins}G / ${losses}V`,
+  statsRate: (rate, wins, losses, settled) =>
+    `📊 <b>Trefferquote ${rate}%</b> — ${wins}G / ${losses}V\n<i>über ${settled} abgeschlossene Trades — die gesamte Bilanz</i>`,
   statsByStrategy: '<b>Nach Strategie</b>',
   statsStrategyRow: (label, rate, wins, losses) =>
     `${label} — <b>${rate}%</b> · ${wins}G / ${losses}V`,
-  statsScopeNote: (shown, lifetime) =>
-    `<i>Die Zahlen umfassen die letzten ${shown} entschiedenen Trades. Seit Beginn sind es ${lifetime}; ältere sind aus dem Detailprotokoll gefallen.</i>`,
+  statsLogged: (n) =>
+    `<i>Nettoergebnis und ROI umfassen die ${n} jüngsten Trades — nur für diese hält das Protokoll noch Preise. Die Trefferquote darunter umfasst alle.</i>`,
   statsOpen: (n) => `📈 ${n} Trade${n === 1 ? '' : 's'} gerade offen`,
   statsByConfidence: '<b>Nach Konfidenz</b>',
   statsConfidenceRow: (label, rate, wins, decided, r, usd, thin) =>

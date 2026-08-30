@@ -295,7 +295,7 @@ export function formatAlert(
   }
 
   if (stats && stats.wins + stats.losses > 0) {
-    lines.push('', t.statsRate(winRate(stats), stats.wins, stats.losses));
+    lines.push('', t.statsRate(winRate(stats), stats.wins, stats.losses, stats.wins + stats.losses));
   }
 
   lines.push('', t.disclaimerLong);
@@ -319,7 +319,7 @@ export function formatClose(trade: ClosedTrade, stats: TradeStats, locale: Local
     `${won ? '🏁' : scratched ? '🛡' : '🛑'} ${t.closeExit}    <code>${money(won ? trade.takeProfit : trade.stopLoss)}</code>`,
     `📈 ${t.closeResult}  <b>${trade.resultPct > 0 ? '+' : ''}${trade.resultPct}%</b>`,
     '',
-    t.statsRate(winRate(stats), stats.wins, stats.losses),
+    t.statsRate(winRate(stats), stats.wins, stats.losses, stats.wins + stats.losses),
   ].join('\n');
 }
 

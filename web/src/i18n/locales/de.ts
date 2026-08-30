@@ -133,7 +133,7 @@ export const de: Translation = {
     roiNote: '(1x, Kursbewegung ohne Hebel)',
     bySetup: 'Nach Strategie',
     thin: 'Noch zu wenige abgeschlossene Trades für eine Kurve. Die ersten schließen ein bis zwei Tage nach einem Scan.',
-    footnote: 'Kumulierte Rendite in R — eine Einheit ist das Risiko, mit dem ein Trade eröffnet wurde. {{count}} abgeschlossene Trades: jeder hat entweder sein Ziel oder seinen Stop erreicht. Ein Call, der anders endet, ist weder Gewinn noch Verlust und zählt auf dieser Seite nirgends.',
+    footnote: 'Kumulierte Rendite in R — eine Einheit ist das Risiko, mit dem ein Trade eröffnet wurde. Umfasst die {{count}} jüngsten abgeschlossenen Trades — nur für diese hält das Protokoll noch Preise; für ältere lässt sich R nicht neu berechnen. Die vollständige Bilanz steht neben dem Live-Board. Ein Call, der weder Ziel noch Stop erreicht, ist weder Gewinn noch Verlust und bleibt draußen.',
   },
 
   signals: {

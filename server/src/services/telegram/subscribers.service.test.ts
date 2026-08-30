@@ -218,17 +218,31 @@ describe('the published record', () => {
     /*
      * The invariant the whole message rests on, pinned on its own.
      *
-     * Breakevens in the log are the case that broke it: they return zero R and
-     * zero percent, so including them moved no sum — only the denominator. The
-     * header said 73 while the line beneath it read 40W / 79L. Both figures
-     * were true about different sets of trades, which is why nobody caught it
-     * from the numbers alone.
+     * `settled` is not counted; it is wins + losses, from the same source as
+     * the two numbers beside it. The header used to say 73 while the line
+     * under it read 40W / 79L, because one came from the detailed log and the
+     * other from the lifetime counters — both true about different sets of
+     * trades, which is why the numbers alone never gave it away.
+     *
+     * The log here holds fewer trades than the counters, which is the normal
+     * state after a few weeks: R can only be computed for trades whose prices
+     * survive, so it covers the tail while the rate covers everything.
      */
     const store = await import('../store/store.js');
+    await store.setJson(store.storeKey('trades:stats'), {
+      wins: 40,
+      losses: 79,
+      expired: 54,
+      superseded: 2,
+      voided: 0,
+      breakeven: 44,
+      byStrategy: { day: { wins: 40, losses: 79 } },
+      updatedAt: new Date().toISOString(),
+    });
     await store.setJson(store.storeKey('trades:history'), [
       ...Array.from({ length: 3 }, (_, i) => closed(85, 'win', `w${i}`)),
       ...Array.from({ length: 2 }, (_, i) => closed(85, 'loss', `l${i}`)),
-      // Neither a win nor a loss, and so in none of the figures.
+      // Neither a win nor a loss, and so in none of the sums.
       ...Array.from({ length: 6 }, (_, i) => ({ ...closed(85, 'win', `b${i}`), outcome: 'breakeven', resultPct: 0 })),
     ]);
 
@@ -238,31 +252,39 @@ describe('the published record', () => {
     const text = posted.map(([, body]) => body).join(' ');
 
     const [, wins, losses] = text.match(/(\d+)W . (\d+)L/) ?? [];
-    const [, settled] = text.match(/(\d+) settled/) ?? [];
+    const [, settled] = text.match(/(\d+) settled trades/) ?? [];
     assert.equal(Number(settled), Number(wins) + Number(losses), text);
-    assert.equal(Number(settled), 5, 'the six breakevens are not settled trades');
+    assert.equal(Number(settled), 119, 'the headline count is the whole record');
+    // And the narrower scope is named rather than left to be assumed.
+    assert.match(text, /cover the 5 most recent trades/);
   });
 
   it('breaks the win rate down by setup, and omits setups with nothing settled', async () => {
     /*
-     * Seeding the lifetime counters used to be enough here. It no longer is,
-     * and that is the fix working: every figure on this message — the header
-     * count, the rate, both sums and this split — now comes from one pass over
-     * `trades:history`. The counters and the log describe different sets of
-     * trades, so a figure taken from each cannot be presented as one record.
+     * The rows have to add up to the header, so the split reads whatever the
+     * header reads — the lifetime counters. A reader who totals the setups and
+     * lands on a different number is right to distrust both figures.
      *
-     * Nine wins and five losses across two setups, and a swing that has
-     * settled nothing. The swing is the row worth pinning: it is left out
-     * rather than printed at 0%, because zero of zero is not a win rate and
-     * sits in the list inviting comparison against setups that have traded.
+     * The third row is the case worth pinning: a setup that has settled
+     * nothing is left out rather than printed at 0%, because zero of zero is
+     * not a win rate and sits in the list inviting comparison against setups
+     * that have actually traded.
      */
     const store = await import('../store/store.js');
-    await store.setJson(store.storeKey('trades:history'), [
-      ...Array.from({ length: 7 }, (_, i) => closed(85, 'win', `sw${i}`, 'scalping')),
-      ...Array.from({ length: 1 }, (_, i) => closed(85, 'loss', `sl${i}`, 'scalping')),
-      ...Array.from({ length: 2 }, (_, i) => closed(72, 'win', `dw${i}`, 'day')),
-      ...Array.from({ length: 4 }, (_, i) => closed(72, 'loss', `dl${i}`, 'day')),
-    ]);
+    await store.setJson(store.storeKey('trades:stats'), {
+      wins: 9,
+      losses: 5,
+      expired: 2,
+      superseded: 0,
+      voided: 0,
+      breakeven: 3,
+      byStrategy: {
+        scalping: { wins: 7, losses: 1 },
+        day: { wins: 2, losses: 4 },
+        swing: { wins: 0, losses: 0 },
+      },
+      updatedAt: new Date().toISOString(),
+    });
 
     await start(900, 'en');
     posted = [];
@@ -272,7 +294,7 @@ describe('the published record', () => {
     assert.match(text, /Win rate 64%/);
     // The whole and its parts: 9 + 5 settled, split 7/1 and 2/4.
     assert.match(text, /9W . 5L/);
-    assert.match(text, /14 settled/);
+    assert.match(text, /14 settled trades/);
     assert.match(text, /7W . 1L/);
     assert.match(text, /2W . 4L/);
     // Swing settled nothing, so it has no row at all.

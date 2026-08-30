@@ -121,20 +121,41 @@ export const en = {
   statsNone: '📊 No trades on the record yet. The first confirmed call opens one.',
   statsOnlyOpen: (open: number) =>
     `📊 No settled trades yet — ${open} still open. The record starts when the first one closes.`,
-  /** The headline: what every settled trade adds up to, in units of risk. */
-  statsNet: (r: string, usd: string, settled: number) =>
-    `📊 <b>Net result ${r}</b> <i>(${usd} if risking $100 per trade)</i>\n<i>over ${settled} settled trades</i>`,
+  /**
+   * What the priced trades add up to, in units of risk.
+   *
+   * Carries no denominator of its own. The win rate below is the complete
+   * record and states the count once; this covers whatever the log still holds
+   * prices for, and `statsLogged` says so whenever the two differ.
+   */
+  statsNet: (r: string, usd: string) =>
+    `📊 <b>Net result ${r}</b> <i>(${usd} if risking $100 per trade)</i>`,
   /** Raw price movement summed across settled trades — no leverage, no sizing. */
   statsRoi: (pct: string) =>
     `📈 <b>Cumulative ROI ${pct}</b> <i>(1x, unleveraged price movement)</i>`,
-  statsRate: (rate: number, wins: number, losses: number) =>
-    `📊 <b>Win rate ${rate}%</b> — ${wins}W / ${losses}L`,
+  /**
+   * The complete record, and the count it is over.
+   *
+   * Both come from the lifetime counters — the only place that remembers every
+   * decided call. The detailed log keeps the most recent closes and rolls the
+   * rest out, so this count can exceed the one the R figures cover, and the
+   * number beside it is always exactly wins + losses.
+   */
+  statsRate: (rate: number, wins: number, losses: number, settled: number) =>
+    `📊 <b>Win rate ${rate}%</b> — ${wins}W / ${losses}L\n<i>over ${settled} settled trades, the full record</i>`,
   /** Heading for the per-setup split. Only rendered when a setup has a record. */
   statsByStrategy: '<b>By setup</b>',
   statsStrategyRow: (label: string, rate: number, wins: number, losses: number) =>
     `${label} — <b>${rate}%</b> · ${wins}W / ${losses}L`,
-  statsScopeNote: (shown: number, lifetime: number) =>
-    `<i>Figures cover the most recent ${shown} decided trades. ${lifetime} have been decided since the record began; the older ones have rolled out of the detailed log.</i>`,
+  /**
+   * Said out loud whenever R covers less than the whole record.
+   *
+   * The older closes are gone from the detailed log, and with them the entry
+   * and exit prices R is computed from. There is no recovering those figures —
+   * only being clear about which trades the ones on screen describe.
+   */
+  statsLogged: (n: number) =>
+    `<i>Net result and ROI cover the ${n} most recent trades — the only ones the log still prices. The win rate below covers every one.</i>`,
   statsOpen: (n: number) => `📈 ${n} trade${n === 1 ? '' : 's'} open right now`,
   /** The record cut by the confluence reading each call was made on. */
   statsByConfidence: '<b>By confidence</b>',
