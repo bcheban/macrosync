@@ -99,10 +99,14 @@ export interface TradeStats {
    * busier. Two days, at the rate it currently closes trades. Accumulating at
    * close is the only way the figure keeps meaning what it says.
    *
-   * `settled` is what `r` covers, and it tracks wins + losses exactly once the
+   * `roiPct` is the same record as a share of a deposit: each trade's R times
+   * the risk its setup calls for. Summed rather than compounded, so it does
+   * not depend on the order the trades happened to close in.
+   *
+   * `settled` is what both cover, and it tracks wins + losses exactly once the
    * seed below has run.
    */
-  sums: { r: number; settled: number };
+  sums: { r: number; roiPct: number; settled: number };
   updatedAt: string;
 }
 
@@ -130,7 +134,7 @@ const EMPTY_STATS: TradeStats = {
   voided: 0,
   breakeven: 0,
   byStrategy: {},
-  sums: { r: 0, settled: 0 },
+  sums: { r: 0, roiPct: 0, settled: 0 },
   updatedAt: new Date(0).toISOString(),
 };
 
@@ -178,15 +182,21 @@ export const winRate = (stats: TradeStats): number => {
  * more than they are credited here, so the seed understates the record and
  * never flatters it — the safe direction for a figure nobody can re-derive.
  */
-const seedSums = (stats: TradeStats): { r: number; settled: number } => ({
-  r: Number(
-    STRATEGIES.reduce((sum, strategy) => {
-      const row = stats.byStrategy[strategy] ?? { wins: 0, losses: 0 };
-      return sum + row.wins * STRATEGY_PROFILES[strategy].rewardRatio - row.losses;
-    }, 0).toFixed(2),
-  ),
-  settled: stats.wins + stats.losses,
-});
+const seedSums = (stats: TradeStats): TradeStats['sums'] => {
+  const perStrategy = STRATEGIES.map((strategy) => {
+    const row = stats.byStrategy[strategy] ?? { wins: 0, losses: 0 };
+    return {
+      r: row.wins * STRATEGY_PROFILES[strategy].rewardRatio - row.losses,
+      riskPct: STRATEGY_PROFILES[strategy].baseRiskPct,
+    };
+  });
+
+  return {
+    r: Number(perStrategy.reduce((sum, row) => sum + row.r, 0).toFixed(2)),
+    roiPct: Number(perStrategy.reduce((sum, row) => sum + row.r * row.riskPct, 0).toFixed(2)),
+    settled: stats.wins + stats.losses,
+  };
+};
 
 export const loadStats = async (): Promise<TradeStats> => {
   const stats = await getJson<TradeStats>(STATS_KEY, EMPTY_STATS);
@@ -461,6 +471,15 @@ async function record(closed: ClosedTrade[]): Promise<TradeStats> {
     sums: {
       r: Number(
         (stats.sums.r + closed.reduce((sum, trade) => sum + realisedR(trade), 0)).toFixed(2),
+      ),
+      roiPct: Number(
+        (
+          stats.sums.roiPct +
+          closed.reduce(
+            (sum, trade) => sum + realisedR(trade) * STRATEGY_PROFILES[trade.strategy].baseRiskPct,
+            0,
+          )
+        ).toFixed(2),
       ),
       settled:
         stats.sums.settled +

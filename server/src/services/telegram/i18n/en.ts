@@ -142,6 +142,19 @@ export const en = {
     `📊 <b>Win rate ${rate}%</b> — ${wins}W / ${losses}L`,
   /** The count both figures above it are over. Said once, not twice. */
   statsSettled: (n: number) => `<i>over ${n} settled trades — the full record</i>`,
+  /**
+   * The record as a share of a deposit, over the same trades as everything
+   * else on the message.
+   *
+   * It used to be the sum of each trade's raw price move at 1x. That figure
+   * needed the entry and exit of every trade and the log keeps those for the
+   * most recent closes, so it could only ever describe a window, and a window
+   * sitting under a full-record headline is the thing readers were right to
+   * distrust. This one is derived from R and the risk each setup calls for,
+   * both of which outlive the prices — so it covers every decided trade.
+   */
+  statsRoi: (pct: string) =>
+    `📈 <b>Cumulative ROI ${pct}</b> <i>(of a deposit, at the risk each setup calls for)</i>`,
   /** Heading for the per-setup split. Only rendered when a setup has a record. */
   statsByStrategy: '<b>By setup</b>',
   statsStrategyRow: (label: string, rate: number, wins: number, losses: number) =>

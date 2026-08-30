@@ -427,6 +427,7 @@ api.get(
       losses: stats.losses,
       settled: stats.wins + stats.losses,
       r: stats.sums.r,
+      roiPct: stats.sums.roiPct,
     };
 
     res.json({ trades, stats, record, count: trades.length });

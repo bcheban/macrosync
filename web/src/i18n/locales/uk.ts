@@ -132,7 +132,8 @@ export const uk: Translation = {
 
   journal: {
     title: 'Журнал угод',
-    roi: 'Сукупний ROI',
+    priceMove: 'Рух ціни',
+    ofDeposit: 'від депозиту',
     whatIsR: 'Що таке R?',
     roiNote: '(1x, без плеча — ті самі угоди, що на кривій)',
     bySetup: 'За стратегіями',

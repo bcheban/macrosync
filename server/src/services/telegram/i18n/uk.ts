@@ -131,6 +131,8 @@ export const uk: Dictionary = {
   statsRate: (rate, wins, losses) =>
     `📊 <b>Вінрейт ${rate}%</b> — ${wins}П / ${losses}З`,
   statsSettled: (n) => `<i>за весь запис — закритих угод ${n}</i>`,
+  statsRoi: (pct) =>
+    `📈 <b>Сукупний ROI ${pct}</b> <i>(від депозиту, за ризику, який радить сетап)</i>`,
   statsByStrategy: '<b>За стратегіями</b>',
   statsStrategyRow: (label, rate, wins, losses) =>
     `${label} — <b>${rate}%</b> · ${wins}П / ${losses}З`,

@@ -256,8 +256,14 @@ describe('the published record', () => {
     assert.equal(Number(settled), Number(wins) + Number(losses), text);
     assert.equal(Number(settled), 119, 'the headline count is the whole record');
     // And the narrower scope is named rather than left to be assumed.
-    // No line here describes a different set of trades from the one above it.
-    assert.ok(!/ROI/i.test(text), 'ROI cannot cover the record, so it is not on the summary');
+    /*
+     * ROI is over the same trades as everything else: -19R at the 0.75% a day
+     * trade calls for. Derived from R and the setup's risk rather than from
+     * stored prices, which is what lets it reach trades the log has dropped.
+     */
+    assert.match(text, /Cumulative ROI -14\.25%/);
+    // And no line on the message counts a different set of trades.
+    assert.ok(!/most recent/i.test(text), 'nothing here describes a narrower window');
     /*
      * 40 wins at the 1.5 the engine targets, less 79 losses at one risk unit
      * each. The log holds five of those trades; the figure covers all 119.

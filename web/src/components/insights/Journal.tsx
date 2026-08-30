@@ -201,6 +201,20 @@ export function Journal({ onClose }: { onClose: () => void }) {
                     {record.r.toFixed(1)}R
                   </span>
                   <span className="tnum font-mono text-[12px] text-white/50">{simulatedUsd(record.r)}</span>
+                  {/*
+                    The same record as a share of a deposit. Derived from R and
+                    the risk each setup calls for, so unlike the price-movement
+                    figure below it reaches trades the log has already dropped.
+                  */}
+                  <span
+                    className={cn(
+                      'tnum font-mono text-[12px]',
+                      record.roiPct >= 0 ? 'text-bull/90' : 'text-bear/90',
+                    )}
+                  >
+                    {record.roiPct >= 0 ? '+' : ''}
+                    {record.roiPct.toFixed(2)}% {t('journal.ofDeposit')}
+                  </span>
                   <span className="text-[11.5px] text-white/40">
                     {t('journal.fullRecord', {
                       wins: String(record.wins),
@@ -223,7 +237,7 @@ export function Journal({ onClose }: { onClose: () => void }) {
                 one flatters.
               */}
               <p className="mt-2 flex items-baseline gap-1.5 text-[11px]">
-                <span className="text-white/30">{t('journal.roi')}</span>
+                <span className="text-white/30">{t('journal.priceMove')}</span>
                 <span
                   className={cn(
                     'tnum font-mono text-[13px] font-semibold',

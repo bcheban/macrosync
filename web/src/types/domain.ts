@@ -308,6 +308,8 @@ export interface TradeRecord {
   settled: number;
   /** Net R across every decided trade, not only the logged ones. */
   r: number;
+  /** The same record as a share of a deposit, at each setup's own risk. */
+  roiPct: number;
 }
 
 export interface TradeHistoryResponse {

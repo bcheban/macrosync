@@ -128,7 +128,8 @@ export const de: Translation = {
 
   journal: {
     title: 'Handelsjournal',
-    roi: 'Kumulierter ROI',
+    priceMove: 'Kursbewegung',
+    ofDeposit: 'vom Depot',
     whatIsR: 'Was ist R?',
     roiNote: '(1x, ohne Hebel — dieselben Trades wie die Kurve)',
     bySetup: 'Nach Strategie',

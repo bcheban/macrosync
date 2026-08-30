@@ -121,6 +121,8 @@ export const de: Dictionary = {
   statsRate: (rate, wins, losses) =>
     `📊 <b>Trefferquote ${rate}%</b> — ${wins}G / ${losses}V`,
   statsSettled: (n) => `<i>über ${n} abgeschlossene Trades — die gesamte Bilanz</i>`,
+  statsRoi: (pct) =>
+    `📈 <b>Kumulierter ROI ${pct}</b> <i>(vom Depot, beim Risiko, das das Setup vorsieht)</i>`,
   statsByStrategy: '<b>Nach Strategie</b>',
   statsStrategyRow: (label, rate, wins, losses) =>
     `${label} — <b>${rate}%</b> · ${wins}G / ${losses}V`,

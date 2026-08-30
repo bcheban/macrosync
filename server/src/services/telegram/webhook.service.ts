@@ -233,19 +233,17 @@ async function statsLine(locale: Locale): Promise<string> {
   /*
    * Every figure here is over the same trades, and that is the constraint.
    *
-   * Cumulative ROI used to sit between them. It sums each trade's price move,
-   * so it needs the entry and exit of every trade, and the detailed log keeps
-   * those for the most recent closes only — two days at the current rate. It
-   * could be shown over its own narrower window with a note explaining the
-   * gap, and that is what it was, and the note is the problem: a summary whose
-   * lines count different things asks the reader to hold two records at once,
-   * and reading either one wrong is the summary's fault.
+   * Cumulative ROI used to break it. It summed each trade's raw price move,
+   * which needs the entry and exit of every trade, and the log keeps those for
+   * the most recent closes — two days at the current rate. It came with a note
+   * explaining the shortfall, and the note was the problem: a summary whose
+   * lines count different things asks the reader to hold two records at once.
    *
-   * There is no recovering it. The prices went with the rows. The one ROI that
-   * can cover the record is net R rescaled by a risk percentage, which is the
-   * figure above in different units and says nothing the reader does not have.
-   * So the record summary carries R, and ROI stays on the journal panel, where
-   * a window of trades is what is being looked at.
+   * Those prices are gone with the rows and there is no recovering them. So
+   * ROI is derived instead from what does survive: R, and the risk each setup
+   * calls for. It answers the question people actually ask a ROI figure —
+   * what a deposit following every call would have done — and it answers it
+   * over the whole record rather than over the last two days.
    */
   const led = ledgerSummary(history);
   const record = { wins: stats.wins, losses: stats.losses, settled: stats.wins + stats.losses };
@@ -276,8 +274,11 @@ async function statsLine(locale: Locale): Promise<string> {
    * works; this says whether the direction did — a wide-stop swing and a tight
    * scalp weigh the same in R and very differently here.
    */
+  const roi = stats.sums.roiPct;
+
   const lines = [
     t.statsNet(`${netR >= 0 ? '+' : ''}${netR.toFixed(1)}R`, simulatedUsd(netR)),
+    t.statsRoi(`${roi >= 0 ? '+' : ''}${roi.toFixed(2)}%`),
     t.statsRate(rate, record.wins, record.losses),
     t.statsSettled(record.settled),
     t.statsOpen(active.length),
