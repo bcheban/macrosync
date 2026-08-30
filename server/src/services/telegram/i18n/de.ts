@@ -13,7 +13,7 @@ export const de: Dictionary = {
 
   welcomeIntro: '📡 <b>Ayanox</b> — ein automatischer Futures-Radar.',
   welcomeBody:
-    'Er durchsucht rund um die Uhr die liquiden USDT-Perpetuals auf MEXC. Bestätigt sich ein Setup, bekommst du das Signal: Einstieg, Stop, Ziel, die Begründung in einem Satz und den Hebel, bei dem die Liquidation noch hinter dem Stop liegt.',
+    'Er durchsucht rund um die Uhr die liquiden USDT-Perpetuals auf MEXC. Bestätigt sich ein Setup, bekommst du das Signal: Einstieg, TP, SL, die Begründung in einem Satz und den Hebel, bei dem die Liquidation noch hinter dem Stop liegt.',
   welcomeSubscribed:
     'Du bist angemeldet. Die Schaltflächen unter der Tastatur sind alles Weitere: Einstellungen, der Leitfaden, ein Positionsrechner und die Bilanz.',
   helpIntro: '📡 <b>Ayanox</b> — ein automatischer Radar für MEXC-Perpetuals.',
@@ -83,7 +83,7 @@ export const de: Dictionary = {
   alertToTarget: 'Weg zum TP',
   alertUnleveraged: '1x, vor Hebel',
   alertLeverage: 'Max. sicherer Hebel',
-  alertLeverageNote: 'Liquidation bleibt hinter dem Stop',
+  alertLeverageNote: 'Liquidation bleibt hinter dem SL — eine Obergrenze, keine Empfehlung',
   alertRisk: (pct) => `Risiko ${pct}% des Depots`,
 
   sizingMargin: (margin, leverage, risk, balance) =>

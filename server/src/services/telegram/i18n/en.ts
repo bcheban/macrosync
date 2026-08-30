@@ -13,7 +13,7 @@ export const en = {
 
   welcomeIntro: '📡 <b>Ayanox</b> — an automated futures radar.',
   welcomeBody:
-    'It scans the liquid USDT perpetuals on MEXC around the clock, and when a setup confirms you get the call: entry, stop, target, the reasoning in one sentence, and the leverage at which liquidation still sits clear of the stop.',
+    'It scans the liquid USDT perpetuals on MEXC around the clock, and when a setup confirms you get the call: entry, TP, SL, the reasoning in one sentence, and the leverage at which liquidation still sits clear of the stop.',
   welcomeSubscribed:
     'You are subscribed. The buttons below the keyboard are everything else — settings, the guide, a position calculator, and the record.',
   helpIntro: '📡 <b>Ayanox</b> — an automated futures radar for MEXC perpetuals.',
@@ -85,8 +85,8 @@ export const en = {
   alertToTarget: 'Move to TP',
   alertUnleveraged: '1x, before leverage',
   alertLeverage: 'Max safe leverage',
-  alertLeverageNote: 'liquidation stays past the stop',
-  alertRisk: (pct: string) => `Risk ${pct}% of book`,
+  alertLeverageNote: 'liquidation stays past the SL — a ceiling, not a suggestion',
+  alertRisk: (pct: string) => `Risk ${pct}% of deposit`,
 
   sizingMargin: (margin: string, leverage: number, risk: string, balance: string) =>
     `💰 <b>Margin ${margin}</b> at ${leverage}x — risking <b>${risk}</b> of ${balance}`,
