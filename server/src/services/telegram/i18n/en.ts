@@ -130,12 +130,6 @@ export const en = {
    */
   statsNet: (r: string, usd: string) =>
     `📊 <b>Net result ${r}</b> <i>(${usd} if risking $100 per trade)</i>`,
-  /** Raw price movement summed across settled trades — no leverage, no sizing. */
-  statsRoi: (pct: string) =>
-    `📈 <b>Cumulative ROI ${pct}</b> <i>(1x, unleveraged price movement)</i>`,
-  /** Same figure when it cannot reach the whole record, with its own count. */
-  statsRoiScoped: (pct: string, n: number) =>
-    `📈 <b>Cumulative ROI ${pct}</b> <i>(1x, unleveraged — the ${n} most recent trades)</i>`,
   /**
    * The complete record, and the count it is over.
    *
@@ -152,15 +146,6 @@ export const en = {
   statsByStrategy: '<b>By setup</b>',
   statsStrategyRow: (label: string, rate: number, wins: number, losses: number) =>
     `${label} — <b>${rate}%</b> · ${wins}W / ${losses}L`,
-  /**
-   * Said out loud whenever R covers less than the whole record.
-   *
-   * The older closes are gone from the detailed log, and with them the entry
-   * and exit prices R is computed from. There is no recovering those figures —
-   * only being clear about which trades the ones on screen describe.
-   */
-  statsLogged: (n: number) =>
-    `<i>ROI needs the entry and exit price of each trade, and the log keeps those for the ${n} most recent. R does not, so the net result above covers every trade.</i>`,
   statsOpen: (n: number) => `📈 ${n} trade${n === 1 ? '' : 's'} open right now`,
   /** The record cut by the confluence reading each call was made on. */
   statsByConfidence: '<b>By confidence</b>',

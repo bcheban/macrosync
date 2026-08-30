@@ -130,7 +130,7 @@ export const de: Translation = {
     title: 'Handelsjournal',
     roi: 'Kumulierter ROI',
     whatIsR: 'Was ist R?',
-    roiNote: '(1x, Kursbewegung ohne Hebel)',
+    roiNote: '(1x, ohne Hebel — dieselben Trades wie die Kurve)',
     bySetup: 'Nach Strategie',
     fullRecord: '{{wins}}G / {{losses}}V über {{count}} abgeschlossene Trades — die gesamte Bilanz',
     recentWindow: 'Die {{count}} jüngsten, Trade für Trade',

@@ -129,7 +129,7 @@ export const en = {
     title: 'Trade journal',
     roi: 'Cumulative ROI',
     whatIsR: 'What is R?',
-    roiNote: '(1x, unleveraged price movement)',
+    roiNote: '(1x, unleveraged — the same trades as the curve)',
     bySetup: 'By setup',
     fullRecord: '{{wins}}W / {{losses}}L over {{count}} settled trades — the full record',
     recentWindow: 'The {{count}} most recent, trade by trade',

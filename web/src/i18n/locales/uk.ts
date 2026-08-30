@@ -134,7 +134,7 @@ export const uk: Translation = {
     title: 'Журнал угод',
     roi: 'Сукупний ROI',
     whatIsR: 'Що таке R?',
-    roiNote: '(1x, рух ціни без плеча)',
+    roiNote: '(1x, без плеча — ті самі угоди, що на кривій)',
     bySetup: 'За стратегіями',
     fullRecord: '{{wins}}П / {{losses}}З за {{count}} закритих угод — весь запис',
     recentWindow: 'Останні {{count}} — угода за угодою',

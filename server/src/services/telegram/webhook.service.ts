@@ -231,19 +231,21 @@ async function statsLine(locale: Locale): Promise<string> {
   const [stats, active, history] = await Promise.all([loadStats(), loadActive(), loadHistory()]);
 
   /*
-   * The record, and the one figure that cannot reach all of it.
+   * Every figure here is over the same trades, and that is the constraint.
    *
-   * Wins, losses and net R all come from counters that are added to at close
-   * and never roll out, so all three describe every decided trade. ROI is the
-   * exception: it is a sum of per-trade price moves, and the detailed log
-   * keeps prices for the most recent closes only. R survives because it does
-   * not need them — a loss is one risk unit and a win is the ratio the engine
-   * targeted, both known from the outcome alone.
+   * Cumulative ROI used to sit between them. It sums each trade's price move,
+   * so it needs the entry and exit of every trade, and the detailed log keeps
+   * those for the most recent closes only — two days at the current rate. It
+   * could be shown over its own narrower window with a note explaining the
+   * gap, and that is what it was, and the note is the problem: a summary whose
+   * lines count different things asks the reader to hold two records at once,
+   * and reading either one wrong is the summary's fault.
    *
-   * So one line carries a narrower count, and says so. The alternative was
-   * putting every figure on the log, which is what this message did before:
-   * it read 52 settled when 119 calls had been decided, describing two days as
-   * though it were the record.
+   * There is no recovering it. The prices went with the rows. The one ROI that
+   * can cover the record is net R rescaled by a risk percentage, which is the
+   * figure above in different units and says nothing the reader does not have.
+   * So the record summary carries R, and ROI stays on the journal panel, where
+   * a window of trades is what is being looked at.
    */
   const led = ledgerSummary(history);
   const record = { wins: stats.wins, losses: stats.losses, settled: stats.wins + stats.losses };
@@ -274,22 +276,12 @@ async function statsLine(locale: Locale): Promise<string> {
    * works; this says whether the direction did — a wide-stop swing and a tight
    * scalp weigh the same in R and very differently here.
    */
-  const roi = led.roiPct;
-  const roiPct = `${roi >= 0 ? '+' : ''}${roi.toFixed(2)}%`;
-  const partial = led.settled > 0 && led.settled < record.settled;
-
   const lines = [
     t.statsNet(`${netR >= 0 ? '+' : ''}${netR.toFixed(1)}R`, simulatedUsd(netR)),
     t.statsRate(rate, record.wins, record.losses),
     t.statsSettled(record.settled),
-    '',
-    partial ? t.statsRoiScoped(roiPct, led.settled) : t.statsRoi(roiPct),
+    t.statsOpen(active.length),
   ];
-
-  // Why one line counts fewer trades than the two above it.
-  if (partial) lines.push(t.statsLogged(led.settled));
-
-  lines.push(t.statsOpen(active.length));
 
   /*
    * The split reads the counters, because the win rate above it does.

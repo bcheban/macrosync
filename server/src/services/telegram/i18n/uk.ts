@@ -128,18 +128,12 @@ export const uk: Dictionary = {
     `📊 Закритих угод ще немає — ${open} у роботі. Запис почнеться, коли закриється перша.`,
   statsNet: (r, usd) =>
     `📊 <b>Чистий результат ${r}</b> <i>(${usd}, якщо ризикувати $100 на угоду)</i>`,
-  statsRoi: (pct) =>
-    `📈 <b>Сукупний ROI ${pct}</b> <i>(1x, рух ціни без плеча)</i>`,
-  statsRoiScoped: (pct, n) =>
-    `📈 <b>Сукупний ROI ${pct}</b> <i>(1x, без плеча — ${n} ${plural(n, 'остання угода', 'останні угоди', 'останніх угод')})</i>`,
   statsRate: (rate, wins, losses) =>
     `📊 <b>Вінрейт ${rate}%</b> — ${wins}П / ${losses}З`,
   statsSettled: (n) => `<i>за весь запис — закритих угод ${n}</i>`,
   statsByStrategy: '<b>За стратегіями</b>',
   statsStrategyRow: (label, rate, wins, losses) =>
     `${label} — <b>${rate}%</b> · ${wins}П / ${losses}З`,
-  statsLogged: (n) =>
-    `<i>Для ROI потрібні ціни входу й виходу кожної угоди, а журнал зберігає їх лише для ${n} ${plural(n, 'останньої', 'останніх', 'останніх')}. Для R не потрібні, тож чистий результат вище враховує всі угоди.</i>`,
   statsOpen: (n) => `📈 Зараз відкрито угод: ${n}`,
   statsByConfidence: '<b>За впевненістю</b>',
   statsConfidenceRow: (label, rate, wins, decided, r, usd, thin) =>

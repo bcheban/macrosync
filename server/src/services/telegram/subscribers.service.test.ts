@@ -256,7 +256,8 @@ describe('the published record', () => {
     assert.equal(Number(settled), Number(wins) + Number(losses), text);
     assert.equal(Number(settled), 119, 'the headline count is the whole record');
     // And the narrower scope is named rather than left to be assumed.
-    assert.match(text, /the log keeps those for the 5 most recent/);
+    // No line here describes a different set of trades from the one above it.
+    assert.ok(!/ROI/i.test(text), 'ROI cannot cover the record, so it is not on the summary');
     /*
      * 40 wins at the 1.5 the engine targets, less 79 losses at one risk unit
      * each. The log holds five of those trades; the figure covers all 119.
