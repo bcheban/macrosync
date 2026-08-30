@@ -133,7 +133,7 @@ export const de: Translation = {
     roiNote: '(1x, Kursbewegung ohne Hebel)',
     bySetup: 'Nach Strategie',
     thin: 'Noch zu wenige abgeschlossene Trades für eine Kurve. Die ersten schließen ein bis zwei Tage nach einem Scan.',
-    footnote: 'Kumulierte Rendite in R — eine Einheit ist das Risiko, mit dem ein Trade eröffnet wurde. {{count}} abgeschlossene Trades. Breakeven zählt als null und bleibt in der Kurve; verfallene Calls und solche, die ein neueres Setup ersetzt hat, sind keine Trades und fehlen.',
+    footnote: 'Kumulierte Rendite in R — eine Einheit ist das Risiko, mit dem ein Trade eröffnet wurde. {{count}} abgeschlossene Trades: jeder hat entweder sein Ziel oder seinen Stop erreicht. Ein Call, der anders endet, ist weder Gewinn noch Verlust und zählt auf dieser Seite nirgends.',
   },
 
   signals: {

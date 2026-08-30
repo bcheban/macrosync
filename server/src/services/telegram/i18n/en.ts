@@ -127,13 +127,14 @@ export const en = {
   /** Raw price movement summed across settled trades — no leverage, no sizing. */
   statsRoi: (pct: string) =>
     `📈 <b>Cumulative ROI ${pct}</b> <i>(1x, unleveraged price movement)</i>`,
-  statsRate: (rate: number, wins: number, losses: number, expired: string) =>
-    `📊 <b>Win rate ${rate}%</b> — ${wins}W / ${losses}L${expired}`,
+  statsRate: (rate: number, wins: number, losses: number) =>
+    `📊 <b>Win rate ${rate}%</b> — ${wins}W / ${losses}L`,
   /** Heading for the per-setup split. Only rendered when a setup has a record. */
   statsByStrategy: '<b>By setup</b>',
   statsStrategyRow: (label: string, rate: number, wins: number, losses: number) =>
     `${label} — <b>${rate}%</b> · ${wins}W / ${losses}L`,
-  statsExpired: (n: number) => ` · ${n} expired`,
+  statsScopeNote: (shown: number, lifetime: number) =>
+    `<i>Figures cover the most recent ${shown} decided trades. ${lifetime} have been decided since the record began; the older ones have rolled out of the detailed log.</i>`,
   statsOpen: (n: number) => `📈 ${n} trade${n === 1 ? '' : 's'} open right now`,
   /** The record cut by the confluence reading each call was made on. */
   statsByConfidence: '<b>By confidence</b>',
@@ -153,8 +154,17 @@ export const en = {
     `💡 <i>Dollar figures are a simulation assuming exactly $${usd} is put at risk — the amount lost if SL is hit — on every single trade. 1R = that risk.</i>`,
   statsThinNote: (n: number) =>
     `<i>⚠️ fewer than ${n} settled trades — not yet evidence.</i>`,
+/*
+   * What counts, said as a rule rather than as a list of exclusions.
+   *
+   * It used to enumerate the three ways a call can end without a verdict, and
+   * then a counter beside the win rate reported one of them. Neither belongs
+   * here: an expired call is not an event in anyone's account, and printing a
+   * tally of them next to wins and losses invites the reader to add all three
+   * into one denominator that no figure on this message uses.
+   */
   statsFootnote:
-    '<i>Counts TP and SL only. Expired calls, ones replaced by a newer setup and breakeven closes stay out of the denominator.</i>',
+    '<i>A trade counts once it reaches TP or SL. Anything that ends without doing either is neither a win nor a loss, so it stays out of every figure above.</i>',
 
   // --- balance --------------------------------------------------------------
   balanceInvalid: '⚠️ <b>Invalid format.</b>',

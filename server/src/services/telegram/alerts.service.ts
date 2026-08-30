@@ -295,8 +295,7 @@ export function formatAlert(
   }
 
   if (stats && stats.wins + stats.losses > 0) {
-    const expired = stats.expired ? t.statsExpired(stats.expired) : '';
-    lines.push('', t.statsRate(winRate(stats), stats.wins, stats.losses, expired));
+    lines.push('', t.statsRate(winRate(stats), stats.wins, stats.losses));
   }
 
   lines.push('', t.disclaimerLong);
@@ -311,7 +310,6 @@ export function formatClose(trade: ClosedTrade, stats: TradeStats, locale: Local
   const meta = STRATEGY_META[trade.strategy];
 
   const headline = won ? t.closeWin : scratched ? t.closeBreakeven : t.closeLoss;
-  const expired = stats.expired ? t.statsExpired(stats.expired) : '';
 
   return [
     `${headline} — <b>${escapeHtml(displayTicker(trade.base))}</b>`,
@@ -321,7 +319,7 @@ export function formatClose(trade: ClosedTrade, stats: TradeStats, locale: Local
     `${won ? '🏁' : scratched ? '🛡' : '🛑'} ${t.closeExit}    <code>${money(won ? trade.takeProfit : trade.stopLoss)}</code>`,
     `📈 ${t.closeResult}  <b>${trade.resultPct > 0 ? '+' : ''}${trade.resultPct}%</b>`,
     '',
-    t.statsRate(winRate(stats), stats.wins, stats.losses, expired),
+    t.statsRate(winRate(stats), stats.wins, stats.losses),
   ].join('\n');
 }
 

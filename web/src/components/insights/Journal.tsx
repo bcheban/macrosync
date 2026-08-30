@@ -101,7 +101,21 @@ export function Journal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const { data, loading, error } = usePolling((signal) => api.tradeHistory(signal), 120_000);
 
-  const trades = data?.trades ?? [];
+  /*
+   * Settled means decided: the call reached its target or it hit its stop.
+   *
+   * Everything on this panel reads this one array — the curve, the per-setup
+   * split, the ROI line and the count in the footnote. It used to read the
+   * unfiltered log, which also holds breakevens and calls that expired. Those
+   * contribute exactly zero to R and to the percentage, so no sum here ever
+   * moved; only the denominator did, and that was enough for the footnote to
+   * quote a total the wins and losses above it did not add up to.
+   */
+  const trades = useMemo(
+    () => (data?.trades ?? []).filter((trade) => trade.outcome === 'win' || trade.outcome === 'loss'),
+    [data],
+  );
+
   const bySetup = useMemo(
     () =>
       ORDER.map((strategy) => {

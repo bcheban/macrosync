@@ -120,12 +120,13 @@ export const de: Dictionary = {
     `📊 <b>Nettoergebnis ${r}</b> <i>(${usd} bei $100 Risiko pro Trade)</i>\n<i>über ${settled} abgeschlossene Trades</i>`,
   statsRoi: (pct) =>
     `📈 <b>Kumulierter ROI ${pct}</b> <i>(1x, Kursbewegung ohne Hebel)</i>`,
-  statsRate: (rate, wins, losses, expired) =>
-    `📊 <b>Trefferquote ${rate}%</b> — ${wins}G / ${losses}V${expired}`,
+  statsRate: (rate, wins, losses) =>
+    `📊 <b>Trefferquote ${rate}%</b> — ${wins}G / ${losses}V`,
   statsByStrategy: '<b>Nach Strategie</b>',
   statsStrategyRow: (label, rate, wins, losses) =>
     `${label} — <b>${rate}%</b> · ${wins}G / ${losses}V`,
-  statsExpired: (n) => ` · ${n} verfallen`,
+  statsScopeNote: (shown, lifetime) =>
+    `<i>Die Zahlen umfassen die letzten ${shown} entschiedenen Trades. Seit Beginn sind es ${lifetime}; ältere sind aus dem Detailprotokoll gefallen.</i>`,
   statsOpen: (n) => `📈 ${n} Trade${n === 1 ? '' : 's'} gerade offen`,
   statsByConfidence: '<b>Nach Konfidenz</b>',
   statsConfidenceRow: (label, rate, wins, decided, r, usd, thin) =>
@@ -137,7 +138,7 @@ export const de: Dictionary = {
   statsThinNote: (n) =>
     `<i>⚠️ weniger als ${n} abgeschlossene Trades — noch kein Beleg.</i>`,
   statsFootnote:
-    '<i>Gezählt werden nur TP und SL. Verfallene Calls, durch ein neueres Setup ersetzte und auf Break-even geschlossene bleiben außerhalb des Nenners.</i>',
+    '<i>Ein Trade zählt, sobald er TP oder SL erreicht. Was anders endet, ist weder Gewinn noch Verlust und bleibt aus allen Zahlen oben heraus.</i>',
 
   balanceInvalid: '⚠️ <b>Ungültiges Format.</b>',
   balanceHowTo:

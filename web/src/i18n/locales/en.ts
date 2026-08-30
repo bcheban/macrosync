@@ -132,7 +132,7 @@ export const en = {
     roiNote: '(1x, unleveraged price movement)',
     bySetup: 'By setup',
     thin: 'Not enough settled trades yet to draw a curve. The first few close within a day or two of a scan.',
-    footnote: 'Cumulative return in R — one unit is the risk each trade was opened with. {{count}} settled trades. Breakeven closes count as zero and stay in the curve; expired calls and ones replaced by a newer setup are not trades and are left out.',
+    footnote: 'Cumulative return in R — one unit is the risk each trade was opened with. {{count}} settled trades: every one either reached its target or hit its stop. A call that ends any other way is neither a win nor a loss, and is not counted anywhere on this panel.',
   },
 
   signals: {

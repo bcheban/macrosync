@@ -65,8 +65,16 @@ export function realisedR(trade: ClosedTrade): number {
   return moved / risk;
 }
 
-/** Only outcomes that say something about the call. */
-const SETTLED = new Set(['win', 'loss', 'breakeven']);
+/**
+ * Settled means decided: the call was right or it was wrong.
+ *
+ * Breakeven used to be in here. It contributes exactly zero to both R and the
+ * percentage — the exit is the entry by construction — so counting it changed
+ * no sum, only the denominator, and that was enough to make the header say 73
+ * while the W/L line beside it added to 119. A count that does not equal
+ * wins + losses is a count of something the reader was not told about.
+ */
+const SETTLED = new Set(['win', 'loss']);
 
 /**
  * What every settled trade adds up to, in units of risk.
@@ -123,6 +131,46 @@ export function cumulativeRoiPct(history: ClosedTrade[]): number {
   return history
     .filter((trade) => SETTLED.has(trade.outcome))
     .reduce((sum, trade) => sum + (Number.isFinite(trade.resultPct) ? trade.resultPct : 0), 0);
+}
+
+export interface LedgerSummary {
+  wins: number;
+  losses: number;
+  /** Always exactly `wins + losses`. That is the point of this type. */
+  settled: number;
+  rate: number | null;
+  r: number;
+  roiPct: number;
+}
+
+/**
+ * Every headline figure, from one pass over one array.
+ *
+ * They used to come from two places: the percentages from lifetime counters in
+ * `trades:stats`, the sums from `trades:history` — which keeps only the most
+ * recent closes. The counters never forget and the log does, so the two drifted
+ * apart as soon as the log filled: 119 decided trades against 73 rows.
+ *
+ * Nothing was lost to bad data. It was two scopes presented as one, which is
+ * the harder kind of wrong to notice, because both numbers were correct about
+ * different questions. Returning them together makes that impossible.
+ */
+export function ledgerSummary(history: ClosedTrade[]): LedgerSummary {
+  const settled = history.filter((trade) => SETTLED.has(trade.outcome));
+  const wins = settled.filter((trade) => trade.outcome === 'win').length;
+  const losses = settled.length - wins;
+
+  return {
+    wins,
+    losses,
+    settled: settled.length,
+    rate: settled.length ? Math.round((wins / settled.length) * 100) : null,
+    r: settled.reduce((sum, trade) => sum + realisedR(trade), 0),
+    roiPct: settled.reduce(
+      (sum, trade) => sum + (Number.isFinite(trade.resultPct) ? trade.resultPct : 0),
+      0,
+    ),
+  };
 }
 
 export function netR(history: ClosedTrade[]): { r: number; settled: number } {

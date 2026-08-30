@@ -114,12 +114,13 @@ export const uk: Dictionary = {
     `📊 <b>Чистий результат ${r}</b> <i>(${usd}, якщо ризикувати $100 на угоду)</i>\n<i>за ${settled} закритих угод</i>`,
   statsRoi: (pct) =>
     `📈 <b>Сукупний ROI ${pct}</b> <i>(1x, рух ціни без плеча)</i>`,
-  statsRate: (rate, wins, losses, expired) =>
-    `📊 <b>Вінрейт ${rate}%</b> — ${wins}П / ${losses}З${expired}`,
+  statsRate: (rate, wins, losses) =>
+    `📊 <b>Вінрейт ${rate}%</b> — ${wins}П / ${losses}З`,
   statsByStrategy: '<b>За стратегіями</b>',
   statsStrategyRow: (label, rate, wins, losses) =>
     `${label} — <b>${rate}%</b> · ${wins}П / ${losses}З`,
-  statsExpired: (n) => ` · ${n} протерміновано`,
+  statsScopeNote: (shown, lifetime) =>
+    `<i>Числа охоплюють останні ${shown} вирішених угод. Від початку записів їх ${lifetime}; давніші випали з докладного журналу.</i>`,
   statsOpen: (n) => `📈 Зараз відкрито угод: ${n}`,
   statsByConfidence: '<b>За впевненістю</b>',
   statsConfidenceRow: (label, rate, wins, decided, r, usd, thin) =>
@@ -131,7 +132,7 @@ export const uk: Dictionary = {
   statsThinNote: (n) =>
     `<i>⚠️ менше ніж ${n} закритих угод — це ще не доказ.</i>`,
   statsFootnote:
-    '<i>Рахуються лише TP і SL. Протерміновані виклики, замінені новішим сетапом і виходи в беззбиток лишаються поза знаменником.</i>',
+    '<i>Угода потрапляє в підрахунок, коли дійшла до TP або SL. Усе, що завершилося інакше, — не перемога і не програш, тож у числа вище не входить.</i>',
 
   balanceInvalid: '⚠️ <b>Невірний формат.</b>',
   balanceHowTo:

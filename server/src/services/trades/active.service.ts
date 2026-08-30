@@ -1,7 +1,8 @@
 import { assetBySymbol } from '../../data/assets.js';
 import type { Strategy } from '../../types/domain.js';
 import { getAllTickers24h } from '../market.service.js';
-import { loadActive, loadStats, winRate, type ActiveTrade } from './trades.service.js';
+import { ledgerSummary } from './confidence.js';
+import { loadActive, loadHistory, type ActiveTrade } from './trades.service.js';
 
 /**
  * The open trades, priced, for the dashboard.
@@ -88,7 +89,17 @@ function priceTrade(trade: ActiveTrade, price: number | undefined): ActiveSignal
 }
 
 export async function getActiveSignals(): Promise<ActiveSignalsResponse> {
-  const [active, stats] = await Promise.all([loadActive(), loadStats()]);
+  /*
+   * The record beside the board comes from the trade log, not the lifetime
+   * counters.
+   *
+   * The counters never forget; the log keeps the most recent closes. Reading
+   * one here and the other in the journal put two different win rates on the
+   * same page, each correct about a different set of trades and neither saying
+   * which. One source, one record.
+   */
+  const [active, history] = await Promise.all([loadActive(), loadHistory()]);
+  const ledger = ledgerSummary(history);
 
   /*
    * A pricing failure must not empty the panel. The trades are what matters
@@ -112,8 +123,8 @@ export async function getActiveSignals(): Promise<ActiveSignalsResponse> {
   return {
     signals,
     counts,
-    winRate: winRate(stats),
-    decided: stats.wins + stats.losses,
+    winRate: ledger.rate ?? 0,
+    decided: ledger.settled,
     updatedAt: new Date().toISOString(),
   };
 }

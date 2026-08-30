@@ -39,8 +39,7 @@ import {
 } from './sizing.service.js';
 import { loadActive, loadHistory, loadStats, winRate } from '../trades/trades.service.js';
 import {
-  cumulativeRoiPct,
-  netR,
+  ledgerSummary,
   recordByBucket,
   simulatedUsd,
   RISK_PER_TRADE_USD,
@@ -230,11 +229,15 @@ const STATS_ORDER: Strategy[] = ['scalping', 'day', 'swing'];
 async function statsLine(locale: Locale): Promise<string> {
   const t = dict(locale);
   const [stats, active, history] = await Promise.all([loadStats(), loadActive(), loadHistory()]);
-  const decided = stats.wins + stats.losses;
 
-  if (!decided) return active.length ? t.statsOnlyOpen(active.length) : t.statsNone;
+  /*
+   * One array, one pass, every figure. The header count, the win rate and both
+   * sums now come from the same trades, so `settled` equals wins + losses by
+   * construction rather than by coincidence.
+   */
+  const led = ledgerSummary(history);
+  if (!led.settled) return active.length ? t.statsOnlyOpen(active.length) : t.statsNone;
 
-  const expired = stats.expired ? t.statsExpired(stats.expired) : '';
   const labels = strategyLabels(locale);
 
   /*
@@ -245,25 +248,47 @@ async function statsLine(locale: Locale): Promise<string> {
    * not. Putting the total first means the rate underneath it is read as a
    * detail of a known outcome rather than as the outcome.
    */
-  const net = netR(history);
+  const net = { r: led.r, settled: led.settled };
   /*
    * The raw move alongside the risk-normalised one. R says whether the sizing
    * works; this says whether the direction did — a wide-stop swing and a tight
    * scalp weigh the same in R and very differently here.
    */
-  const roi = cumulativeRoiPct(history);
+  const roi = led.roiPct;
   const lines = [
     t.statsNet(`${net.r >= 0 ? '+' : ''}${net.r.toFixed(1)}R`, simulatedUsd(net.r), net.settled),
     t.statsRoi(`${roi >= 0 ? '+' : ''}${roi.toFixed(2)}%`),
     '',
-    t.statsRate(winRate(stats), stats.wins, stats.losses, expired),
+    t.statsRate(led.rate ?? 0, led.wins, led.losses),
     t.statsOpen(active.length),
   ];
 
-  const split = STATS_ORDER.map((strategy) => ({
-    label: labels[strategy],
-    ...(stats.byStrategy[strategy] ?? { wins: 0, losses: 0 }),
-  })).filter((row) => row.wins + row.losses > 0);
+  /*
+   * Said out loud when the detailed log no longer reaches the whole record.
+   *
+   * The lifetime counters remember closes the log has rolled out, and there is
+   * no way to recompute their R — the per-trade prices went with them. So the
+   * figures above describe the recent record, and a reader comparing them with
+   * a number they saw last month deserves to know which set they are looking
+   * at rather than being left to assume it is all of them.
+   */
+  const lifetime = stats.wins + stats.losses;
+  if (lifetime > led.settled) lines.push(t.statsScopeNote(led.settled, lifetime));
+
+  /*
+   * The split reads the same log as everything above it.
+   *
+   * It used to read `stats.byStrategy`, which counts for all time — so its rows
+   * would have summed to the lifetime total while the header counted the recent
+   * window. Two thirds of a fix is not a fix: if the parts do not add to the
+   * whole a reader is right to distrust both.
+   */
+  const settledRows = history.filter((trade) => trade.outcome === 'win' || trade.outcome === 'loss');
+  const split = STATS_ORDER.map((strategy) => {
+    const mine = settledRows.filter((trade) => trade.strategy === strategy);
+    const wins = mine.filter((trade) => trade.outcome === 'win').length;
+    return { label: labels[strategy], wins, losses: mine.length - wins };
+  }).filter((row) => row.wins + row.losses > 0);
 
   if (split.length) {
     lines.push('', t.statsByStrategy);

@@ -95,6 +95,18 @@ const ACTIVE_KEY = storeKey('trades:active');
 const STATS_KEY = storeKey('trades:stats');
 const HISTORY_KEY = storeKey('trades:history');
 
+/**
+ * How many closes the detailed log keeps.
+ *
+ * It was 100, which the record outgrew — and because every published figure
+ * that needs per-trade data reads this log while the win rate read the lifetime
+ * counters, the two started describing different sets of trades. A thousand is
+ * roughly a month at the current rate and a few hundred kilobytes; the counters
+ * remain the authority for anything older.
+ */
+const HISTORY_LIMIT = 1000;
+
+
 const EMPTY_STATS: TradeStats = {
   wins: 0,
   losses: 0,
@@ -408,7 +420,7 @@ async function record(closed: ClosedTrade[]): Promise<TradeStats> {
 
   // A bounded history makes the record auditable rather than just a percentage.
   const history = await getJson<ClosedTrade[]>(HISTORY_KEY, []);
-  await Promise.all([setJson(STATS_KEY, next), setJson(HISTORY_KEY, [...closed, ...history].slice(0, 100))]);
+  await Promise.all([setJson(STATS_KEY, next), setJson(HISTORY_KEY, [...closed, ...history].slice(0, HISTORY_LIMIT))]);
 
   return next;
 }
