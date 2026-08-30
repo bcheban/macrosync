@@ -111,7 +111,7 @@ export const uk: Dictionary = {
   statsOnlyOpen: (open) =>
     `📊 Закритих угод ще немає — ${open} у роботі. Запис почнеться, коли закриється перша.`,
   statsNet: (r, usd, settled) =>
-    `📊 <b>Чистий результат ${r}</b> <i>(${usd}, якщо ризикувати $100 на угоду)</i>\n<i>за ${settled} закритих угод</i>`,
+    `📊 <b>Чистий результат ${r}</b> <i>(${usd}, якщо ризикувати $100 на угоду)</i>\n<i>закритих угод — ${settled}</i>`,
   statsRoi: (pct) =>
     `📈 <b>Сукупний ROI ${pct}</b> <i>(1x, рух ціни без плеча)</i>`,
   statsRate: (rate, wins, losses) =>
@@ -120,7 +120,7 @@ export const uk: Dictionary = {
   statsStrategyRow: (label, rate, wins, losses) =>
     `${label} — <b>${rate}%</b> · ${wins}П / ${losses}З`,
   statsScopeNote: (shown, lifetime) =>
-    `<i>Числа охоплюють останні ${shown} вирішених угод. Від початку записів їх ${lifetime}; давніші випали з докладного журналу.</i>`,
+    `<i>Числа охоплюють ${shown} останніх вирішених угод. Від початку записів їх ${lifetime}; давніші випали з докладного журналу.</i>`,
   statsOpen: (n) => `📈 Зараз відкрито угод: ${n}`,
   statsByConfidence: '<b>За впевненістю</b>',
   statsConfidenceRow: (label, rate, wins, decided, r, usd, thin) =>
