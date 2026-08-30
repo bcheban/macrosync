@@ -200,8 +200,21 @@ const seedSums = (stats: TradeStats): TradeStats['sums'] => {
 
 export const loadStats = async (): Promise<TradeStats> => {
   const stats = await getJson<TradeStats>(STATS_KEY, EMPTY_STATS);
-  // Written before the accumulator existed: value it once, from the counters.
-  return stats.sums ? stats : { ...stats, sums: seedSums(stats) };
+  /*
+   * Seeded when a field is missing, not merely when `sums` is.
+   *
+   * `roiPct` was added after `sums` had already been written, so a record with
+   * the older shape passed the presence check and served an undefined figure —
+   * which JSON drops silently, so the field simply vanished from the response
+   * rather than failing anywhere a test would see. Checking the numbers
+   * themselves is what makes the next field added here safe.
+   */
+  const complete =
+    typeof stats.sums?.r === 'number' &&
+    typeof stats.sums?.roiPct === 'number' &&
+    typeof stats.sums?.settled === 'number';
+
+  return complete ? stats : { ...stats, sums: seedSums(stats) };
 };
 export const loadActive = (): Promise<ActiveTrade[]> => getJson<ActiveTrade[]>(ACTIVE_KEY, []);
 

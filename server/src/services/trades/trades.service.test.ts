@@ -439,6 +439,40 @@ describe('trade ledger', () => {
     assert.equal(stats.voided, 1);
   });
 
+  it('values a record written before the accumulator, and again when a field is added', async () => {
+    /*
+     * The seed runs on any missing field, not only on a missing `sums`.
+     *
+     * `roiPct` was added after `sums` had been written once, so records with
+     * the older shape passed a presence check and served an undefined number.
+     * JSON drops those, so the field vanished from the response instead of
+     * failing anywhere loud. Both shapes are pinned here because the next
+     * field added will land in exactly the same position.
+     */
+    const store = await import('../store/store.js');
+    const base = {
+      wins: 40,
+      losses: 79,
+      expired: 54,
+      superseded: 2,
+      voided: 0,
+      breakeven: 44,
+      byStrategy: { day: { wins: 40, losses: 79 } },
+      updatedAt: new Date().toISOString(),
+    };
+
+    for (const written of [base, { ...base, sums: { r: -19, settled: 119 } }]) {
+      await store.setJson(store.storeKey('trades:stats'), written);
+      const { sums } = await trades.loadStats();
+
+      // 40 wins at the 1.5 the engine targets, less 79 losses at one risk unit.
+      assert.equal(sums.r, -19);
+      // The same record against the 0.75% a day trade calls for.
+      assert.equal(sums.roiPct, -14.25);
+      assert.equal(sums.settled, 119);
+    }
+  });
+
   it('reports a win rate over decided trades only', async () => {
     assert.equal(trades.winRate({ wins: 3, losses: 1, expired: 0, superseded: 0, voided: 0, breakeven: 0, byStrategy: {}, updatedAt: '' }), 75);
     // Expired and superseded calls must not dilute the denominator.
