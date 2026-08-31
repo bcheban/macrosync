@@ -32,7 +32,29 @@ const expired = (key: string): boolean => {
 const REST_URL = env.redisUrl;
 const REST_TOKEN = env.redisToken;
 
-export const storeBackend = (): 'redis' | 'memory' => (REST_URL && REST_TOKEN ? 'redis' : 'memory');
+/**
+ * Tests never reach the real store, whatever the environment says.
+ *
+ * `NODE_TEST_CONTEXT` is set by the node test runner in the process it runs
+ * cases in, and by nothing else. Without this the backend is chosen purely by
+ * whether credentials happen to be present — so a developer who pulls an env
+ * file to run a script has, from that moment, a test suite that reads and
+ * writes the production ledger. It opens trades, settles them and records wins.
+ *
+ * That very nearly happened here: the suite was pointed at production for one
+ * run and got away with it only because every case that writes also stubs
+ * `globalThis.fetch`, which swallowed the REST calls by accident. A file that
+ * did not stub fetch would have written for real, and the first sign of it
+ * would have been a win rate nobody could explain.
+ *
+ * Checked here rather than in a test setup file because the guarantee has to
+ * hold for every test file including ones not yet written — a convention that
+ * has to be remembered is not a guarantee.
+ */
+const underTest = (): boolean => Boolean(process.env.NODE_TEST_CONTEXT);
+
+export const storeBackend = (): 'redis' | 'memory' =>
+  REST_URL && REST_TOKEN && !underTest() ? 'redis' : 'memory';
 
 let lastError: string | undefined;
 
