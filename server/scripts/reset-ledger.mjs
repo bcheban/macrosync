@@ -21,6 +21,8 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 /** The record, and everything computed from it. Mirrors `reset.service.ts`. */
 const PATTERNS = [
@@ -38,20 +40,43 @@ const PATTERNS = [
 /** The roster is not part of the record and is never touched here. */
 const PREFIX = process.env.STORE_PREFIX ?? 'macrosync';
 
+/**
+ * Where the credentials come from, resolved against this file rather than the
+ * working directory.
+ *
+ * That was the first thing to go wrong in practice. Run from the repo root and
+ * it looked for `./.env`; run from `server/` and it looked somewhere else
+ * again — and either way the failure read as a missing variable rather than as
+ * a path it had never checked. A script whose behaviour depends on where you
+ * happened to be standing is one nobody can be told how to run.
+ */
+const HERE = dirname(fileURLToPath(import.meta.url));
+const CANDIDATES = ['../.env', '../.env.local', '../../.env', '../../.env.local'];
+
 function env(name) {
   if (process.env[name]) return process.env[name];
 
-  // A local `.env` is the usual way this runs; fall back to it before failing.
-  for (const file of ['.env', '../.env']) {
+  for (const file of CANDIDATES) {
     try {
-      const match = readFileSync(file, 'utf8').match(new RegExp(`^${name}="?([^"\n]+)"?$`, 'm'));
-      if (match) return match[1];
+      const text = readFileSync(resolve(HERE, file), 'utf8');
+      // Tolerates `export NAME=`, quotes, and trailing whitespace.
+      const pattern = new RegExp(
+        `^\\s*(?:export\\s+)?${name}\\s*=\\s*["']?([^"'\\r\\n]+)`,
+        'm',
+      );
+      const match = text.match(pattern);
+      if (match) return match[1].trim();
     } catch {
       // Absent is fine; the next candidate or the throw below handles it.
     }
   }
 
-  throw new Error(`${name} is not set — export it or put it in server/.env`);
+  throw new Error(
+    `${name} is not set.` +
+      `\n  Looked in: ${CANDIDATES.map((file) => resolve(HERE, file)).join(', ')}` +
+      '\n  Fix: put KV_REST_API_URL and KV_REST_API_TOKEN in server/.env, or run' +
+      '\n       npx vercel env pull server/.env --environment=production',
+  );
 }
 
 const url = env('KV_REST_API_URL');
