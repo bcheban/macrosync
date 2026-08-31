@@ -83,6 +83,17 @@ function priceTrade(trade: ActiveTrade, price: number | undefined): ActiveSignal
     progressPct: price === undefined || span === 0 ? null : round(((price - trade.entry) / span) * 100, 1),
     openedAt: trade.openedAt,
     ageMinutes: Math.max(0, Math.round((Date.now() - Date.parse(trade.openedAt)) / 60_000)),
+    /*
+     * The ladder, and which rungs have paid.
+     *
+     * Carried through because the board and the alert describe the same trade,
+     * and a card showing one target beside a message showing three is the kind
+     * of disagreement that makes a reader distrust both. Absent on trades
+     * opened before the ladder existed, which is why it is optional rather
+     * than defaulted — an empty ladder and no ladder are different facts.
+     */
+    ...(trade.targets?.length ? { targets: trade.targets } : {}),
+    ...(trade.fills?.length ? { fills: trade.fills } : {}),
     ...(trade.breakevenAt ? { breakevenAt: trade.breakevenAt } : {}),
   };
 }

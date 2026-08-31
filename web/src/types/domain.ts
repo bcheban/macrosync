@@ -225,7 +225,16 @@ export interface ActiveSignal {
   stopLoss: number;
   /** Where the stop started, so the risk the call carried stays legible. */
   initialStopLoss: number;
+  /** The last rung of the ladder, so anything reading one target still works. */
   takeProfit: number;
+  /**
+   * The ladder, nearest rung first, and what has closed against it.
+   *
+   * Absent on trades published before the ladder existed. Those resolve on a
+   * single target and are drawn that way, because that is what they are.
+   */
+  targets?: { level: number; price: number; share: number }[];
+  fills?: { level: number; price: number; share: number; reason: string }[];
   /** Null when the exchange feed could not be read; the row still renders. */
   price: number | null;
   unrealisedPct: number | null;

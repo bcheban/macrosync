@@ -206,9 +206,36 @@ function TradeCard({
         </div>
         <div className="min-w-0">
           <div className="text-white/30">{t('signals.target')}</div>
-          <div className="tnum truncate font-mono text-white/50">{formatPrice(trade.takeProfit)}</div>
+          <div className="tnum truncate font-mono text-white/50">
+            {formatPrice(trade.targets?.length ? trade.targets[0]!.price : trade.takeProfit)}
+          </div>
         </div>
       </div>
+
+      {/*
+        The rungs, when the trade has any. Shown as a row of small chips rather
+        than three more label/value pairs: the interesting thing at a glance is
+        which of them have paid, not what each is worth to four decimal places.
+      */}
+      {trade.targets && trade.targets.length > 1 && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          {trade.targets.map((target) => {
+            const hit = trade.fills?.some((fill) => fill.reason === 'target' && fill.level === target.level);
+            return (
+              <span
+                key={target.level}
+                title={formatPrice(target.price)}
+                className={cn(
+                  'tnum rounded px-1.5 py-0.5 font-mono text-[9.5px]',
+                  hit ? 'bg-bull/15 text-bull/90' : 'bg-white/5 text-white/35',
+                )}
+              >
+                {hit ? '✓' : ''}TP{target.level} · {Math.round(target.share * 100)}%
+              </span>
+            );
+          })}
+        </div>
+      )}
 
       {trade.progressPct !== null && <ProgressBar pct={trade.progressPct} />}
 
