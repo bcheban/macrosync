@@ -347,6 +347,7 @@ is why the API function is pinned to `fra1` in `vercel.json`.
 | GET    | `/api/signals/active`          | Open trades from the ledger, priced — the Live Trades board |
 | GET    | `/api/market/candles`          | OHLC for one symbol — the bars behind the trade chart      |
 | POST   | `/api/cron/signals`            | The scheduled scan. `Bearer $CRON_SECRET`; 404s while unset |
+| POST   | `/api/cron/daily-report`       | Publishes the end-of-day summary if one is owed. `Bearer $CRON_SECRET` |
 | POST   | `/api/telegram/webhook`        | Telegram updates. Guarded by `secret_token`; 404s while unset |
 | POST   | `/api/alerts/test`             | Sends one real signal to prove the path. `?secret=`        |
 | POST   | `/api/admin/reset`             | Clears the trading record. `Bearer $ADMIN_SECRET` + `?confirm=RESET` |
@@ -640,6 +641,98 @@ tagged "Bitcoin near current levels" as a NEAR story.
 
 Headlines are cached for five minutes, and a failed refresh serves the previous payload rather than
 emptying the feed.
+
+### Targets — a ladder, not a level
+
+Every call publishes three rungs rather than one target, at **1R / 1.5R / 2.5R**, closing **50 / 30 /
+20 percent** of the position. The middle rung sits where the single target used to, so the record
+before and after this can be read against each other.
+
+The first fill pulls the stop to entry. That is the whole point of taking half off: past TP1 the
+trade cannot lose, and the remainder runs on money the market has already paid.
+
+Rungs are defined in **R**, never in prices. A ladder in prices means one thing on BTC and something
+else entirely on a microcap; R means the same everywhere and is the unit the record is already kept
+in. A rung that would land outside a sane band is dropped and its share redistributed, so the ladder
+always closes the whole position — clamping instead would put two rungs at one price, which fills
+twice on a single candle.
+
+**Results are position-weighted.** A trade that booked half at 1R and gave the rest back at entry
+returned `+0.5R` — not the `+1R` its first target suggests, and not the `0` its exit price suggests.
+Fills are written at close, so `realisedR` reads what happened instead of inferring it from an
+outcome label.
+
+Two consequences worth knowing before reading the stats:
+
+- A trade that fills **any** rung is a win. An expiry after TP1 is a win, and `breakeven` is
+  unreachable for a laddered trade — the stop only moves to entry *after* a rung has paid.
+- Trades opened before this shipped keep the old rules entirely: one target, the fractional stop
+  trigger. They were published that way, and resolving them under rules their readers were never
+  shown would be judging them for something else.
+
+### Cards are edited, not reposted
+
+A rung reached is news about a message the reader already has. Three rungs across a dozen open calls
+would be thirty notifications about positions they know they are in, so the original alert is
+rewritten in place with the full ladder — hit and pending — and the stop's state.
+
+The rendered card is stored per trade under `trades:cards:<id>`, deliberately outside
+`trades:active`: that document is read and rewritten on every scan, and the text is the bulk of it.
+The cards key is read only when something actually happened, and deleted when the trade closes.
+
+The separate breakeven message now goes out for pre-ladder trades only. For the rest the stop moves
+*because* TP1 filled, and one event belongs in one place.
+
+### The record, cut three ways
+
+`/stats` and the daily report both carry **today**, the **trailing seven days** and the **total**.
+
+Day and week are computed from the detailed log, because counters have no timestamps — a running
+total cannot be asked what happened yesterday. The total comes from the counters, because the log
+rolls and a sum over it would quietly become a fortnight's trading wearing the word "total". Each
+row states its own window; the week says so when the log no longer reaches back seven days.
+
+The day is labelled as the noise it is. A handful of trades printing a percentage is not evidence,
+and a reader comparing a 100% day against a 33% record will believe the day.
+
+### The daily report — `/api/cron/daily-report`
+
+Published once per UTC day, after 23:59.
+
+It rides the same five-minute pinger as the scan rather than owning a schedule. A second schedule is
+a second secret to rotate and a second thing to notice has stopped; piggybacking costs one date
+comparison per run and cannot silently stop while the bot is still alerting.
+
+So the trigger is not "it is 23:59" — a pinger may land at 23:57 and 00:02 and never on the minute.
+It is **"the most recent 23:59 has passed and its report has not gone out"**, which fires exactly
+once whatever the pinger does, including after an outage that spanned midnight.
+
+The endpoint exists for a scheduler that would rather call it directly. Both paths run the same
+idempotent function, so wiring one up cannot produce two reports.
+
+```bash
+curl -X POST "https://your-app.vercel.app/api/cron/daily-report"   -H "Authorization: Bearer $CRON_SECRET"
+```
+
+A deployment that has never reported adopts the current day silently, rather than opening with a
+report for a day that ended before the feature existed.
+
+### Resetting the record — `scripts/reset-ledger.mjs`
+
+Run before a release that changes what the record means, which the ladder does: every figure on the
+old record was earned by a full position running to a single level.
+
+It talks to Redis directly rather than through the deployed app, so it works before the release is
+out and needs no admin secret. Dry run is the default.
+
+```bash
+cd server
+node scripts/reset-ledger.mjs            # lists what would go
+node scripts/reset-ledger.mjs --confirm  # deletes it
+```
+
+Open trades go too. They were published under the old rules and cannot be retrofitted with targets
+they never carried.
 
 ### Autonomous alerts — `/api/cron/signals`
 
