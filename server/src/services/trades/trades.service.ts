@@ -321,10 +321,26 @@ const close = (
  * the ledger still tracked a BUY — two records of the same pair disagreeing,
  * with the stale one later resolving against a call nobody was following.
  */
+/**
+ * Why a call was not opened.
+ *
+ * `standing` is not a failure: the same call is already being tracked, and
+ * opening a second would put two positions on one setup. It reads as one only
+ * because both come back without a trade — which is exactly the ambiguity that
+ * had the webhook answering "the ledger refused these levels" to somebody whose
+ * levels were fine and whose trade was already running.
+ */
+export type RefusalReason = 'wait' | 'levels' | 'ladder' | 'standing';
+
 export async function openTrade(
   signal: Signal,
-): Promise<{ opened: boolean; trade?: ActiveTrade; superseded?: ClosedTrade }> {
-  if (signal.verdict === 'wait') return { opened: false };
+): Promise<{
+  opened: boolean;
+  trade?: ActiveTrade;
+  superseded?: ClosedTrade;
+  reason?: RefusalReason;
+}> {
+  if (signal.verdict === 'wait') return { opened: false, reason: 'wait' };
 
   /*
    * The engine refuses these upstream now, but the ledger checks too: a trade
@@ -342,7 +358,7 @@ export async function openTrade(
       stopLoss: signal.stopLoss,
       takeProfit: signal.takeProfit,
     });
-    return { opened: false };
+    return { opened: false, reason: 'levels' };
   }
 
   const active = await loadActive();
@@ -350,7 +366,7 @@ export async function openTrade(
   const existing = active.find((trade) => tradeKey(trade) === key);
 
   // The identical call standing already — nothing to record.
-  if (existing && existing.side === signal.verdict) return { opened: false };
+  if (existing && existing.side === signal.verdict) return { opened: false, reason: 'standing' };
 
   /*
    * The ladder is built here, not in the engine, and from the published levels.
@@ -372,7 +388,7 @@ export async function openTrade(
       entry: signal.entry,
       stopLoss: signal.stopLoss,
     });
-    return { opened: false };
+    return { opened: false, reason: 'ladder' };
   }
 
   const superseded = existing ? close(existing, 'superseded', signal.entry) : undefined;

@@ -209,6 +209,15 @@ export const env = {
 
   /** Shared secret for `/api/cron/signals`. The route 404s while unset. */
   cronSecret: process.env.CRON_SECRET ?? '',
+  /**
+   * Guards the TradingView webhook. The route 404s while unset.
+   *
+   * Separate from `CRON_SECRET` on purpose: this one has to be pasted into
+   * a third party's alert box, in plain text, where anybody with access to
+   * that chart can read it. Sharing it with the secret that triggers scans
+   * would make a leaked alert template into a leaked scheduler.
+   */
+  tradingViewSecret: process.env.TRADINGVIEW_WEBHOOK_SECRET ?? '',
   /** Strategies the scheduled run evaluates. */
   cronStrategies: parseList(process.env.CRON_STRATEGIES, ['scalping', 'day', 'swing']),
 

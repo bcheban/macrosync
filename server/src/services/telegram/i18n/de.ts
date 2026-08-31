@@ -79,6 +79,7 @@ export const de: Dictionary = {
   alertStop: 'SL',
   alertTarget: 'TP',
   alertRiskReward: 'Chance / Risiko',
+  alertViaTradingView: 'über TradingView',
   alertConfidence: 'Konfidenz',
   alertToTarget: 'Weg zum TP',
   alertUnleveraged: '1x, vor Hebel',
@@ -113,6 +114,9 @@ export const de: Dictionary = {
   watchCleared: (n) => `👁 ${n} Beobachtung(en) entfernt.`,
   watchTriggered: (base, strategy) =>
     `👁 <b>${base}</b> — das beobachtete ${strategy}-Setup ist jetzt ein Call.`,
+  replyHit: (ticker, tps, share) =>
+    `✅ <b>$${ticker}</b> hat ${tps} erreicht! ${share}% realisiert.`,
+  replyBreakeven: '🛡 Stop-Loss auf Einstieg gezogen.',
   cardTpHit: (level, price, share) =>
     `✅ <b>TP${level}</b> <code>${price}</code> — erreicht, ${share}% realisiert`,
   cardTpPending: (level, price, share) =>

@@ -293,6 +293,7 @@ Everything lives in `server/.env` (see `server/.env.example`). Every value has a
 | `TELEGRAM_CHAT_ID`      | —                       | Where alerts are posted                                     |
 | `TELEGRAM_COOLDOWN_MS`  | `5400000`               | Quiet period per asset; reversals ignore it                 |
 | `CRON_SECRET`           | —                       | Guards `/api/cron/signals`; the route 404s while unset       |
+| `TRADINGVIEW_WEBHOOK_SECRET` | —                  | Guards the TradingView webhook; the route 404s while unset   |
 | `CRON_STRATEGIES`       | all three               | Which strategies the scheduled run evaluates                |
 | `RADAR_ENABLED`         | `true`                  | Scan the exchange rather than the dashboard's asset list     |
 | `RADAR_UNIVERSE_SIZE`   | `150`                   | Cap on the volume-ranked universe                            |
@@ -348,6 +349,7 @@ is why the API function is pinned to `fra1` in `vercel.json`.
 | GET    | `/api/market/candles`          | OHLC for one symbol — the bars behind the trade chart      |
 | POST   | `/api/cron/signals`            | The scheduled scan. `Bearer $CRON_SECRET`; 404s while unset |
 | POST   | `/api/cron/daily-report`       | Publishes the end-of-day summary if one is owed. `Bearer $CRON_SECRET` |
+| POST   | `/api/webhooks/tradingview`    | Opens a trade from a TradingView alert. 404s while its secret is unset |
 | POST   | `/api/telegram/webhook`        | Telegram updates. Guarded by `secret_token`; 404s while unset |
 | POST   | `/api/alerts/test`             | Sends one real signal to prove the path. `?secret=`        |
 | POST   | `/api/admin/reset`             | Clears the trading record. `Bearer $ADMIN_SECRET` + `?confirm=RESET` |
@@ -733,6 +735,102 @@ node scripts/reset-ledger.mjs --confirm  # deletes it
 
 Open trades go too. They were published under the old rules and cannot be retrofitted with targets
 they never carried.
+
+### TradingView alerts — `/api/webhooks/tradingview`
+
+A chart you have already made up your mind about, arriving as a webhook. It
+converges with the engine at `openTrade`, so an external call gets the same
+1R/1.5R/2.5R ladder, the same breakeven rule and the same place in the record.
+Nothing about the ladder has to be computed on the TradingView side — the alert
+sends entry and stop, and the rungs follow from the risk between them.
+
+**The secret cannot be a header.** TradingView's alert webhook posts a body to a
+URL and offers no way to set request headers, so `Authorization: Bearer` — the
+obvious design — is unusable from the only client that will ever call this. The
+route accepts the secret from a header, the query string or the body; the one to
+paste into TradingView is the field in the JSON.
+
+The route **404s while `TRADINGVIEW_WEBHOOK_SECRET` is unset**, and 404s again on
+a wrong secret. A 401 would tell a scanner it had found something worth coming
+back to.
+
+#### The alert template
+
+In TradingView: *Create Alert → Notifications → Webhook URL*, then paste the URL
+and put this in the message box. `{{close}}` is the price at the moment the alert
+fires; replace it with a plot value if your strategy computes its own entry.
+
+```json
+{
+  "secret": "<TRADINGVIEW_WEBHOOK_SECRET>",
+  "symbol": "{{ticker}}",
+  "side": "long",
+  "entry": "{{close}}",
+  "stopLoss": "{{plot_0}}",
+  "strategy": "day",
+  "timeframe": "{{interval}}",
+  "note": "Breakout retest held.",
+  "id": "{{ticker}}-{{timenow}}"
+}
+```
+
+| Field | Required | Notes |
+| ----- | -------- | ----- |
+| `secret` | yes | Unless sent as a header or `?secret=` |
+| `symbol` | yes | `MEXC:LABUSDT.P`, `LABUSDT` and `LAB` all resolve to `LABUSDT` |
+| `side` | yes | `long` / `short` / `buy` / `sell` |
+| `entry` | yes | Number or string; commas and spaces are tolerated |
+| `stopLoss` | yes | Must sit on the losing side of entry |
+| `strategy` | no | `scalping` / `day` / `swing`, default `day` — decides the horizon |
+| `timeframe` | no | Display only |
+| `note` | no | One sentence for the card, in place of the engine's reasoning |
+| `id` | no | Dedupe key; falls back to symbol + side + entry + stop |
+
+**Set the alert to fire once per bar close.** TradingView resends while a
+condition holds, and a duplicate here is not a duplicate message — it is a second
+position on the same setup, counted twice in the record. The `id` field is the
+safety net: the same key inside six hours is accepted and ignored.
+
+#### What the answers mean
+
+| Status | Body | Meaning |
+| ------ | ---- | ------- |
+| 200 | `{ ok: true, targets: [...] }` | Opened, and the ladder it built |
+| 200 | `{ ok: true, duplicate: true }` | Same `id` already seen — ignored |
+| 200 | `{ ok: true, alreadyOpen: true }` | That setup is already being tracked |
+| 400 | `{ error: "..." }` | The payload is wrong, and the message says how |
+| 404 | `{ error: "Not found" }` | Wrong secret, or the feature is not configured |
+| 422 | `{ error: "..." }` | The levels are unusable |
+
+TradingView shows the response body in its alert log, so every refusal names what
+was wrong rather than answering a bare status.
+
+An external call carries **no confidence score**, and the card says "via
+TradingView" where an engine call shows its confluence. Inventing a number would
+drop these trades into a confidence bracket and move its win rate with evidence
+that is not about the engine; zero falls outside every bracket, so they count in
+the record and stay out of the calibration.
+
+### The take-profit ping
+
+A rung filling rewrites the card **and** sends a short reply under it:
+
+> ✅ **$LAB** hit TP1! Secured 50%. 🛡 Stop-loss moved to breakeven.
+
+Both are needed. An edit is silent, so on its own the one moment a reader might
+act on arrives without a notification; a ping without the edit would leave the
+card claiming a target is still pending. The reply is threaded to each reader's
+own copy of the call, using the message id stored when it was sent.
+
+**Once per level, and the claim is written before the send.** A half-delivered
+send retried five minutes later would tell half the roster a second time that TP1
+hit, and the only fix for that is an apology — where a missed ping still leaves
+the card correct for anyone who opens the chat.
+
+Rungs swept by a single candle fold into one reply (`TP1 + TP2`, one share
+figure). A reader experiences that as one event, and the share named is what
+those rungs booked rather than everything booked so far — "secured 80%" after a
+ping that said 50% reads as 130% of a position.
 
 ### Autonomous alerts — `/api/cron/signals`
 

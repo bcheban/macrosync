@@ -91,6 +91,15 @@ export type InlineButton =
 export type InlineKeyboard = InlineButton[][];
 
 export interface SendOptions {
+  /**
+   * Post this as a reply to an existing message in the same chat.
+   *
+   * What makes a short "TP1 hit" land under the call it is about rather than at
+   * the bottom of a channel, hours of other messages later. Silently ignored by
+   * Telegram if the target has been deleted, which is the right failure: the
+   * ping still arrives, just unthreaded.
+   */
+  replyTo?: number;
   /** Defaults to the owner chat from the environment. */
   chatId?: string;
   keyboard?: InlineKeyboard;
@@ -162,6 +171,16 @@ async function attempt(html: string, options: SendOptions): Promise<SendResult &
         chat_id: options.chatId ?? env.telegramChatId,
         text: html,
         parse_mode: 'HTML',
+        ...(options.replyTo
+          ? {
+              /*
+               * `allow_sending_without_reply` so a deleted original downgrades
+               * to an ordinary message instead of failing the send. The point
+               * of this message is the notification; the threading is a bonus.
+               */
+              reply_parameters: { message_id: options.replyTo, allow_sending_without_reply: true },
+            }
+          : {}),
         // The alert is the message; a link preview would bury it.
         link_preview_options: { is_disabled: true },
         /*

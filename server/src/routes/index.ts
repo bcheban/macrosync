@@ -20,6 +20,7 @@ import {
 import { botStatus, handleUpdate, type TelegramUpdate } from '../services/telegram/webhook.service.js';
 import { getActiveSignals } from '../services/trades/active.service.js';
 import { resetStore, type ResetScope } from '../services/admin/reset.service.js';
+import { webhooks } from './webhooks.js';
 import { maybePublishDailyReport } from '../services/telegram/daily-report.js';
 import { analyticsForReader, formatAnalytics, refreshSnapshot } from '../services/admin/analytics.service.js';
 import {
@@ -38,6 +39,16 @@ const CRON_KEY = storeKey('cron:last');
 import type { Locale, Signal } from '../types/domain.js';
 
 export const api = Router();
+
+/*
+ * Inbound alerts from outside the engine, in their own file.
+ *
+ * Mounted here rather than on the app so it inherits the dual `/api` and `/`
+ * mounting: behind the platform rewrite the prefix is already consumed, and a
+ * webhook URL that works locally and 404s in production is the worst kind of
+ * thing to hand to a third party that logs failures somewhere you do not see.
+ */
+api.use('/webhooks', webhooks);
 
 /** Wraps an async handler so rejections reach the error middleware. */
 const route =

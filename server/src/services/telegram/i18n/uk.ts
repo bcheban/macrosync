@@ -89,6 +89,7 @@ export const uk: Dictionary = {
   alertStop: 'SL',
   alertTarget: 'TP',
   alertRiskReward: 'Ризик / прибуток',
+  alertViaTradingView: 'через TradingView',
   alertConfidence: 'Впевненість',
   alertToTarget: 'Хід до TP',
   alertUnleveraged: '1x, до плеча',
@@ -123,6 +124,9 @@ export const uk: Dictionary = {
   watchCleared: (n) => `👁 Прибрано стежень: ${n}.`,
   watchTriggered: (base, strategy) =>
     `👁 <b>${base}</b> — сетап ${strategy}, за яким ти стежив, став викликом.`,
+  replyHit: (ticker, tps, share) =>
+    `✅ <b>$${ticker}</b> взяв ${tps}! Зафіксовано ${share}%.`,
+  replyBreakeven: '🛡 Стоп переставлено в беззбиток.',
   cardTpHit: (level, price, share) =>
     `✅ <b>TP${level}</b> <code>${price}</code> — взято, зафіксовано ${share}%`,
   cardTpPending: (level, price, share) =>

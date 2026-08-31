@@ -8,7 +8,15 @@ export type Direction = 'long' | 'short' | 'neutral';
 export type Sentiment = 'bullish' | 'bearish' | 'neutral';
 export type VolatilityRegime = 'low' | 'elevated' | 'high' | 'extreme';
 /** Every price in the app comes from one exchange; there is no fallback feed. */
-export type DataSource = 'mexc';
+/**
+ * Where a call came from.
+ *
+ * `tradingview` is not a data feed but an origin: the levels were decided on
+ * somebody's chart rather than by the engine. The card reads differently for
+ * it — there is no confluence score to show, and claiming one would be
+ * inventing agreement that was never measured.
+ */
+export type DataSource = 'mexc' | 'tradingview';
 export type Locale = 'en' | 'uk';
 
 /**

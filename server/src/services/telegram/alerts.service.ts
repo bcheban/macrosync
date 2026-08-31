@@ -15,8 +15,8 @@ import { getPrefs } from './preferences.service.js';
 import type { Channel, Locale, Prefs } from './preferences.service.js';
 import { dict } from './i18n/index.js';
 import { getAccount, mexcFuturesUrl, planPosition } from './sizing.service.js';
-import type { ActiveTrade, Progress } from '../trades/trades.service.js';
-import { forgetCards, rememberCards, updateCards, type Card } from './signal-cards.js';
+import type { ActiveTrade, Progress, RefusalReason } from '../trades/trades.service.js';
+import { announceFills, forgetCards, rememberCards, updateCards, type Card } from './signal-cards.js';
 
 /**
  * Alerting for confirmed calls.
@@ -279,7 +279,15 @@ export function formatAlert(
 
   const lines = [
     `${emoji} <b>${escapeHtml(displayTicker(signal.base))}</b> — <b>${long ? t.alertLong : t.alertShort}</b>`,
-    `${meta.label} · <i>${escapeHtml(signal.timeframe)} · ${t.alertConfidence} ${signal.confidence}/100</i>`,
+    /*
+     * An engine call shows how much of its own confluence agreed. An external
+     * one has no such quantity — the levels came off somebody's chart — so it
+     * says where it came from instead. Printing `0/100` would read as a broken
+     * signal, and printing an invented number would be worse.
+     */
+    signal.source === 'tradingview'
+      ? `${meta.label} · <i>${escapeHtml(signal.timeframe)} · ${t.alertViaTradingView}</i>`
+      : `${meta.label} · <i>${escapeHtml(signal.timeframe)} · ${t.alertConfidence} ${signal.confidence}/100</i>`,
     '',
     /*
      * Entry, target, stop — the order a trade is thought about rather than the
@@ -552,8 +560,14 @@ export async function notifyProgress(
 
   let edited = 0;
 
-  for (const { trade } of progressed) {
+  for (const { trade, filled } of progressed) {
+    /*
+     * The card first, then the ping. A reader whose notification arrives before
+     * the message it points at has been rewritten taps through to a card that
+     * still says the target is pending — and distrusts both.
+     */
     edited += await updateCards(trade, { keyboard: keyboard(trade.symbol) });
+    await announceFills(trade, filled);
   }
 
   /*
@@ -569,6 +583,66 @@ export async function notifyProgress(
   }
 
   return edited;
+}
+
+/**
+ * Publishes a call the engine did not find.
+ *
+ * The webhook path. It skips everything `notifySignals` does to decide *whether*
+ * to speak — the transition guard, the cooldown, the per-run cap ranked by
+ * conviction — because none of those questions apply: somebody set this alert
+ * deliberately and firing it is the answer. What it does not skip is the ledger,
+ * the ladder or the cards, so an external call is a first-class trade from the
+ * moment it lands.
+ *
+ * Returns the trade so the caller can answer the webhook with something more
+ * useful than `ok`, and `undefined` when the ledger refused the levels.
+ */
+export async function publishExternalSignal(
+  signal: Signal,
+  event?: MacroEvent,
+): Promise<{
+  trade?: ActiveTrade;
+  delivered: number;
+  superseded?: string;
+  reason?: RefusalReason;
+}> {
+  if (!telegramConfigured()) {
+    const { trade, superseded, reason } = await openTrade(signal);
+    return {
+      trade,
+      delivered: 0,
+      ...(superseded ? { superseded: superseded.base } : {}),
+      ...(reason ? { reason } : {}),
+    };
+  }
+
+  const stats = await loadStats();
+  const result = await broadcast(
+    async ({ chatId, prefs }) => {
+      const body = formatAlert(signal, signal.summary.text, event, stats, prefs.locale);
+      const sizing = await sizingLine(chatId, signal, prefs.locale);
+      return sizing ? `${body}\n\n${sizing}` : body;
+    },
+    (prefs) => signalKeyboard(prefs, signal.symbol),
+    signal.strategy,
+    'signals',
+  );
+
+  /*
+   * Opened after the broadcast, like the engine path, and for the same reason:
+   * the cards are filed against the trade id, so the trade has to exist to file
+   * them against and the messages have to exist to be filed.
+   */
+  const { trade, superseded, reason } = await openTrade(signal);
+  if (trade) await rememberCards(trade.id, result.cards);
+
+  return {
+    trade,
+    delivered: result.delivered,
+    ...(superseded ? { superseded: superseded.base } : {}),
+    ...(reason ? { reason } : {}),
+  };
 }
 
 /**

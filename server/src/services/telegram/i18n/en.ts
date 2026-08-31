@@ -81,6 +81,8 @@ export const en = {
   alertStop: 'SL',
   alertTarget: 'TP',
   alertRiskReward: 'Risk / reward',
+  /** Shown in place of a confluence score on a call the engine did not find. */
+  alertViaTradingView: 'via TradingView',
   alertConfidence: 'Confidence',
   alertToTarget: 'Move to TP',
   alertUnleveraged: '1x, before leverage',
@@ -127,6 +129,16 @@ export const en = {
    * part a reader cannot infer — half booked at the first target is a different
    * position from a tenth.
    */
+  /**
+   * The ping under the call, when a rung pays.
+   *
+   * Short on purpose. It arrives as a notification on a phone, where the
+   * first line is all that is read — the card above it carries the detail for
+   * anyone who opens the chat.
+   */
+  replyHit: (ticker: string, tps: string, share: number) =>
+    `✅ <b>$${ticker}</b> hit ${tps}! Secured ${share}%.`,
+  replyBreakeven: '🛡 Stop-loss moved to breakeven.',
   cardTpHit: (level: number, price: string, share: number) =>
     `✅ <b>TP${level}</b> <code>${price}</code> — hit, ${share}% booked`,
   cardTpPending: (level: number, price: string, share: number) =>
