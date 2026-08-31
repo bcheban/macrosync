@@ -45,6 +45,7 @@ import {
   RISK_PER_TRADE_USD,
   THIN_SAMPLE,
 } from '../trades/confidence.js';
+import { tiers } from '../trades/periods.js';
 import { maxSafeLeverage } from '../signal.engine.js';
 import { getContractSpecs } from '../market.service.js';
 
@@ -276,13 +277,42 @@ async function statsLine(locale: Locale): Promise<string> {
    */
   const roi = stats.sums.roiPct;
 
+  /*
+   * The two shorter windows, under the record rather than above it.
+   *
+   * They come from the detailed log because counters have no timestamps — a
+   * running total cannot be asked what happened yesterday. That makes them a
+   * different kind of figure from the one above, so each states its own window
+   * and the day is labelled as the noise it is: a handful of trades printing a
+   * percentage is not evidence, however good the percentage looks.
+   */
+  const window = tiers(history, stats);
+
   const lines = [
     t.statsNet(`${netR >= 0 ? '+' : ''}${netR.toFixed(1)}R`, simulatedUsd(netR)),
     t.statsRoi(`${roi >= 0 ? '+' : ''}${roi.toFixed(2)}%`),
     t.statsRate(rate, record.wins, record.losses),
     t.statsSettled(record.settled),
     t.statsOpen(active.length),
+    '',
+    t.statsRecent,
+    t.statsPeriod(
+      t.reportDay,
+      window.daily.rate,
+      window.daily.wins,
+      window.daily.losses,
+      `${window.daily.r >= 0 ? '+' : ''}${window.daily.r.toFixed(1)}R`,
+    ),
+    t.statsPeriod(
+      t.reportWeek,
+      window.weekly.rate,
+      window.weekly.wins,
+      window.weekly.losses,
+      `${window.weekly.r >= 0 ? '+' : ''}${window.weekly.r.toFixed(1)}R`,
+    ),
   ];
+
+  if (!window.weekly.complete) lines.push(t.reportPartialWeek);
 
   /*
    * The split reads the counters, because the win rate above it does.

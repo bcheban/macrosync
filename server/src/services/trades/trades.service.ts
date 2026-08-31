@@ -4,6 +4,18 @@ import type { Signal, Strategy } from '../../types/domain.js';
 import { getJson, setJson, storeKey } from '../store/store.js';
 import { STRATEGIES, STRATEGY_PROFILES } from '../signal.engine.js';
 import { realisedR } from './confidence.js';
+import {
+  anyTargetHit,
+  buildLadder,
+  pctAt,
+  pendingTargets,
+  remainingShare,
+  weighted,
+  type Fill,
+  type Target,
+} from './targets.js';
+
+export type { Fill, Target } from './targets.js';
 
 /**
  * Outcome tracking for the calls the bot publishes.
@@ -33,7 +45,35 @@ export interface ActiveTrade {
    * unreconstructable from the record.
    */
   initialStopLoss: number;
+  /**
+   * The last rung of the ladder, kept as its own field.
+   *
+   * Every consumer that predates multi-TP reads this — the alert card, the
+   * board, the resolvability check — and every one of them means "the price
+   * this call is aiming at". That is still the last rung, so the field keeps
+   * its meaning rather than being deleted and re-added under another name.
+   */
   takeProfit: number;
+  /**
+   * The ladder, nearest rung first.
+   *
+   * Optional because the trades already open when this shipped have none, and
+   * they have to resolve on the rules they were opened under. A trade cannot be
+   * retrofitted with targets it was never published with — the reader was shown
+   * one level and would be judged against three.
+   */
+  targets?: Target[];
+  /** What has closed so far, in the order it closed. */
+  fills?: Fill[];
+  /**
+   * Where this call was announced, so the announcement can be updated.
+   *
+   * One entry per chat that received it. Absent for a trade opened while
+   * Telegram was unreachable, which is the case that matters: an edit needs a
+   * message to edit, and a trade with no announcement simply has nothing to
+   * keep in step.
+   */
+  messages?: { chatId: string; messageId: number }[];
   timeframe: string;
   openedAt: string;
   /** When the stop was moved to entry, if it has been. */
@@ -221,13 +261,55 @@ export const loadActive = (): Promise<ActiveTrade[]> => getJson<ActiveTrade[]>(A
 const tradeKey = (trade: { symbol: string; strategy: Strategy }): string =>
   `${trade.symbol}:${trade.strategy}`;
 
-const close = (trade: ActiveTrade, outcome: Outcome, exit: number): ClosedTrade => {
-  const move = ((exit - trade.entry) / trade.entry) * 100;
+/**
+ * Closes a trade, settling whatever is still open at one price.
+ *
+ * The result is position-weighted, which is the change multi-TP forces. A
+ * trade that took half off at 1R and gave the rest back at entry did not
+ * return what either of those prices says on its own; it returned the blend,
+ * and the blend is what the record has to carry or every figure derived from
+ * it describes a position nobody held.
+ *
+ * A trade with no ladder settles the whole position at `exit`, which is the
+ * old behaviour exactly — the trades already open when this shipped resolve on
+ * the rules they were published under.
+ */
+const close = (
+  trade: ActiveTrade,
+  outcome: Outcome,
+  exit: number,
+  /*
+   * How the remainder closed, which is not the same question as how the trade
+   * turned out. A call that filled TP1 and came back to entry is a win whose
+   * remainder closed at breakeven; labelling that remainder a target fill
+   * would credit it with reaching a level it never reached. The caller knows
+   * which it was, so the caller says.
+   */
+  closedBy?: Fill['reason'],
+): ClosedTrade => {
+  const at = new Date().toISOString();
+  const reason: Fill['reason'] =
+    closedBy ??
+    (outcome === 'win'
+      ? 'target'
+      : outcome === 'breakeven'
+        ? 'breakeven'
+        : outcome === 'loss'
+          ? 'stop'
+          : 'expiry');
+
+  const open = remainingShare(trade.fills ?? []);
+  const fills: Fill[] = [
+    ...(trade.fills ?? []),
+    ...(open > 0 ? [{ level: 0, price: exit, share: open, at, reason }] : []),
+  ];
+
   return {
     ...trade,
+    fills,
     outcome,
-    closedAt: new Date().toISOString(),
-    resultPct: Number((trade.side === 'buy' ? move : -move).toFixed(2)),
+    closedAt: at,
+    resultPct: Number(weighted(fills, (price) => pctAt(trade.side, trade.entry, price)).toFixed(2)),
   };
 };
 
@@ -239,7 +321,9 @@ const close = (trade: ActiveTrade, outcome: Outcome, exit: number): ClosedTrade 
  * the ledger still tracked a BUY — two records of the same pair disagreeing,
  * with the stale one later resolving against a call nobody was following.
  */
-export async function openTrade(signal: Signal): Promise<{ opened: boolean; superseded?: ClosedTrade }> {
+export async function openTrade(
+  signal: Signal,
+): Promise<{ opened: boolean; trade?: ActiveTrade; superseded?: ClosedTrade }> {
   if (signal.verdict === 'wait') return { opened: false };
 
   /*
@@ -268,10 +352,33 @@ export async function openTrade(signal: Signal): Promise<{ opened: boolean; supe
   // The identical call standing already — nothing to record.
   if (existing && existing.side === signal.verdict) return { opened: false };
 
+  /*
+   * The ladder is built here, not in the engine, and from the published levels.
+   *
+   * Built here because it is a property of how the trade is managed rather
+   * than of how the setup was found — the engine's job ends at entry, stop and
+   * a reward ratio. Built from the levels rather than recomputed from the ATR
+   * so the rungs are exact multiples of the risk the reader was actually
+   * shown, not of a risk recalculated a moment later against a moved market.
+   *
+   * An empty ladder means every rung fell outside the sane band, which the
+   * engine's own tradability check should already have caught. Refused rather
+   * than published with one improvised target: a call whose first rung is
+   * absurd is not a call worth making.
+   */
+  const targets = buildLadder(signal.strategy, signal.verdict, signal.entry, signal.stopLoss);
+  if (!targets.length) {
+    console.error(`[trades] no usable target ladder for ${signal.symbol}`, {
+      entry: signal.entry,
+      stopLoss: signal.stopLoss,
+    });
+    return { opened: false };
+  }
+
   const superseded = existing ? close(existing, 'superseded', signal.entry) : undefined;
   const remaining = existing ? active.filter((trade) => trade.id !== existing.id) : active;
 
-  remaining.push({
+  const opened: ActiveTrade = {
     id: `${key}:${Date.now()}`,
     symbol: signal.symbol,
     base: signal.base,
@@ -280,16 +387,21 @@ export async function openTrade(signal: Signal): Promise<{ opened: boolean; supe
     entry: signal.entry,
     stopLoss: signal.stopLoss,
     initialStopLoss: signal.stopLoss,
-    takeProfit: signal.takeProfit,
+    // The last rung is the target, so everything that reads this still works.
+    takeProfit: targets[targets.length - 1]!.price,
+    targets,
+    fills: [],
     confidence: signal.confidence,
     timeframe: signal.timeframe,
     openedAt: new Date().toISOString(),
-  });
+  };
+
+  remaining.push(opened);
 
   await setJson(ACTIVE_KEY, remaining);
   if (superseded) await record([superseded]);
 
-  return { opened: true, ...(superseded ? { superseded } : {}) };
+  return { opened: true, trade: opened, ...(superseded ? { superseded } : {}) };
 }
 
 /**
@@ -345,6 +457,14 @@ export interface Resolution {
   closed?: ClosedTrade;
   /** Set on the run where the stop moved, so it is announced exactly once. */
   movedToBreakeven?: boolean;
+  /**
+   * Rungs that filled during this run, in order.
+   *
+   * Carried out of the resolver rather than derived by comparing before and
+   * after, so the announcement cannot drift from what actually happened. Empty
+   * on every run where nothing filled, which is almost all of them.
+   */
+  filled?: Fill[];
 }
 
 /**
@@ -376,9 +496,24 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
   // Signed so a long and a short read identically from here on.
   const trigger = trade.entry + (trade.takeProfit - trade.entry) * breakevenFraction();
 
+  /*
+   * Two rulebooks, and which one applies is decided by the trade, not by the
+   * deployment.
+   *
+   * A laddered call protects itself when TP1 fills — a concrete level the
+   * reader was shown. A call published before the ladder existed has only the
+   * old fractional trigger, and it has to keep it: those trades are open right
+   * now, their readers were shown one target, and resolving them under rules
+   * they were never published under would be judging them for something else.
+   */
+  const ladder = trade.targets ?? [];
+  const laddered = ladder.length > 0;
+
   let stop = trade.stopLoss;
   let atBreakeven = Boolean(trade.breakevenAt);
   let moved = false;
+  let fills: Fill[] = [...(trade.fills ?? [])];
+  const filled: Fill[] = [];
 
   /*
    * The best the trade ever managed, as a fraction of the distance to target.
@@ -395,23 +530,70 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
       if (candle.openTime < openedAt) continue;
 
       const hitStop = long ? candle.low <= stop : candle.high >= stop;
-      const hitTarget = long ? candle.high >= trade.takeProfit : candle.low <= trade.takeProfit;
 
       if (hitStop) {
         /*
          * A stop sitting at entry is not a loss — nothing was lost. Recording it
          * as one would be as wrong as recording it as a win, so it gets its own
          * outcome and stays out of the rate.
+         *
+         * Unless a rung already filled. Then the call was right, whatever the
+         * remainder did on the way back: half the position was booked at a
+         * profit and cannot be un-booked by what happened after it.
          */
-        const settled = { ...trade, stopLoss: stop };
+        const settled = { ...trade, stopLoss: stop, fills };
+        const outcome: Outcome = anyTargetHit(fills) ? 'win' : atBreakeven ? 'breakeven' : 'loss';
         return {
           trade: settled,
-          closed: close(settled, atBreakeven ? 'breakeven' : 'loss', stop),
+          closed: close(settled, outcome, stop, atBreakeven ? 'breakeven' : 'stop'),
           ...(moved ? { movedToBreakeven: true } : {}),
+          ...(filled.length ? { filled } : {}),
         };
       }
 
-      if (hitTarget) {
+      /*
+       * Rungs, nearest first, and a single bar can sweep more than one.
+       *
+       * Ordered, so the first rung that did not fill ends the scan: nothing
+       * further out can have filled on a bar that never reached this one.
+       * Checked after the stop, so a bar that touched both is read as the stop
+       * — intrabar order is unknowable from candles, and that is the reading
+       * that flatters least.
+       */
+      for (const target of pendingTargets(ladder, fills)) {
+        const reached = long ? candle.high >= target.price : candle.low <= target.price;
+        if (!reached) break;
+
+        const fill: Fill = {
+          level: target.level,
+          price: target.price,
+          share: target.share,
+          at: new Date(candle.openTime).toISOString(),
+          reason: 'target',
+        };
+        fills = [...fills, fill];
+        filled.push(fill);
+
+        // The first rung pays for the trade, so the trade stops being able to lose.
+        if (!atBreakeven) {
+          stop = trade.entry;
+          atBreakeven = true;
+          moved = true;
+        }
+      }
+
+      if (laddered && remainingShare(fills) <= 0) {
+        const settled = { ...trade, stopLoss: stop, fills };
+        return {
+          trade: settled,
+          closed: close(settled, 'win', trade.takeProfit),
+          ...(moved ? { movedToBreakeven: true } : {}),
+          ...(filled.length ? { filled } : {}),
+        };
+      }
+
+      // The pre-ladder path: one target, all of it, exactly as before.
+      if (!laddered && (long ? candle.high >= trade.takeProfit : candle.low <= trade.takeProfit)) {
         const settled = { ...trade, stopLoss: stop };
         return {
           trade: settled,
@@ -424,8 +606,11 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
       const span = trade.takeProfit - trade.entry;
       if (span !== 0) bestProgress = Math.max(bestProgress, (reach - trade.entry) / span);
 
-      // Checked after the levels, so a bar cannot both save and settle itself.
-      if (!atBreakeven && (long ? candle.high >= trigger : candle.low <= trigger)) {
+      /*
+       * The old trigger, for trades that have no rung to fill. Checked after
+       * the levels, so a bar cannot both save and settle itself.
+       */
+      if (!laddered && !atBreakeven && (long ? candle.high >= trigger : candle.low <= trigger)) {
         stop = trade.entry;
         atBreakeven = true;
         moved = true;
@@ -436,6 +621,7 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
   const updated: ActiveTrade = {
     ...trade,
     stopLoss: stop,
+    ...(fills.length ? { fills } : {}),
     ...(atBreakeven && !trade.breakevenAt ? { breakevenAt: new Date().toISOString() } : {}),
   };
 
@@ -457,10 +643,25 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
 
   if (age > lifetime || stagnant) {
     const last = set?.candles[set.candles.length - 1]?.close ?? trade.entry;
-    return { trade: updated, closed: close(updated, 'expired', last), ...(moved ? { movedToBreakeven: true } : {}) };
+    /*
+     * A laddered call that ran out of time with a rung already booked is a
+     * win, not an expiry. It reached a level it published and paid out there;
+     * the remainder simply stopped being interesting.
+     */
+    const outcome: Outcome = anyTargetHit(fills) ? 'win' : 'expired';
+    return {
+      trade: updated,
+      closed: close(updated, outcome, last, 'expiry'),
+      ...(moved ? { movedToBreakeven: true } : {}),
+      ...(filled.length ? { filled } : {}),
+    };
   }
 
-  return { trade: updated, ...(moved ? { movedToBreakeven: true } : {}) };
+  return {
+    trade: updated,
+    ...(moved ? { movedToBreakeven: true } : {}),
+    ...(filled.length ? { filled } : {}),
+  };
 }
 
 /** Folds closed trades into the running statistics and the history log. */
@@ -520,16 +721,30 @@ async function record(closed: ClosedTrade[]): Promise<TradeStats> {
  * Checks every open trade and settles the ones that reached a level or ran out
  * of time. Returns what closed, so the caller can announce it.
  */
+export interface Progress {
+  trade: ActiveTrade;
+  /** The rungs that filled on this run. Never empty. */
+  filled: Fill[];
+}
+
 export async function evaluateTrades(now = Date.now()): Promise<{
   closed: ClosedTrade[];
   /** Trades whose stop moved to entry on this run — announced once. */
   movedToBreakeven: ActiveTrade[];
+  /**
+   * Trades still running that booked a rung on this run.
+   *
+   * Separate from `closed` because the reader's position changed without the
+   * trade ending, which is the state multi-TP introduces and the one the old
+   * shape had no way to express.
+   */
+  progressed: Progress[];
   stats: TradeStats;
   open: number;
 }> {
   const active = await loadActive();
   if (!active.length) {
-    return { closed: [], movedToBreakeven: [], stats: await loadStats(), open: 0 };
+    return { closed: [], movedToBreakeven: [], progressed: [], stats: await loadStats(), open: 0 };
   }
 
   const resolutions = await Promise.all(active.map((trade) => resolve(trade, now)));
@@ -544,15 +759,25 @@ export async function evaluateTrades(now = Date.now()): Promise<{
     .filter((resolution) => resolution.movedToBreakeven)
     .map((resolution) => resolution.trade);
 
+  const progressed = resolutions
+    .filter((resolution) => !resolution.closed && resolution.filled?.length)
+    .map((resolution) => ({ trade: resolution.trade, filled: resolution.filled! }));
+
   /*
-   * Written even when nothing closed: a stop that moved has to survive the run,
-   * or the next one would find the original stop and announce the move again.
+   * Written whenever anything changed, and a booked rung is a change.
+   *
+   * `progressed` belongs in this condition for the same reason the moved stop
+   * does: a fill that is not persisted is re-detected on the next run, and the
+   * reader is told a second time that TP2 was reached. The failure is silent
+   * and repeats forever, which is the worst shape a bug can take in a notifier.
    */
-  if (closed.length || movedToBreakeven.length) await setJson(ACTIVE_KEY, remaining);
+  if (closed.length || movedToBreakeven.length || progressed.length) {
+    await setJson(ACTIVE_KEY, remaining);
+  }
 
   const stats = closed.length ? await record(closed) : await loadStats();
 
-  return { closed, movedToBreakeven, stats, open: remaining.length };
+  return { closed, movedToBreakeven, progressed, stats, open: remaining.length };
 }
 
 export async function tradesStatus() {

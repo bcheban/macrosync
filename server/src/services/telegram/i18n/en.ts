@@ -118,6 +118,54 @@ export const en = {
   watchCleared: (n: number) => `👁 Cleared ${n} watch${n === 1 ? '' : 'es'}.`,
   watchTriggered: (base: string, strategy: string) =>
     `👁 <b>${base}</b> — the ${strategy} setup you were watching is now a call.`,
+  /**
+   * The ladder, written under the card it belongs to.
+   *
+   * One line per rung whether it filled or not, because the shape is the
+   * information: "TP1 hit" on its own does not say whether two rungs are still
+   * running or the trade is nearly done. The share is stated because it is the
+   * part a reader cannot infer — half booked at the first target is a different
+   * position from a tenth.
+   */
+  cardTpHit: (level: number, price: string, share: number) =>
+    `✅ <b>TP${level}</b> <code>${price}</code> — hit, ${share}% booked`,
+  cardTpPending: (level: number, price: string, share: number) =>
+    `⏳ <b>TP${level}</b> <code>${price}</code> — pending, ${share}%`,
+  cardStopAtEntry: '🛡 <i>Stop moved to entry — this trade can no longer lose.</i>',
+  cardRunning: (share: number) => `<i>${share}% still running.</i>`,
+  cardClosedWon: (pct: string) => `🏁 <b>Closed ${pct}</b> <i>(position-weighted)</i>`,
+  cardClosedLost: (pct: string) => `🏁 <b>Closed ${pct}</b>`,
+  /**
+   * The end-of-day summary.
+   *
+   * Three windows, in the order a reader should weigh them — and the day is
+   * first only because it is what they came for. The footnote is what stops the
+   * ordering from being a lie: a day is a handful of trades and cannot mean
+   * anything, whatever percentage it prints.
+   */
+  /** Heading for the two short windows under the record. */
+  statsRecent: '<b>Recent</b>',
+  statsPeriod: (label: string, rate: number | null, wins: number, losses: number, r: string) =>
+    rate === null
+      ? `${label} — <i>nothing settled</i>`
+      : `${label} — <b>${rate}%</b> · ${wins}W / ${losses}L · ${r}`,
+  reportTitle: (date: string) => `🗓 <b>Daily report</b> — <code>${date}</code> UTC`,
+  reportDay: 'Today',
+  reportWeek: 'Last 7 days',
+  reportTotal: 'All time',
+  reportRow: (
+    label: string,
+    rate: number,
+    wins: number,
+    losses: number,
+    r: string,
+    roi: string,
+  ) => `<b>${label}</b> — ${rate}% · ${wins}W / ${losses}L · ${r} · ${roi}`,
+  reportQuiet: (label: string) => `<b>${label}</b> — <i>nothing settled</i>`,
+  reportPartialWeek:
+    '<i>⚠️ The detailed log no longer reaches back a full week, so the 7-day row covers part of it.</i>',
+  reportFootnote:
+    '<i>A day is a handful of trades and cannot prove anything — read it for whether the bot worked, not for whether the strategy does. Only the all-time row is a claim.</i>',
   statsNone: '📊 No trades on the record yet. The first confirmed call opens one.',
   statsOnlyOpen: (open: number) =>
     `📊 No settled trades yet — ${open} still open. The record starts when the first one closes.`,

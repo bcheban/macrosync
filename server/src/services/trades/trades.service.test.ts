@@ -95,24 +95,91 @@ describe('trade ledger', () => {
     cache.clear();
   });
 
-  it('settles a long that tagged its target as a win', async () => {
-    // Never dips back to entry, so the moved stop is never in the way.
-    script = { ETHUSDT: [[105, 111], [102, 106]] };
+  /**
+   * Opens a call under the rules that applied before the ladder existed.
+   *
+   * Those trades are not hypothetical — dozens were open when this shipped —
+   * and they resolve on a single target and a fractional breakeven trigger,
+   * because that is what their readers were shown. Stripping the ladder off a
+   * freshly opened trade is the cheapest way to hold that path still.
+   */
+  const openLegacy = async (
+    base: string,
+    verdict: 'buy' | 'sell',
+    entry: number,
+    stop: number,
+    target: number,
+  ) => {
+    await trades.openTrade(signal(base, verdict, entry, stop, target));
+    const { setJson, storeKey } = await import('../store/store.js');
+    const active = await trades.loadActive();
+    await setJson(
+      storeKey('trades:active'),
+      active.map(({ targets, fills, ...rest }) => ({ ...rest, takeProfit: target })),
+    );
+  };
+
+  it('settles a long that filled every rung as a win', async () => {
+    /*
+     * Entry 100 risking 5, so the ladder is 105 / 107.5 / 112.5. The first bar
+     * books half, the second sweeps the rest. Never dips back to entry, so the
+     * stop that first fill moved is never in the way.
+     */
+    script = { ETHUSDT: [[105, 113], [102, 106]] };
 
     await trades.openTrade(signal('ETH', 'buy', 100, 95, 110));
     const { closed, stats } = await trades.evaluateTrades();
 
     assert.equal(closed.length, 1);
     assert.equal(closed[0]?.outcome, 'win');
-    assert.equal(closed[0]?.resultPct, 10);
+    // Position-weighted: half at +5%, three tenths at +7.5%, a fifth at +12.5%.
+    assert.equal(closed[0]?.resultPct, 7.25);
     assert.equal(trades.winRate(stats), 100);
   });
 
-  it('moves the stop to entry at the configured threshold', async () => {
+  it('books half at the first rung and protects the rest', async () => {
+    /*
+     * The rule the whole system turns on. One bar reaches 105 and comes back
+     * through entry: half the position is booked at +1R and the remainder
+     * closes at the stop that fill moved, which is entry.
+     *
+     * So this is a win worth +0.5R — not the +1R its first target suggests,
+     * and not the 0 its final exit price suggests. No single level can say it.
+     */
+    script = { LADUSDT: [[105, 101], [101, 99]] };
+
+    await trades.openTrade(signal('LAD', 'buy', 100, 95, 110));
+    const { closed, stats } = await trades.evaluateTrades();
+
+    assert.equal(closed[0]?.outcome, 'win', 'a booked rung cannot be un-booked');
+    assert.equal(closed[0]?.resultPct, 2.5, 'half of +5%, and nothing on the rest');
+    assert.equal(closed[0]?.fills?.length, 2);
+    assert.equal(closed[0]?.fills?.[0]?.reason, 'target');
+    assert.equal(closed[0]?.fills?.[1]?.reason, 'breakeven');
+    assert.equal(stats.wins, 1);
+    assert.equal(stats.breakeven, 0, 'breakeven is unreachable once a rung fills');
+  });
+
+  it('redistributes a rung that falls outside the sane band', async () => {
+    /*
+     * A rung beyond the band is dropped and its share spread over the rest, so
+     * the ladder always closes the whole position. Risking 40 against an entry
+     * of 100 puts the later rungs at 160 and 200 — past the half-of-entry
+     * bound, and past anything a candle inside the horizon is going to print.
+     */
+    const { buildLadder } = await import('./targets.js');
+    const ladder = buildLadder('day', 'buy', 100, 60);
+
+    assert.equal(ladder.length, 1, 'only the 1R rung sits inside the band');
+    assert.equal(ladder[0]?.price, 140);
+    assert.equal(ladder[0]?.share, 1, 'and it takes the whole position');
+  });
+
+  it('moves a pre-ladder stop to entry at the configured threshold', async () => {
     // 75% of the way from 100 to 110 is 107.5; the bar reaches it and stops there.
     script = { BEAUSDT: [[108], [101]] };
 
-    await trades.openTrade(signal('BEA', 'buy', 100, 95, 110));
+    await openLegacy('BEA', 'buy', 100, 95, 110);
     const { closed, movedToBreakeven } = await trades.evaluateTrades();
 
     assert.equal(closed.length, 0, 'still running');
@@ -124,7 +191,7 @@ describe('trade ledger', () => {
   it('announces the move once, not on every run', async () => {
     script = { BEBUSDT: [[108], [101]] };
 
-    await trades.openTrade(signal('BEB', 'buy', 100, 95, 110));
+    await openLegacy('BEB', 'buy', 100, 95, 110);
     await trades.evaluateTrades();
     const again = await trades.evaluateTrades();
 
@@ -143,7 +210,7 @@ describe('trade ledger', () => {
     // Reaches 108, then trades back through entry.
     script = { BECUSDT: [[108, 101], [101, 99]] };
 
-    await trades.openTrade(signal('BEC', 'buy', 100, 95, 110));
+    await openLegacy('BEC', 'buy', 100, 95, 110);
     const { closed, stats } = await trades.evaluateTrades();
 
     assert.equal(closed[0]?.outcome, 'breakeven');
@@ -165,7 +232,7 @@ describe('trade ledger', () => {
      */
     script = { BEFUSDT: [[106, 101], [101, 99]] };
 
-    await trades.openTrade(signal('BEF', 'buy', 100, 95, 110));
+    await openLegacy('BEF', 'buy', 100, 95, 110);
     const { closed, movedToBreakeven } = await trades.evaluateTrades();
 
     assert.equal(movedToBreakeven.length, 0, 'below the trigger');
@@ -188,7 +255,7 @@ describe('trade ledger', () => {
       mutable.breakevenThreshold = 0.5;
       script = { BEGUSDT: [[106], [101]] };
 
-      await trades.openTrade(signal('BEG', 'buy', 100, 95, 110));
+      await openLegacy('BEG', 'buy', 100, 95, 110);
       const { movedToBreakeven } = await trades.evaluateTrades();
 
       assert.equal(movedToBreakeven.length, 1, 'the threshold is read at call time');
@@ -224,7 +291,8 @@ describe('trade ledger', () => {
      * that ran 40% of the way and returned is a trade that was working and
      * stopped — a different thing from one that never moved.
      */
-    const highs = Array.from({ length: 40 }, (_, i) => (i === 5 ? 105 : 101));
+    // 104 rather than 105: at 105 the first rung fills and this becomes a win.
+    const highs = Array.from({ length: 40 }, (_, i) => (i === 5 ? 104 : 101));
     script = { STBUSDT: [highs, highs.map(() => 99)] };
 
     await trades.openTrade(signal('STB', 'buy', 100, 95, 110));
@@ -261,20 +329,25 @@ describe('trade ledger', () => {
     assert.equal(closed.length, 0);
   });
 
-  it('costs a win when one bar both scratches and targets', async () => {
+  it('costs the last rung when one bar both stops and targets', async () => {
     /*
-     * Documented rather than avoided. The second bar has a low of 99 and a high
-     * of 111: with the stop already at 100 the price traded through it at some
-     * point, and intrabar order is unknowable. A real position with a stop at
-     * entry would have been closed before the target printed, so this reads as
-     * the scratch — the same "flatters least" rule the levels have always used.
+     * Documented rather than avoided. The first bar books TP1 and TP2 and pulls
+     * the stop to entry; the second has a low of 99 and a high of 113, so it
+     * traded through that stop at some point and also printed the last rung.
+     * Intrabar order is unknowable, and a real position would have been closed
+     * before the rung filled — so the remainder is taken at the stop.
+     *
+     * The trade is still a win. Two rungs were booked and no later bar can
+     * un-book them; what the rule costs is the tail, not the outcome.
      */
-    script = { BEDUSDT: [[108, 111], [99, 99]] };
+    script = { BEDUSDT: [[108, 113], [99, 99]] };
 
     await trades.openTrade(signal('BED', 'buy', 100, 95, 110));
     const { closed } = await trades.evaluateTrades();
 
-    assert.equal(closed[0]?.outcome, 'breakeven');
+    assert.equal(closed[0]?.outcome, 'win');
+    // Half at +5%, three tenths at +7.5%, and the last fifth at entry.
+    assert.equal(closed[0]?.resultPct, 4.75);
   });
 
   it('reads the threshold in the trade direction for a short', async () => {
@@ -300,14 +373,18 @@ describe('trade ledger', () => {
   });
 
   it('reads a short in the opposite direction', async () => {
-    // Short from 100: target 90 below, stop 105 above. Price falls to 89.
-    script = { XRPUSDT: [[101, 99], [95, 89]] };
+    /*
+     * Short from 100 risking 5, so the ladder walks down: 95 / 92.5 / 87.5.
+     * The second bar sweeps all three, and the weighting reads identically to
+     * the long — which is the point of signing everything by side.
+     */
+    script = { XRPUSDT: [[101, 99], [95, 87]] };
 
     await trades.openTrade(signal('XRP', 'sell', 100, 105, 90));
     const { closed } = await trades.evaluateTrades();
 
     assert.equal(closed[0]?.outcome, 'win');
-    assert.equal(closed[0]?.resultPct, 10);
+    assert.equal(closed[0]?.resultPct, 7.25);
   });
 
   it('counts the stop when one bar touched both levels', async () => {
@@ -386,8 +463,8 @@ describe('trade ledger', () => {
   });
 
   it('does not settle the same trade twice', async () => {
-    // A clean win: never dips back through entry once the stop has moved.
-    script = { AVAXUSDT: [[105, 111], [102, 106]] };
+    // A clean win: every rung fills, and it never dips back through entry.
+    script = { AVAXUSDT: [[105, 113], [102, 106]] };
 
     await trades.openTrade(signal('AVAX', 'buy', 100, 95, 110));
     await trades.evaluateTrades();

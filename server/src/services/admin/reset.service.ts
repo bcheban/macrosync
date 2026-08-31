@@ -26,6 +26,17 @@ const LEDGER_PATTERNS = [
   'trades:active',
   'trades:stats',
   'trades:history',
+  /*
+   * The published cards, one key per trade.
+   *
+   * Nothing else deletes these until the trade they belong to closes, so a
+   * reset that left them would strand one key per open call — and the next
+   * trade to reuse an id would edit a message about a trade that no longer
+   * exists.
+   */
+  'trades:cards:*',
+  // Derived from the ledger: kept, it would re-report a day that was wiped.
+  'telegram:daily-report',
   'alerts:last',
   /*
    * The derived read of the ledger, and it was missed the first time.

@@ -113,6 +113,30 @@ export const de: Dictionary = {
   watchCleared: (n) => `👁 ${n} Beobachtung(en) entfernt.`,
   watchTriggered: (base, strategy) =>
     `👁 <b>${base}</b> — das beobachtete ${strategy}-Setup ist jetzt ein Call.`,
+  cardTpHit: (level, price, share) =>
+    `✅ <b>TP${level}</b> <code>${price}</code> — erreicht, ${share}% realisiert`,
+  cardTpPending: (level, price, share) =>
+    `⏳ <b>TP${level}</b> <code>${price}</code> — offen, ${share}%`,
+  cardStopAtEntry: '🛡 <i>Stop auf Einstieg gezogen — dieser Trade kann nicht mehr verlieren.</i>',
+  cardRunning: (share) => `<i>${share}% laufen weiter.</i>`,
+  cardClosedWon: (pct) => `🏁 <b>Geschlossen ${pct}</b> <i>(positionsgewichtet)</i>`,
+  cardClosedLost: (pct) => `🏁 <b>Geschlossen ${pct}</b>`,
+  statsRecent: '<b>Zuletzt</b>',
+  statsPeriod: (label, rate, wins, losses, r) =>
+    rate === null
+      ? `${label} — <i>nichts abgeschlossen</i>`
+      : `${label} — <b>${rate}%</b> · ${wins}G / ${losses}V · ${r}`,
+  reportTitle: (date) => `🗓 <b>Tagesbericht</b> — <code>${date}</code> UTC`,
+  reportDay: 'Heute',
+  reportWeek: 'Letzte 7 Tage',
+  reportTotal: 'Gesamt',
+  reportRow: (label, rate, wins, losses, r, roi) =>
+    `<b>${label}</b> — ${rate}% · ${wins}G / ${losses}V · ${r} · ${roi}`,
+  reportQuiet: (label) => `<b>${label}</b> — <i>nichts abgeschlossen</i>`,
+  reportPartialWeek:
+    '<i>⚠️ Das Detailprotokoll reicht keine volle Woche mehr zurück; die 7-Tage-Zeile deckt nur einen Teil ab.</i>',
+  reportFootnote:
+    '<i>Ein Tag sind eine Handvoll Trades und beweist nichts — lies ihn daraufhin, ob der Bot lief, nicht ob die Strategie funktioniert. Nur die Gesamtzeile ist eine Aussage.</i>',
   statsNone: '📊 Noch keine Trades erfasst. Das erste bestätigte Signal eröffnet die Bilanz.',
   statsOnlyOpen: (open) =>
     `📊 Noch nichts abgeschlossen — ${open} laufen. Die Bilanz beginnt, wenn der erste Trade schließt.`,

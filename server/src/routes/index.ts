@@ -10,6 +10,8 @@ import { getSignals, isStrategy, STRATEGY_PROFILES } from '../services/signal.en
 import {
   alertsStatus,
   notifyBreakeven,
+  notifyProgress,
+  publishDailyReport,
   notifyClosed,
   notifySignals,
   notifyWatches,
@@ -18,6 +20,7 @@ import {
 import { botStatus, handleUpdate, type TelegramUpdate } from '../services/telegram/webhook.service.js';
 import { getActiveSignals } from '../services/trades/active.service.js';
 import { resetStore, type ResetScope } from '../services/admin/reset.service.js';
+import { maybePublishDailyReport } from '../services/telegram/daily-report.js';
 import { analyticsForReader, formatAnalytics, refreshSnapshot } from '../services/admin/analytics.service.js';
 import {
   isSelectableSymbol,
@@ -207,6 +210,31 @@ api.post(
  * deliberately idempotent — running it twice in a row sends nothing the second
  * time, because the alert guards and the trade ledger both live in the store.
  */
+/**
+ * The end-of-day summary, on its own trigger.
+ *
+ * Exists so a scheduler can be pointed at 23:59 UTC directly, but the scan also
+ * calls the same function every five minutes — so the report goes out whether
+ * or not anybody sets this up, and setting it up cannot produce two.
+ * Idempotence lives in the service, not in the schedule.
+ */
+api.all(
+  '/cron/daily-report',
+  route(async (req, res) => {
+    const header = req.headers.authorization ?? '';
+    const bearer = header.startsWith('Bearer ') ? header.slice(7) : '';
+    const provided = bearer || (typeof req.query.secret === 'string' ? req.query.secret : '');
+
+    if (!env.cronSecret || provided !== env.cronSecret) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    const result = await maybePublishDailyReport(publishDailyReport);
+    res.json({ ok: true, ...result });
+  }),
+);
+
 api.all(
   '/cron/signals',
   route(async (req, res) => {
@@ -275,10 +303,23 @@ api.all(
      */
     const watches = await notifyWatches(board, headline);
 
-    const { closed, movedToBreakeven, stats, open } = await evaluateTrades();
+    const { closed, movedToBreakeven, progressed, stats, open } = await evaluateTrades();
+    /*
+     * Cards first. A rung booked and a trade settled are both news about a
+     * message the reader already has, so the card is brought up to date before
+     * anything decides whether a separate message is still worth sending.
+     */
+    const updated = await notifyProgress(progressed, closed);
     // Announced before the closes, so a stop that moved is known before it fills.
     const protectedCount = await notifyBreakeven(movedToBreakeven);
     const announced = await notifyClosed(closed, stats);
+
+    /*
+     * Checked on every run, published at most once a day. Riding the scan means
+     * the report cannot quietly stop while the bot is still alerting — there is
+     * no second schedule to fail on its own.
+     */
+    const report = await maybePublishDailyReport(publishDailyReport);
 
     /*
      * Recomputed when something settled, and only then. `/stats_deep` is open to
@@ -302,6 +343,9 @@ api.all(
       closed: closed.map((trade) => ({ base: trade.base, strategy: trade.strategy, outcome: trade.outcome })),
       announced,
       breakeven: protectedCount,
+      // Cards rewritten in place, as against messages newly sent.
+      cardsUpdated: updated,
+      dailyReport: report.published ? report.date : null,
       open,
       winRate: winRate(stats),
       tookMs: Date.now() - startedAt,

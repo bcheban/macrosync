@@ -123,6 +123,30 @@ export const uk: Dictionary = {
   watchCleared: (n) => `👁 Прибрано стежень: ${n}.`,
   watchTriggered: (base, strategy) =>
     `👁 <b>${base}</b> — сетап ${strategy}, за яким ти стежив, став викликом.`,
+  cardTpHit: (level, price, share) =>
+    `✅ <b>TP${level}</b> <code>${price}</code> — взято, зафіксовано ${share}%`,
+  cardTpPending: (level, price, share) =>
+    `⏳ <b>TP${level}</b> <code>${price}</code> — очікується, ${share}%`,
+  cardStopAtEntry: '🛡 <i>Стоп переставлено у вхід — ця угода вже не може піти в мінус.</i>',
+  cardRunning: (share) => `<i>Ще працює ${share}% позиції.</i>`,
+  cardClosedWon: (pct) => `🏁 <b>Закрито ${pct}</b> <i>(зважено за часткою позиції)</i>`,
+  cardClosedLost: (pct) => `🏁 <b>Закрито ${pct}</b>`,
+  statsRecent: '<b>Нещодавнє</b>',
+  statsPeriod: (label, rate, wins, losses, r) =>
+    rate === null
+      ? `${label} — <i>нічого не закрилося</i>`
+      : `${label} — <b>${rate}%</b> · ${wins}П / ${losses}З · ${r}`,
+  reportTitle: (date) => `🗓 <b>Щоденний звіт</b> — <code>${date}</code> UTC`,
+  reportDay: 'Сьогодні',
+  reportWeek: 'Останні 7 днів',
+  reportTotal: 'За весь час',
+  reportRow: (label, rate, wins, losses, r, roi) =>
+    `<b>${label}</b> — ${rate}% · ${wins}П / ${losses}З · ${r} · ${roi}`,
+  reportQuiet: (label) => `<b>${label}</b> — <i>нічого не закрилося</i>`,
+  reportPartialWeek:
+    '<i>⚠️ Докладний журнал уже не сягає на тиждень назад, тож рядок за 7 днів охоплює лише частину.</i>',
+  reportFootnote:
+    '<i>День — це кілька угод, він нічого не доводить: читай його про те, чи працював бот, а не про те, чи працює стратегія. Твердженням є лише рядок за весь час.</i>',
   statsNone: '📊 Записів ще немає. Перший підтверджений сигнал відкриє їх.',
   statsOnlyOpen: (open) =>
     `📊 Закритих угод ще немає — ${open} у роботі. Запис почнеться, коли закриється перша.`,

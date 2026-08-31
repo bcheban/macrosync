@@ -60,6 +60,14 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 
 export interface SendResult {
   delivered: boolean;
+  /**
+   * Telegram's id for the message that arrived.
+   *
+   * The handle a later edit needs. Present only on a delivered message, and
+   * absent even then if the Bot API answered without one — a caller that wants
+   * to update a card has to cope with never having been given a way to.
+   */
+  messageId?: number;
   error?: string;
   /** True when trying the same message again could plausibly work. */
   retryable?: boolean;
@@ -100,6 +108,8 @@ export interface SendOptions {
 /** What Telegram puts in the body. `ok` is authoritative; the status is not. */
 interface BotApiResponse {
   ok: boolean;
+  /** Present on success. Only the id is read; the rest is the echoed message. */
+  result?: { message_id?: number };
   description?: string;
   parameters?: { retry_after?: number };
 }
@@ -182,7 +192,10 @@ async function attempt(html: string, options: SendOptions): Promise<SendResult &
      */
     const body = (await response.json().catch(() => null)) as BotApiResponse | null;
 
-    if (body?.ok === true) return { delivered: true };
+    if (body?.ok === true) {
+      const messageId = body.result?.message_id;
+      return { delivered: true, ...(typeof messageId === 'number' ? { messageId } : {}) };
+    }
 
     const detail = body?.description ?? `${response.status} ${response.statusText}`;
     const retryAfter = body?.parameters?.retry_after;
@@ -242,7 +255,7 @@ export async function sendTelegramMessage(html: string, options: SendOptions = {
 
     if (result.delivered) {
       await bumpStats({ delivered: 1, retries });
-      return { delivered: true };
+      return { delivered: true, ...(result.messageId ? { messageId: result.messageId } : {}) };
     }
 
     last = { delivered: false, error: result.error, retryable: result.retryable, blocked: result.blocked };

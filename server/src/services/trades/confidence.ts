@@ -1,4 +1,5 @@
 import type { ClosedTrade } from './trades.service.js';
+import { rAt, weighted } from './targets.js';
 
 /**
  * The record cut by the confluence reading each call was made on.
@@ -58,6 +59,25 @@ export function realisedR(trade: ClosedTrade): number {
   const risk = Math.abs(trade.entry - opened);
   if (!(risk > 0)) return 0;
 
+  /*
+   * Weighted by what actually closed where, whenever the trade recorded it.
+   *
+   * This is the figure multi-TP changes most. A call that booked half at 1R
+   * and gave the rest back at entry returned +0.5R — not the +1R a win at its
+   * first target suggests, and not the 0 its final exit price suggests. Only
+   * the fills can say, and they are written at close precisely so this does
+   * not have to guess.
+   */
+  if (trade.fills?.length) {
+    return weighted(trade.fills, (price) => rAt(trade.side, trade.entry, opened, price));
+  }
+
+  /*
+   * The pre-ladder reading, for trades that closed before fills were recorded.
+   * Kept rather than migrated: those trades were managed as one position and
+   * settled at one level, and inventing a fill history for them would put
+   * fabricated prices into the only record that can be audited.
+   */
   const exit =
     trade.outcome === 'win' ? trade.takeProfit : trade.outcome === 'loss' ? trade.stopLoss : trade.entry;
   const moved = trade.side === 'buy' ? exit - trade.entry : trade.entry - exit;

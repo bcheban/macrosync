@@ -15,7 +15,8 @@ import { getPrefs } from './preferences.service.js';
 import type { Channel, Locale, Prefs } from './preferences.service.js';
 import { dict } from './i18n/index.js';
 import { getAccount, mexcFuturesUrl, planPosition } from './sizing.service.js';
-import type { ActiveTrade } from '../trades/trades.service.js';
+import type { ActiveTrade, Progress } from '../trades/trades.service.js';
+import { forgetCards, rememberCards, updateCards, type Card } from './signal-cards.js';
 
 /**
  * Alerting for confirmed calls.
@@ -119,6 +120,15 @@ interface BroadcastResult {
   failed: number;
   pruned: number;
   /**
+   * Every message that landed, with the text it landed as.
+   *
+   * Collected here because this is the only place that knows all three things
+   * at once: which chat, which message id Telegram assigned, and what the
+   * personalised body actually said. Reconstructing any of that afterwards
+   * would mean re-rendering a card against prices that have since moved.
+   */
+  cards: Card[];
+  /**
    * Nobody was told and nothing failed: an empty roster, everyone muted, or the
    * last recipient having just been pruned. Distinct from a failure, because
    * there was nothing to go wrong.
@@ -161,8 +171,11 @@ async function broadcast(
     console.info(`[alerts] ${filtered.length} recipient(s) filtered out ${why}`);
   }
 
-  if (!send.length) return { delivered: 0, failed: 0, pruned: 0, silent: true, permanent: false };
+  if (!send.length) {
+    return { delivered: 0, failed: 0, pruned: 0, cards: [], silent: true, permanent: false };
+  }
 
+  const cards: Card[] = [];
   let delivered = 0;
   let failed = 0;
   let pruned = 0;
@@ -176,6 +189,11 @@ async function broadcast(
 
       if (result.delivered) {
         delivered += 1;
+        // No id means no handle to edit by, which is a card that simply cannot
+        // be updated — recorded as delivered, because it was.
+        if (result.messageId) {
+          cards.push({ chatId, messageId: result.messageId, html, locale: recipient.prefs.locale });
+        }
       } else if (result.blocked) {
         await unsubscribe(chatId);
         pruned += 1;
@@ -197,6 +215,7 @@ async function broadcast(
     delivered,
     failed,
     pruned,
+    cards,
     silent: delivered === 0 && failed === 0,
     permanent: failed > 0 && retryable === 0,
   };
@@ -471,7 +490,14 @@ ${sizing}` : body;
       state[key] = { verdict: signal.verdict, sentAt: now, failures: 0 };
       if (!result.silent) sent += 1;
       // Only track what was actually published, so the record matches the channel.
-      await openTrade(signal);
+      const { trade } = await openTrade(signal);
+      /*
+       * The cards are filed against the trade, not the signal, because the
+       * trade is what later events are about. A call that was published but
+       * refused by the ledger — unusable levels — files nothing, and the
+       * updater finds no cards and does nothing, which is correct.
+       */
+      if (trade) await rememberCards(trade.id, result.cards);
       continue;
     }
 
@@ -503,6 +529,73 @@ ${sizing}` : body;
 }
 
 /**
+ * Updates the cards a trade was announced on, instead of announcing again.
+ *
+ * The whole point of the ladder is that a call now has several moments worth
+ * reporting: a rung booked, the stop pulled to entry, the remainder settled.
+ * Sending each of those as its own message would turn a good week into thirty
+ * notifications about trades the reader already knows they are in. Editing puts
+ * the same information where they will look for it — under the call itself.
+ *
+ * Returns how many messages were rewritten, which is a diagnostic rather than a
+ * success condition: a card that could not be edited is a card one event out of
+ * date, and nothing downstream depends on it.
+ */
+export async function notifyProgress(
+  progressed: Progress[],
+  closed: ClosedTrade[],
+): Promise<number> {
+  if (!telegramConfigured()) return 0;
+
+  const keyboard = (symbol: string) => (locale: Locale) =>
+    signalKeyboard({ locale } as Prefs, symbol);
+
+  let edited = 0;
+
+  for (const { trade } of progressed) {
+    edited += await updateCards(trade, { keyboard: keyboard(trade.symbol) });
+  }
+
+  /*
+   * A closed trade gets one last edit and then its cards are dropped. Dropping
+   * them matters: these keys are per trade and nothing else would ever delete
+   * them, so skipping this would leave one small orphan in the store for every
+   * call the bot has ever published.
+   */
+  for (const trade of closed) {
+    if (!trade.targets?.length) continue;
+    edited += await updateCards(trade, { closed: trade, keyboard: keyboard(trade.symbol) });
+    await forgetCards(trade.id);
+  }
+
+  return edited;
+}
+
+/**
+ * Sends the end-of-day summary to everyone who still wants results.
+ *
+ * On the results channel rather than a channel of its own. Somebody who turned
+ * off "did the trade win" has already said they do not want the bot reporting
+ * outcomes at them, and a daily digest of outcomes is the same request answered
+ * once instead of ten times — a new switch would only let them turn it off
+ * twice.
+ */
+export async function publishDailyReport(
+  render: (locale: Locale) => Promise<string>,
+): Promise<number> {
+  if (!telegramConfigured()) return 0;
+
+  const result = await broadcast(
+    ({ prefs }) => render(prefs.locale),
+    undefined,
+    undefined,
+    'results',
+  );
+
+  return result.delivered;
+}
+
+/**
  * Announces a stop pulled up to entry.
  *
  * Sent to everyone unmuted, like a close notice and for the same reason: this
@@ -510,7 +603,22 @@ ${sizing}` : body;
  * have since turned that strategy off does not change that.
  */
 export async function notifyBreakeven(moved: ActiveTrade[]): Promise<number> {
-  if (!telegramConfigured() || !moved.length) return 0;
+  if (!telegramConfigured()) return 0;
+
+  /*
+   * A laddered trade says this on its own card, in the same edit that reports
+   * the rung which caused it — the stop moves *because* TP1 filled, so the two
+   * are one event and belong in one place. Sending a message as well would be
+   * telling the reader something they are already looking at.
+   *
+   * Pre-ladder trades still get the message. Their stop moves on a threshold
+   * nothing else announces, and their cards were sent before any of this
+   * existed, so there is nothing to edit.
+   */
+  const legacy = moved.filter((trade) => !trade.targets?.length);
+  if (!legacy.length) return 0;
+
+  moved = legacy;
 
   let sent = 0;
   for (const trade of moved) {
