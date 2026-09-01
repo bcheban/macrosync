@@ -135,7 +135,7 @@ export const en = {
     fullRecord: '{{wins}}W / {{losses}}L over {{count}} settled trades — the full record',
     recentWindow: 'The {{count}} most recent, trade by trade',
     thin: 'Not enough settled trades yet to draw a curve. The first few close within a day or two of a scan.',
-    footnote: 'Cumulative return in R — one unit is the risk each trade was opened with. Covers the {{count}} most recent settled trades, the ones the log still holds prices for; R cannot be recomputed for older closes. The full win/loss record is the figure beside the live board. A call that ends without reaching its target or its stop is neither a win nor a loss and is left out.',
+    footnote: 'Cumulative return in R — one unit is the risk each trade was opened with. Covers the {{count}} most recent settled trades, the ones the log still holds prices for; R cannot be recomputed for older closes. The full win/loss record is the figure beside the live board. A call that ends without filling a rung or hitting its stop is neither a win nor a loss and is left out.',
   },
 
   signals: {
@@ -286,16 +286,16 @@ export const en = {
     leverage:
       'The highest leverage at which the liquidation price still sits comfortably beyond the stop — computed from this contract’s own maintenance margin, which varies from 0.04% to 5% across the board. It says liquidation will not be what closes the trade. It says nothing about whether the position is sensibly sized.',
     liveTrades:
-      'The trades behind the Telegram alerts. Each one opened when a call was confirmed and closes when price reaches its target or its stop — the win rate counts those two outcomes only. Tap a row to chart that asset.',
+      'The trades behind the Telegram alerts. Each one opened when a call was confirmed and closes when the ladder finishes or the stop is hit. Any filled rung makes it a win, however far the rest ran. Tap a row to chart that asset.',
     signalsLabel: 'What are strategy signals?',
     signals:
       'Each card is one asset on one timeframe. Indicators are computed from live MEXC candles — nothing is predicted, they only describe what the tape has already done. If a macro release lands inside the trade’s horizon, the card says so.',
     confluenceLabel: 'What is confluence?',
     confluence:
       '0–100: how much four independent reads agree — trend (EMA), momentum (MACD), stretch (RSI) and participation (volume). High means they point the same way, not that the trade will work.',
-    levelsLabel: 'Entry, stop and target',
+    levelsLabel: 'Entry, SL and the TP ladder',
     levels:
-      'Entry is the current price. The stop is a multiple of ATR, so a volatile asset gets a wider stop rather than a fixed percentage. The target is a multiple of the risk taken — R:R 2.2 means you risk 1 to make 2.2.',
+      'Entry is the current price. The SL is a multiple of ATR, so a volatile asset gets a wider stop rather than a fixed percentage. Targets are multiples of that risk: TP1 at 1R takes half the position, TP2 at 1.5R takes 30%, TP3 at 2.5R takes the rest — and the stop moves to entry the moment TP1 fills, so past it the trade cannot lose.',
     atrLabel: 'What is ATR?',
     atr: 'Average True Range: how far this asset typically travels in one bar, as a percent of price. It is the volatility budget a stop has to respect.',
     rsiLabel: 'What is RSI?',

@@ -13,7 +13,7 @@ export const de: Dictionary = {
 
   welcomeIntro: '📡 <b>Ayanox</b> — ein automatischer Futures-Radar.',
   welcomeBody:
-    'Er durchsucht rund um die Uhr die liquiden USDT-Perpetuals auf MEXC. Bestätigt sich ein Setup, bekommst du das Signal: Einstieg, TP, SL, die Begründung in einem Satz und den Hebel, bei dem die Liquidation noch hinter dem Stop liegt.',
+    'Er durchsucht rund um die Uhr die liquiden USDT-Perpetuals auf MEXC. Bestätigt sich ein Setup, bekommst du das Signal: Einstieg, drei Take-Profits, SL, die Begründung in einem Satz und den Hebel, bei dem die Liquidation noch hinter dem Stop liegt. Sobald TP1 gefüllt ist, wandert der Stop auf den Einstieg und die Karte aktualisiert sich selbst — ab da kann der Trade nichts mehr kosten.',
   welcomeSubscribed:
     'Du bist angemeldet. Die Schaltflächen unter der Tastatur sind alles Weitere: Einstellungen, der Leitfaden, ein Positionsrechner und die Bilanz.',
   helpIntro: '📡 <b>Ayanox</b> — ein automatischer Radar für MEXC-Perpetuals.',
@@ -50,9 +50,6 @@ export const de: Dictionary = {
   settingsTitle: '⚙️ <b>Einstellungen</b>',
   settingsStrategies: '<b>Strategien</b> — welche Setups dich erreichen',
   settingsChannels: '<b>Benachrichtigungen</b> — welche Momente dich erreichen',
-  settingsLanguage: '<b>Sprache</b>',
-  settingsHint: 'Tippe etwas an, um es ein- oder auszuschalten.',
-
   strategyScalping: '⚡ Scalping',
   strategyDay: '📅 Daytrading',
   strategySwing: '🌊 Swing',
@@ -64,15 +61,13 @@ export const de: Dictionary = {
   channelUpdates: '🛡 Aktualisierungen',
   channelResults: '🏁 Ergebnisse',
   channelSignalsHint: 'Einstiegsmeldungen',
-  channelUpdatesHint: 'Stop auf Break-even gezogen',
-  channelResultsHint: 'Ziel oder Stop erreicht',
+  channelUpdatesHint: 'Take-Profit erreicht, Stop auf Einstieg gezogen',
+  channelResultsHint: 'Trade geschlossen — TP oder SL',
 
   settingsAllOff:
     '<i>Alles ist aus. Du bleibst angemeldet und hörst schlicht nichts, bis du etwas wieder einschaltest.</i>',
   settingsStranded:
     '⚠️ <i>Ergebnisse sind aus, neue Signale aber an: Du erfährst, wann du einsteigen sollst, und nie, wann es vorbei ist. Schließe deine Positionen selbst.</i>',
-  settingsSaved: 'Gespeichert',
-
   alertLong: 'LONG',
   alertShort: 'SHORT',
   alertEntry: 'Einstieg',
@@ -91,11 +86,6 @@ export const de: Dictionary = {
     `💰 <b>Margin ${margin}</b> bei ${leverage}x — im Risiko <b>${risk}</b> von ${balance}`,
   sizingCapped: (riskPct) =>
     `⚠️ <i>Auf dein Guthaben begrenzt: Die volle Größe für ${riskPct}% Risiko braucht mehr Sicherheit, als das Konto hergibt.</i>`,
-
-  breakevenTitle: (base) => `🛡 <b>${base}</b> — halber Weg zum Ziel`,
-  breakevenFrom: (side, entry) => `<i>${side} ab ${entry}</i>`,
-  breakevenMoved: (entry) => `Stop auf den Einstieg gezogen: <code>${entry}</code>`,
-  breakevenWas: (was) => `<i>Vorher ${was}. Ab hier kann dich der Trade nichts mehr kosten.</i>`,
 
   closeWin: '✅ <b>Ziel erreicht</b>',
   closeLoss: '❌ <b>Ausgestoppt</b>',
@@ -213,16 +203,15 @@ export const de: Dictionary = {
   ].join('\n'),
 
   guideRiskBody: [
-    '\u{1F6E1} <b>Warum eine Trefferquote von 35% Geld verdient</b>',
+    '\u{1F6E1} <b>Warum die Trefferquote nicht der Punkt ist</b>',
     '',
-    'Jedes Signal riskiert 1, um 2,2 zu verdienen. Dieses Verhältnis entscheidet über die Profitabilität — nicht, wie oft du richtig liegst.',
+    'Ein Verlust kostet 1R — das Risiko, mit dem du eröffnet hast. Ein Gewinn ist keine einzelne Zahl: die Leiter realisiert 50% bei 1R, 30% bei 1,5R und 20% bei 2,5R. Ein Trade, der ganz durchläuft, bringt <b>1,45R</b>; einer, der die erste Stufe nimmt und dann am Einstieg ausgestoppt wird, <b>0,5R</b>.',
     '',
-    'Auf 100 Trades bei 35%:',
-    '  35 Gewinne \u00D7 2,2 = <b>+77</b>',
-    '  65 Verluste \u00D7 1 = <b>\u221265</b>',
-    '  unterm Strich <b>+12</b> Einheiten',
+    'Diese Spanne ist der ganze Kompromiss. Wer früh die Hälfte mitnimmt, gewinnt öfter und pro Mal weniger.',
     '',
-    'Die Break-even-Trefferquote bei einem CRV von 2,2 liegt bei <b>31%</b>. Darunter verlierst du, wie clever die Einstiege auch aussehen; darüber verdienst du, obwohl du meistens falsch liegst.',
+    'Eine einzelne Break-even-Trefferquote gibt es deshalb nicht. Liefe jeder Gewinner die volle Leiter, wären es <b>41%</b>; stoppte jeder nach der ersten Stufe, <b>67%</b>. Der echte Wert liegt dazwischen und wandert mit dem Markt.',
+    '',
+    'Darum beginnt <code>/stats</code> mit dem Netto-R statt mit einer Prozentzahl. Diese Zahl braucht keine Annahme darüber, wie weit die Leiter lief — sie ist das, was tatsächlich passiert ist.',
     '',
     '<i>Das ist Arithmetik, kein Versprechen. Sie setzt voraus, dass du jedes Signal in der angegebenen Größe nimmst und den Stop hältst — die Verlierer auszulassen, die dir nicht gefallen, ist genau das, was die Rechnung kippen lässt.</i>',
   ].join('\n'),

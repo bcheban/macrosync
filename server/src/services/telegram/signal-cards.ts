@@ -180,6 +180,7 @@ export async function updateCards(
 export async function announceFills(
   trade: ActiveTrade,
   filled: readonly Fill[],
+  reachable: ReadonlySet<string>,
 ): Promise<number> {
   const levels = [...new Set(filled.filter((fill) => fill.reason === 'target').map((fill) => fill.level))];
   if (!levels.length) return 0;
@@ -211,6 +212,18 @@ export async function announceFills(
 
   let sent = 0;
   for (const card of doc.cards) {
+    /*
+     * A card exists for everyone who received the original call. That is not
+     * the same set as everyone who wants a notification now: somebody may have
+     * turned updates off, muted the bot, or switched that strategy off since.
+     *
+     * The edit above rightly ignores all of that — rewriting a message they
+     * already hold is not a new notification. This is, it buzzes a phone, and
+     * sending it to somebody who asked for quiet is the bot ignoring its own
+     * settings screen.
+     */
+    if (!reachable.has(card.chatId)) continue;
+
     const t = dict(card.locale);
     const body = [
       t.replyHit(ticker, fresh.map((level) => `TP${level}`).join(' + '), Math.round(share * 100)),

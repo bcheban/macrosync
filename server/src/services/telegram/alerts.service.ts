@@ -567,7 +567,14 @@ export async function notifyProgress(
      * still says the target is pending — and distrusts both.
      */
     edited += await updateCards(trade, { keyboard: keyboard(trade.symbol) });
-    await announceFills(trade, filled);
+
+    /*
+     * Recipient policy stays here rather than in the cards module, which knows
+     * about messages and nothing about who wants them. A rung filling is an
+     * `updates` event for this trade's strategy, and mutes apply.
+     */
+    const { send } = await activeRecipients(trade.strategy, 'updates');
+    await announceFills(trade, filled, new Set(send.map((recipient) => recipient.chatId)));
   }
 
   /*
@@ -667,57 +674,6 @@ export async function publishDailyReport(
   );
 
   return result.delivered;
-}
-
-/**
- * Announces a stop pulled up to entry.
- *
- * Sent to everyone unmuted, like a close notice and for the same reason: this
- * concerns a position the recipient may be holding right now, and whether they
- * have since turned that strategy off does not change that.
- */
-export async function notifyBreakeven(moved: ActiveTrade[]): Promise<number> {
-  if (!telegramConfigured()) return 0;
-
-  /*
-   * A laddered trade says this on its own card, in the same edit that reports
-   * the rung which caused it — the stop moves *because* TP1 filled, so the two
-   * are one event and belong in one place. Sending a message as well would be
-   * telling the reader something they are already looking at.
-   *
-   * Pre-ladder trades still get the message. Their stop moves on a threshold
-   * nothing else announces, and their cards were sent before any of this
-   * existed, so there is nothing to edit.
-   */
-  const legacy = moved.filter((trade) => !trade.targets?.length);
-  if (!legacy.length) return 0;
-
-  moved = legacy;
-
-  let sent = 0;
-  for (const trade of moved) {
-    const result = await broadcast(
-      ({ prefs }) => {
-        const t = dict(prefs.locale);
-        const side = trade.side === 'buy' ? t.alertLong : t.alertShort;
-
-        return [
-          t.breakevenTitle(escapeHtml(displayTicker(trade.base))),
-          `${STRATEGY_META[trade.strategy].label} · ${t.breakevenFrom(side, money(trade.entry))}`,
-          '',
-          t.breakevenMoved(money(trade.entry)),
-          t.breakevenWas(money(trade.initialStopLoss)),
-        ].join('\n');
-      },
-      undefined,
-      trade.strategy,
-      'updates',
-    );
-
-    if (result.delivered > 0) sent += 1;
-  }
-
-  return sent;
 }
 
 /**

@@ -297,7 +297,7 @@ export const de: Translation = {
     confluenceLabel: 'Was ist Konfluenz?',
     confluence:
       '0–100: wie stark vier unabhängige Messwerte übereinstimmen — Trend (EMA), Momentum (MACD), Überdehnung (RSI) und Beteiligung (Volumen). Hoch heißt, sie zeigen in dieselbe Richtung, nicht dass der Trade aufgeht.',
-    levelsLabel: 'Einstieg, Stop und Ziel',
+    levelsLabel: 'Einstieg, SL und die TP-Leiter',
     levels:
       'Der Einstieg ist der aktuelle Kurs. Der Stop ist ein Vielfaches der ATR, damit ein volatiles Asset einen weiteren Stop bekommt statt eines festen Prozentsatzes. Das Ziel ist ein Vielfaches des eingegangenen Risikos — CRV 2,2 heißt, du riskierst 1, um 2,2 zu verdienen.',
     atrLabel: 'Was ist die ATR?',

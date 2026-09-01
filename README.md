@@ -480,14 +480,24 @@ for every signal tells the reader nothing.
 
 ### Breakeven stops — `server/src/services/trades/`
 
-A trade that travels **75%** of the way to its target has its stop pulled to entry, and the channel
-is told. From that point the position cannot cost anything.
+A trade whose **first rung fills** has its stop pulled to entry. From that point the position cannot
+cost anything, and half of it is already booked.
 
-The threshold started at 50% and moved after the first weeks of live trading: on an hourly bar the
-entry and the halfway mark sit inside the same recent range, so a wick back through entry scratched
-trades that were still working — 29 of the first 92 settled trades closed that way. It reads from
-`BREAKEVEN_THRESHOLD` at call time rather than a module constant, so it can be tuned from a
-deployment and set per case in a test.
+That trigger replaced a threshold. The stop used to move once a trade had travelled 75% of the way
+to a single target — a number that started at 50% and was raised after the first weeks of live
+trading, because on an hourly bar the entry and the halfway mark sit inside the same recent range,
+so a wick back through entry scratched trades that were still working. Twenty-nine of the first 92
+settled trades closed that way.
+
+The ladder removed the question. There is no longer a fraction to tune: the stop moves because money
+came off the table, which is the event it was always trying to approximate.
+
+`BREAKEVEN_THRESHOLD` survives, and now describes history rather than behaviour — the analytics below
+read it to interpret trades closed under the old rule.
+
+**A laddered trade can no longer close at breakeven.** The stop only reaches entry after a rung has
+paid, so being stopped there is a win worth `+0.5R`, not a scratch. Everything written below about
+scratched trades therefore describes the record before this shipped.
 
 The rule forced the resolution loop to be rewritten. It used to ask whether *any* bar touched the
 stop and whether *any* bar touched the target — order-blind, and perfectly adequate while the stop
@@ -682,8 +692,52 @@ The rendered card is stored per trade under `trades:cards:<id>`, deliberately ou
 `trades:active`: that document is read and rewritten on every scan, and the text is the bulk of it.
 The cards key is read only when something actually happened, and deleted when the trade closes.
 
-The separate breakeven message now goes out for pre-ladder trades only. For the rest the stop moves
-*because* TP1 filled, and one event belongs in one place.
+The separate breakeven message is gone. It served pre-ladder trades, whose stops moved on a
+threshold nothing else announced — and no such trade can exist now, because `openTrade` refuses a
+signal it cannot build a ladder for. For everything else the stop moves *because* TP1 filled, and one
+event belongs in one place: the card edit and the reply ping.
+
+### Cumulative ROI is a deposit return, not a price move
+
+It used to sum each trade's raw price move at 1x. That needs the entry and exit of every trade, and
+the detailed log keeps prices for the most recent closes only — two days at the current rate — so the
+figure could describe a window or the record, never both. Under a full-record headline it read as the
+second while being the first.
+
+Those prices are gone with the rows and cannot be recovered. So ROI is derived from what outlives
+them: net R, and the risk each setup calls for (`baseRiskPct` — 0.35 / 0.75 / 1.25 percent for
+scalping, day and swing). It answers what a deposit following every call would have done, over every
+decided trade rather than the last few days.
+
+Accumulated at close in `stats.sums` beside net R, and seeded once from the counters for records that
+predate the accumulator. The seed is approximate in one direction only: two profiles targeted 2.2 and
+3 for the bot's first day, so those wins are credited less than they earned and the figure never
+flatters.
+
+On the site the same number leads the journal panel. The line under the equity curve keeps the raw
+price-move figure and its window, but no longer calls itself ROI — it is labelled *price movement*,
+so the word means one thing on both surfaces.
+
+### Cumulative ROI is a deposit return, not a price move
+
+It used to sum each trade's raw price move at 1x. That needs the entry and exit of every trade, and
+the detailed log keeps prices for the most recent closes only — two days at the current rate — so the
+figure could describe a window or the record, never both. Under a full-record headline it read as the
+second while being the first.
+
+Those prices are gone with the rows and cannot be recovered. So ROI is derived from what outlives
+them: net R, and the risk each setup calls for (`baseRiskPct` — 0.35 / 0.75 / 1.25 percent for
+scalping, day and swing). It answers what a deposit following every call would have done, over every
+decided trade rather than the last few days.
+
+Accumulated at close in `stats.sums` beside net R, and seeded once from the counters for records that
+predate the accumulator. The seed is approximate in one direction only: two profiles targeted 2.2 and
+3 for the bot's first day, so those wins are credited less than they earned and the figure never
+flatters.
+
+On the site the same number leads the journal panel. The line under the equity curve keeps the raw
+price-move figure and its window, but no longer calls itself ROI — it is labelled *price movement*,
+so the word means one thing on both surfaces.
 
 ### The record, cut three ways
 
@@ -1094,16 +1148,20 @@ Six outcomes are recorded, but only two move the rate:
 | `expired` | no | Never reached either level inside its horizon (~3x the advertised duration) |
 | `superseded` | no | Replaced by a reversal on the same pair |
 | `voided` | no | Its levels were not prices, so it could never have resolved |
-| `breakeven` | no | Travelled halfway, had its stop pulled to entry, and came back to it |
+| `breakeven` | no | Pre-ladder only: travelled far enough for the stop to reach entry, then came back to it |
 
 Counting an expired call as a loss would be as dishonest as counting it as a win, so both are kept
 out of the denominator and reported separately — otherwise the rate would quietly measure only the
 decisive calls, which is the most flattering possible sample.
 
-`breakeven` deserves suspicion, and gets it. Before that rule existed every one of these was a
-**loss**; now they leave the denominator entirely, so the published win rate rises without the
-strategy having improved at all. It is counted and reported separately for exactly that reason — a
-rate quoted without its breakeven count is a better-looking number about a smaller question.
+`breakeven` cannot happen any more, and the reason is worth keeping. Under the old rule the stop
+reached entry on a *threshold* — before anything had been booked — so a trade could travel most of
+the way, come back, and leave the denominator entirely. The published win rate rose without the
+strategy improving, which is why it was always counted and reported separately.
+
+The ladder settles it: the stop moves because TP1 filled, so a stop-out at entry has 50% of the
+position banked and is a win at `+0.5R`. The outcome remains in the type for records closed before
+the change.
 
 `voided` exists because of a real defect rather than a hypothetical one. The engine used to size a
 stop from ATR and a target from the stop with no ceiling, so on an asset whose ATR approached its own

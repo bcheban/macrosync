@@ -35,6 +35,9 @@ const trade = (): ActiveTrade =>
     openedAt: new Date().toISOString(),
   }) as ActiveTrade;
 
+/** Both seeded chats want the notification, unless a case says otherwise. */
+const EVERYONE = new Set(['100', '200']);
+
 const fill = (level: number): Fill => ({
   level,
   price: 100 + level,
@@ -76,7 +79,7 @@ describe('the take-profit ping', () => {
 
   it('replies under the call each reader received, not to a channel', async () => {
     await seed();
-    await announceFills(trade(), [fill(1)]);
+    await announceFills(trade(), [fill(1)], EVERYONE);
 
     assert.equal(posted.length, 2, 'one per recipient');
     // Each reader's own copy has its own message id; replying to the wrong one
@@ -93,11 +96,11 @@ describe('the take-profit ping', () => {
 
   it('sends nothing the second time the same level arrives', async () => {
     await seed();
-    await announceFills(trade(), [fill(1)]);
+    await announceFills(trade(), [fill(1)], EVERYONE);
     posted = [];
 
     // The same run retried — a redeploy mid-scan, or a resolver that re-ran.
-    const sent = await announceFills(trade(), [fill(1)]);
+    const sent = await announceFills(trade(), [fill(1)], EVERYONE);
 
     assert.equal(sent, 0);
     assert.equal(posted.length, 0, 'a duplicate ping cannot be taken back');
@@ -105,10 +108,10 @@ describe('the take-profit ping', () => {
 
   it('announces a later rung, and only the part it booked', async () => {
     await seed();
-    await announceFills(trade(), [fill(1)]);
+    await announceFills(trade(), [fill(1)], EVERYONE);
     posted = [];
 
-    await announceFills(trade(), [fill(2)]);
+    await announceFills(trade(), [fill(2)], EVERYONE);
 
     assert.equal(posted.length, 2);
     assert.match(posted[0]!.text, /TP2/);
@@ -129,7 +132,7 @@ describe('the take-profit ping', () => {
      * notifications a second apart are the spam this design exists to avoid —
      * while each level still appears in exactly one reply, ever.
      */
-    await announceFills(trade(), [fill(1), fill(2)]);
+    await announceFills(trade(), [fill(1), fill(2)], EVERYONE);
 
     assert.equal(posted.length, 2, 'two recipients, one message each');
     assert.match(posted[0]!.text, /TP1 \+ TP2/);
@@ -138,7 +141,7 @@ describe('the take-profit ping', () => {
 
   it('stays quiet for a trade nobody was told about', async () => {
     // No cards: the alert never went out, so there is nothing to reply to.
-    const sent = await announceFills(trade(), [fill(1)]);
+    const sent = await announceFills(trade(), [fill(1)], EVERYONE);
 
     assert.equal(sent, 0);
     assert.equal(posted.length, 0);
@@ -148,7 +151,7 @@ describe('the take-profit ping', () => {
     await seed();
     const stopped: Fill = { level: 0, price: 100, share: 0.5, at: '', reason: 'breakeven' };
 
-    const sent = await announceFills(trade(), [stopped]);
+    const sent = await announceFills(trade(), [stopped], EVERYONE);
 
     assert.equal(sent, 0, 'a stop is not a take profit');
   });
@@ -164,10 +167,36 @@ describe('the take-profit ping', () => {
       { chatId: '100', messageId: 555, html: '<b>card</b>', locale: 'en' },
     ]);
 
-    const sent = await announceFills(trade(), [fill(1)]);
+    const sent = await announceFills(trade(), [fill(1)], EVERYONE);
 
     assert.equal(sent, 1);
     assert.equal(posted[0]?.replyTo, 555);
+  });
+
+  it('skips a reader who asked for quiet, and still marks the level announced', async () => {
+    await seed();
+
+    /*
+     * A card exists for everyone who received the original call. That is not
+     * the same set as everyone who wants a buzz now — somebody may have turned
+     * updates off, muted the bot, or switched that strategy off since. The
+     * edit rightly ignores all of that, because rewriting a message they
+     * already hold is not a notification. This is one, and for a while it went
+     * out regardless of the settings screen.
+     */
+    const sent = await announceFills(trade(), [fill(1)], new Set(['200']));
+
+    assert.equal(sent, 1);
+    assert.deepEqual(posted.map((message) => message.chatId), ['200']);
+
+    /*
+     * And the level is spent. Turning updates back on must not deliver a ping
+     * about a rung that filled while they were off — that is a stale alert
+     * dressed as a live one.
+     */
+    posted = [];
+    await announceFills(trade(), [fill(1)], EVERYONE);
+    assert.equal(posted.length, 0);
   });
 
   it('restores fetch', () => {

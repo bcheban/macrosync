@@ -9,7 +9,6 @@ import { getInsights, getMarketContext, invalidateInsights } from '../services/i
 import { getSignals, isStrategy, STRATEGY_PROFILES } from '../services/signal.engine.js';
 import {
   alertsStatus,
-  notifyBreakeven,
   notifyProgress,
   publishDailyReport,
   notifyClosed,
@@ -322,7 +321,15 @@ api.all(
      */
     const updated = await notifyProgress(progressed, closed);
     // Announced before the closes, so a stop that moved is known before it fills.
-    const protectedCount = await notifyBreakeven(movedToBreakeven);
+    /*
+      * A stop reaching entry is no longer an event of its own.
+      *
+      * It happens because TP1 filled, and that is reported by the card edit and
+      * the reply ping together — one cause, one place. The count is still
+      * returned so the run log shows how many trades became risk-free, which is
+      * the thing worth knowing when reading a scan afterwards.
+      */
+     const protectedCount = movedToBreakeven.length;
     const announced = await notifyClosed(closed, stats);
 
     /*

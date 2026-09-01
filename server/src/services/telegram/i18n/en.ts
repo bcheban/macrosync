@@ -13,7 +13,7 @@ export const en = {
 
   welcomeIntro: '📡 <b>Ayanox</b> — an automated futures radar.',
   welcomeBody:
-    'It scans the liquid USDT perpetuals on MEXC around the clock, and when a setup confirms you get the call: entry, TP, SL, the reasoning in one sentence, and the leverage at which liquidation still sits clear of the stop.',
+    'It scans the liquid USDT perpetuals on MEXC around the clock, and when a setup confirms you get the call: entry, three take profits, SL, the reasoning in one sentence, and the leverage at which liquidation still sits clear of the stop. When TP1 fills, the stop moves to entry and the card updates itself — past that point the trade cannot cost you anything.',
   welcomeSubscribed:
     'You are subscribed. The buttons below the keyboard are everything else — settings, the guide, a position calculator, and the record.',
   helpIntro: '📡 <b>Ayanox</b> — an automated futures radar for MEXC perpetuals.',
@@ -31,9 +31,9 @@ export const en = {
     settings: "Choose which strategies you want — Scalping, Day Trading, Swing. Only what is ticked reaches you.",
     balance: "Set your account size and risk per trade to get a personalised margin in every signal. <code>/balance 1000 1</code> is a $1,000 deposit at 1% risk.",
     calc: "Position size, coin quantity and margin for any levels. Leave the levels out and it prices the newest open call against your saved deposit.",
-    stats: "The global win rate and how the algorithm has actually performed.",
+    stats: "The record — net R, win rate and the per-setup split, today, over seven days and for all time. Dollar figures simulate a flat $100 of risk per trade.",
     watching: "The setups you tapped Track on. <code>/watching clear</code> drops all of them.",
-    guide: "Short explainers you can browse: which strategy is which, why a 35% win rate makes money, and how the leverage figure is worked out.",
+    guide: "Short explainers you can browse: which strategy is which, what the take-profit ladder trades away, and how the leverage figure is worked out.",
     stats_deep: "Win rate with and without break-even trades, whether confidence predicts outcome, and what the scratched trades did next.",
     help: "Show this instruction menu.",
     mute: "Two hours of quiet. You stay subscribed.",
@@ -51,9 +51,6 @@ export const en = {
   settingsTitle: '⚙️ <b>Settings</b>',
   settingsStrategies: '<b>Strategies</b> — which setups reach you',
   settingsChannels: '<b>Notifications</b> — which moments reach you',
-  settingsLanguage: '<b>Language</b>',
-  settingsHint: 'Tap anything to turn it on or off.',
-
   strategyScalping: '⚡ Scalping',
   strategyDay: '📅 Day trading',
   strategySwing: '🌊 Swing',
@@ -65,16 +62,13 @@ export const en = {
   channelUpdates: '🛡 Updates',
   channelResults: '🏁 Results',
   channelSignalsHint: 'entry alerts',
-  channelUpdatesHint: 'stop moved to breakeven',
-  channelResultsHint: 'target or stop hit',
+  channelUpdatesHint: 'a take profit filled, stop moved to entry',
+  channelResultsHint: 'a trade closed — TP or SL',
 
   settingsAllOff:
     '<i>Everything is off. You stay subscribed and simply hear nothing until you turn something back on.</i>',
   settingsStranded:
     '⚠️ <i>Results are off while new signals are on: you will be told when to enter and never told when it ends. Close your positions on your own terms.</i>',
-  settingsSaved: 'Saved',
-
-  // --- signals --------------------------------------------------------------
   alertLong: 'LONG',
   alertShort: 'SHORT',
   alertEntry: 'Entry',
@@ -96,12 +90,6 @@ export const en = {
     `⚠️ <i>Capped at your balance: the full size for ${riskPct}% risk needs more collateral than the account holds.</i>`,
 
   // --- updates --------------------------------------------------------------
-  breakevenTitle: (base: string) => `🛡 <b>${base}</b> — halfway to target`,
-  breakevenFrom: (side: string, entry: string) => `<i>${side} from ${entry}</i>`,
-  breakevenMoved: (entry: string) => `Stop moved to entry: <code>${entry}</code>`,
-  breakevenWas: (was: string) => `<i>Was ${was}. From here the trade cannot cost you anything.</i>`,
-
-  // --- results --------------------------------------------------------------
   closeWin: '✅ <b>Target hit</b>',
   closeLoss: '❌ <b>Stopped out</b>',
   closeBreakeven: '🛡 <b>Closed at breakeven</b>',
@@ -280,7 +268,7 @@ export const en = {
   guideIntro: 'Pick a topic. Each one is short and answers a single question.',
   guideBack: '← Back',
   guideStrategies: '📖 Strategies',
-  guideRisk: '🛡 Risk & R:R',
+  guideRisk: '🛡 Risk, and what the ladder trades away',
   guideLeverage: '🧮 Leverage & stops',
 
   guideStrategiesBody: [
@@ -299,18 +287,17 @@ export const en = {
   ].join('\n'),
 
   guideRiskBody: [
-    '🛡 <b>Why a 35% win rate makes money</b>',
+    '🛡 <b>Why the win rate is not the point</b>',
     '',
-    'Every call risks 1 to make 2.2. That ratio is what decides profitability — not how often you are right.',
+    'A loss costs 1R — the risk you set when you opened it. A win is not one number: the ladder books 50% at 1R, 30% at 1.5R and 20% at 2.5R, so a call that runs the whole way returns <b>1.45R</b> and one that takes the first rung and then stops at entry returns <b>0.5R</b>.',
     '',
-    'Over 100 trades at 35%:',
-    '  35 wins × 2.2 = <b>+77</b>',
-    '  65 losses × 1 = <b>−65</b>',
-    '  net <b>+12</b> units',
+    'That range is the whole trade-off. Booking half early wins more often and wins less each time.',
     '',
-    'The break-even win rate at 2.2 R:R is <b>31%</b>. Below it you lose however clever the entries look; above it you make money being wrong most of the time.',
+    'So there is no single break-even win rate. If every winner ran the full ladder it would be <b>41%</b>; if every winner stopped after the first rung it would be <b>67%</b>. The real figure sits between them and moves with the market.',
     '',
-    '<i>This is arithmetic, not a promise. It assumes you take every call at the stated size and hold the stop — skipping the losers you dislike is what turns the maths against you.</i>',
+    'Which is why <code>/stats</code> leads with net R rather than a percentage. That number needs no assumption about how far the ladder ran — it is what actually happened.',
+    '',
+    '<i>Arithmetic, not a promise. It assumes you take every call at the stated size and hold the stop — skipping the losers you dislike is what turns the maths against you.</i>',
   ].join('\n'),
 
   guideLeverageBody: [
@@ -327,7 +314,17 @@ export const en = {
 
   // --- deep stats -----------------------------------------------------------
   deepTitle: '📐 <b>Deep stats</b>',
-  deepThreshold: (pct: number) => `<i>Break-even moves the stop at ${pct}% of the way to target</i>`,
+  /**
+   * Kept for records closed under the old rule, and only meaningful for those.
+   *
+   * The stop used to move at a fraction of the way to a single target. It now
+   * moves when TP1 fills, which is why a laddered trade can no longer close at
+   * breakeven at all: the stop only reaches entry after a rung has paid, so the
+   * close is a win. The figure below therefore describes history, not
+   * behaviour, and says so.
+   */
+  deepThreshold: (pct: number) =>
+    `<i>Historic rule: the stop moved at ${pct}% of the way to target. It now moves when TP1 fills.</i>`,
   deepRateHeading: '<b>Win rate</b>',
   deepRateNone: '  Nothing settled yet.',
   deepRateExcl: (rate: number, wins: number, losses: number) =>
