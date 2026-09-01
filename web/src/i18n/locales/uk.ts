@@ -127,6 +127,7 @@ export const uk: Translation = {
     entry: 'Вхід',
     record: '{{rate}}% · {{decided}} закрито',
     exposure: 'Відкрита експозиція',
+    timeLeft: '⏳ витрачено {{pct}}% відведеного часу',
     exposureRisk_one: '{{count}} позиція · 1R під ризиком',
     exposureRisk_few: '{{count}} позиції · {{count}}R під ризиком',
     exposureRisk_many: '{{count}} позицій · {{count}}R під ризиком',

@@ -100,6 +100,14 @@ export interface SendOptions {
    * ping still arrives, just unthreaded.
    */
   replyTo?: number;
+  /**
+   * Deliver without a notification sound.
+   *
+   * For messages that are a record rather than a prompt. A trade closing on its
+   * clock is something to find later when reading back, not something to wake
+   * somebody for — and a bot that buzzes for bookkeeping is a bot people mute.
+   */
+  quiet?: boolean;
   /** Defaults to the owner chat from the environment. */
   chatId?: string;
   keyboard?: InlineKeyboard;
@@ -171,6 +179,7 @@ async function attempt(html: string, options: SendOptions): Promise<SendResult &
         chat_id: options.chatId ?? env.telegramChatId,
         text: html,
         parse_mode: 'HTML',
+        ...(options.quiet ? { disable_notification: true } : {}),
         ...(options.replyTo
           ? {
               /*

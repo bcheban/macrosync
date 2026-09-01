@@ -90,6 +90,14 @@ export const en = {
     `⚠️ <i>Capped at your balance: the full size for ${riskPct}% risk needs more collateral than the account holds.</i>`,
 
   // --- updates --------------------------------------------------------------
+  /**
+   * A trade that ended on its clock rather than at a level.
+   *
+   * Carries the result because a timed-out trade is no longer necessarily
+   * worth nothing: under the ladder it may have booked a rung on the way.
+   */
+  timedOut: (ticker: string, days: number, r: string) =>
+    `⌛ <b>$${ticker}</b> closed on time after ${days} day${days === 1 ? '' : 's'} at <b>${r}</b>`,
   closeWin: '✅ <b>Target hit</b>',
   closeLoss: '❌ <b>Stopped out</b>',
   closeBreakeven: '🛡 <b>Closed at breakeven</b>',

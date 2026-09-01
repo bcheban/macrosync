@@ -97,6 +97,8 @@ export const uk: Dictionary = {
   sizingCapped: (riskPct) =>
     `⚠️ <i>Обмежено твоїм балансом: повний розмір під ризик ${riskPct}% потребує більше застави, ніж є на рахунку.</i>`,
 
+  timedOut: (ticker, days, r) =>
+    `⌛ <b>$${ticker}</b> закрито за часом через ${days} дн. з результатом <b>${r}</b>`,
   closeWin: '✅ <b>Ціль досягнуто</b>',
   closeLoss: '❌ <b>Вибило по стопу</b>',
   closeBreakeven: '🛡 <b>Закрито в нуль</b>',

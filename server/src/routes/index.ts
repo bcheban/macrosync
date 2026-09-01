@@ -12,6 +12,7 @@ import {
   notifyProgress,
   publishDailyReport,
   notifyClosed,
+  notifyTimedOut,
   notifySignals,
   notifyWatches,
   sendTestAlert,
@@ -330,6 +331,13 @@ api.all(
       * the thing worth knowing when reading a scan afterwards.
       */
      const protectedCount = movedToBreakeven.length;
+
+    /*
+     * Said quietly, after the decisive closes. A trade that ran out its clock
+     * is bookkeeping rather than an event, but it is bookkeeping about a
+     * position somebody may still think they are holding.
+     */
+    const timedOut = await notifyTimedOut(closed);
     const announced = await notifyClosed(closed, stats);
 
     /*
@@ -361,6 +369,8 @@ api.all(
       closed: closed.map((trade) => ({ base: trade.base, strategy: trade.strategy, outcome: trade.outcome })),
       announced,
       breakeven: protectedCount,
+      // Trades ended by their own clock rather than by a level.
+      timedOut,
       // Cards rewritten in place, as against messages newly sent.
       cardsUpdated: updated,
       dailyReport: report.published ? report.date : null,

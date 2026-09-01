@@ -242,6 +242,14 @@ export interface ActiveSignal {
   progressPct: number | null;
   openedAt: string;
   ageMinutes: number;
+  /**
+   * How much of its permitted life the trade has used, 0 to 1.
+   *
+   * Age alone says nothing without the horizon beside it: six hours is most of
+   * a scalp and nothing to a swing. At 1 the next scan closes it for running
+   * out of time rather than for being wrong.
+   */
+  lifeUsed?: number;
   /** Set once the stop has been pulled to entry. */
   breakevenAt?: string;
 }

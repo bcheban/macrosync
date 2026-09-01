@@ -237,6 +237,22 @@ function TradeCard({
         </div>
       )}
 
+      {/*
+        Shown only once it means something. A trade at a fifth of its clock is
+        simply open; one at four fifths is about to be closed for going
+        nowhere, and that is worth seeing before it happens rather than after.
+      */}
+      {typeof trade.lifeUsed === 'number' && trade.lifeUsed >= 0.75 && (
+        <div
+          className={cn(
+            'mt-1.5 text-[10px]',
+            trade.lifeUsed >= 0.95 ? 'text-warn/90' : 'text-white/35',
+          )}
+        >
+          {t('liveTrades.timeLeft', { pct: String(Math.round(trade.lifeUsed * 100)) })}
+        </div>
+      )}
+
       {trade.progressPct !== null && <ProgressBar pct={trade.progressPct} />}
 
       <div className="mt-1.5 flex items-center gap-1 text-[10px] text-white/25 transition-colors group-hover:text-white/50">

@@ -87,6 +87,8 @@ export const de: Dictionary = {
   sizingCapped: (riskPct) =>
     `⚠️ <i>Auf dein Guthaben begrenzt: Die volle Größe für ${riskPct}% Risiko braucht mehr Sicherheit, als das Konto hergibt.</i>`,
 
+  timedOut: (ticker, days, r) =>
+    `⌛ <b>$${ticker}</b> nach ${days} Tag${days === 1 ? '' : 'en'} auf Zeit geschlossen, Ergebnis <b>${r}</b>`,
   closeWin: '✅ <b>Ziel erreicht</b>',
   closeLoss: '❌ <b>Ausgestoppt</b>',
   closeBreakeven: '🛡 <b>Auf Break-even geschlossen</b>',

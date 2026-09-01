@@ -2,7 +2,13 @@ import { env } from '../../config/env.js';
 import { assetBySymbol } from '../../data/assets.js';
 import type { Strategy } from '../../types/domain.js';
 import { getAllTickers24h } from '../market.service.js';
-import { loadActive, loadStats, winRate, type ActiveTrade } from './trades.service.js';
+import {
+  loadActive,
+  loadStats,
+  winRate,
+  MAX_LIFETIME_MS,
+  type ActiveTrade,
+} from './trades.service.js';
 
 /**
  * The open trades, priced, for the dashboard.
@@ -45,6 +51,8 @@ export interface ActiveSignal {
   progressPct: number | null;
   openedAt: string;
   ageMinutes: number;
+  /** 0..1 of the trade's permitted life. At 1 the next scan closes it. */
+  lifeUsed: number;
   /** Set once the stop has been pulled to entry. */
   breakevenAt?: string;
 }
@@ -91,6 +99,22 @@ function priceTrade(trade: ActiveTrade, price: number | undefined): ActiveSignal
     progressPct: price === undefined || span === 0 ? null : round(((price - trade.entry) / span) * 100, 1),
     openedAt: trade.openedAt,
     ageMinutes: Math.max(0, Math.round((Date.now() - Date.parse(trade.openedAt)) / 60_000)),
+    /*
+     * How much of its allotted time this trade has used.
+     *
+     * The board showed age and never showed what age *meant* — six hours is
+     * most of a scalp's life and nothing at all to a swing. A fraction reads
+     * the same for all three, and it is the number that says a position is
+     * about to be closed for going nowhere rather than for being wrong.
+     */
+    lifeUsed: round(
+      Math.min(
+        1,
+        (Date.now() - Date.parse(trade.openedAt)) /
+          Math.min(MAX_LIFETIME_MS[trade.strategy] ?? Infinity, env.maxTradeDurationMs),
+      ),
+      2,
+    ),
     /*
      * The ladder, and which rungs have paid.
      *

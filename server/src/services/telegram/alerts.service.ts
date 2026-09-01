@@ -14,7 +14,7 @@ import { displayTicker } from '../../utils/ticker.js';
 import { getPrefs } from './preferences.service.js';
 import type { Channel, Locale, Prefs } from './preferences.service.js';
 import { dict } from './i18n/index.js';
-import { bucketOf } from '../trades/confidence.js';
+import { bucketOf, realisedR } from '../trades/confidence.js';
 import {
   cooldownFor,
   loadCooldown,
@@ -172,6 +172,8 @@ async function broadcast(
   keyboard?: (prefs: Prefs) => InlineKeyboard,
   strategy?: Strategy,
   channel?: Channel,
+  /** Delivery options that apply to every recipient of this one message. */
+  options?: { quiet?: boolean },
 ): Promise<BroadcastResult> {
   const { send, filtered } = await activeRecipients(strategy, channel);
   if (filtered.length) {
@@ -193,7 +195,11 @@ async function broadcast(
     const { chatId } = recipient;
     try {
       const html = await render(recipient);
-      const result = await sendTelegramMessage(html, { chatId, keyboard: keyboard?.(recipient.prefs) });
+      const result = await sendTelegramMessage(html, {
+        chatId,
+        keyboard: keyboard?.(recipient.prefs),
+        ...(options?.quiet ? { quiet: true } : {}),
+      });
 
       if (result.delivered) {
         delivered += 1;
@@ -755,6 +761,59 @@ export async function publishDailyReport(
   );
 
   return result.delivered;
+}
+
+/**
+ * Says, quietly, that a trade ran out of time.
+ *
+ * These used to close in silence. That was right when the only silent outcome
+ * was a call that never went anywhere — but a laddered trade can time out
+ * having already booked a rung, so "expired" now covers results that moved real
+ * money, and a reader watching a position deserves to know it ended.
+ *
+ * Sent without a notification sound and on the `updates` channel, so it obeys
+ * the same preferences as every other in-flight message. A trade closing on its
+ * own clock is bookkeeping: worth finding when you read back, not worth waking
+ * anybody for.
+ */
+export async function notifyTimedOut(closed: readonly ClosedTrade[]): Promise<number> {
+  if (!telegramConfigured()) return 0;
+
+  /*
+   * Identified by how the remainder closed rather than by the outcome label.
+   * A timed-out trade that filled a rung is graded a win or a loss like any
+   * other, so the label cannot tell it apart from one that reached its target.
+   */
+  const timedOut = closed.filter((trade) => trade.fills?.at(-1)?.reason === 'expiry');
+  if (!timedOut.length) return 0;
+
+  let sent = 0;
+  for (const trade of timedOut) {
+    const days = Math.max(
+      1,
+      Math.round((Date.parse(trade.closedAt) - Date.parse(trade.openedAt)) / 86_400_000),
+    );
+    const r = realisedR(trade);
+
+    const result = await broadcast(
+      ({ prefs }) => {
+        const t = dict(prefs.locale);
+        return t.timedOut(
+          escapeHtml(displayTicker(trade.base)),
+          days,
+          `${r >= 0 ? '+' : ''}${r.toFixed(2)}R`,
+        );
+      },
+      undefined,
+      trade.strategy,
+      'updates',
+      { quiet: true },
+    );
+
+    if (result.delivered > 0) sent += 1;
+  }
+
+  return sent;
 }
 
 /**

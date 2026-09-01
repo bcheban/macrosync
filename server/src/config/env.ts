@@ -302,6 +302,26 @@ export const env = {
    * after the fact.
    */
   signalsPerHour: positiveInt(process.env.SIGNALS_PER_HOUR, 4),
+
+  /**
+   * The longest any trade may stay open, whatever its strategy says.
+   *
+   * A backstop, not the schedule. Each strategy already has its own horizon —
+   * six hours for a scalp, thirty-six for a day trade, ten days for a swing —
+   * and those are tighter than this for two of the three. Replacing them with
+   * one flat number would let a five-minute scalp sit open for ten days, which
+   * is worse than the problem it would be solving.
+   *
+   * What this catches is the case the per-strategy table cannot: a trade whose
+   * strategy is not in that table at all. A field corrupted in the store, a
+   * strategy added to the engine and forgotten here, a webhook payload that got
+   * through with something unexpected — any of them would otherwise look up
+   * `undefined`, compare `age > undefined` as false, and hold a slot for ever.
+   */
+  maxTradeDurationMs: positiveInt(
+    process.env.MAX_TRADE_DURATION_DAYS,
+    10,
+  ) * 24 * 60 * 60 * 1000,
   /**
    * Guards the TradingView webhook. The route 404s while unset.
    *

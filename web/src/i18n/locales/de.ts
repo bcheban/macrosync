@@ -123,6 +123,7 @@ export const de: Translation = {
     entry: 'Einstieg',
     record: '{{rate}}% · {{decided}} abgeschlossen',
     exposure: 'Offenes Risiko',
+    timeLeft: '⏳ {{pct}}% der Zeit verbraucht',
     exposureRisk_one: '{{count}} Position · 1R im Risiko',
     exposureRisk_other: '{{count}} Positionen · {{count}}R im Risiko',
     floating: 'unrealisiert',

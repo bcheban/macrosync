@@ -657,6 +657,106 @@ describe('trade ledger', () => {
     assert.equal(reversal.opened, true, 'a reversal replaces rather than adds');
   });
 
+  it('closes a trade that outlived its strategy, and leaves a younger one alone', async () => {
+    /*
+     * The zombie: a position sitting near entry, reaching neither level,
+     * holding one of fifteen slots for ever. A day trade gets 36 hours.
+     *
+     * Both trades are flat — the tape never touches a rung or the stop — so the
+     * only thing separating them is the clock.
+     */
+    script = { OLDUSDT: [[101], [99]], NEWUSDT: [[101], [99]] };
+
+    await trades.openTrade(signal('OLD', 'buy', 100, 95, 110));
+    await trades.openTrade(signal('NEW', 'buy', 100, 95, 110));
+
+    // Age the first one past its horizon by resolving from a later clock.
+    const later = Date.now() + 37 * 60 * 60_000;
+    const store = await import('../store/store.js');
+    const active = await store.getJson<Record<string, unknown>[]>(store.storeKey('trades:active'), []);
+    await store.setJson(
+      store.storeKey('trades:active'),
+      active.map((trade) =>
+        trade.base === 'OLD'
+          ? { ...trade, openedAt: new Date(Date.now() - 37 * 60 * 60_000).toISOString() }
+          : trade,
+      ),
+    );
+
+    const { closed, open } = await trades.evaluateTrades();
+
+    assert.equal(closed.length, 1, 'only the one past its horizon');
+    assert.equal(closed[0]?.base, 'OLD');
+    assert.equal(open, 1, 'the young trade keeps its slot');
+    void later;
+  });
+
+  it('ends a trade whose strategy has no horizon at all', async () => {
+    /*
+     * The case the per-strategy table cannot catch and the ceiling exists for.
+     *
+     * A strategy missing from `MAX_LIFETIME_MS` produced `age > undefined`,
+     * which is false — so the trade never timed out, never closed, and held a
+     * slot permanently. A field corrupted in the store or a strategy added to
+     * the engine and forgotten here both land exactly there.
+     */
+    script = { GHOSTUSDT: [[101], [99]] };
+
+    await trades.openTrade(signal('GHOST', 'buy', 100, 95, 110));
+
+    const store = await import('../store/store.js');
+    const { env } = await import('../../config/env.js');
+    const active = await store.getJson<Record<string, unknown>[]>(store.storeKey('trades:active'), []);
+    await store.setJson(
+      store.storeKey('trades:active'),
+      active.map((trade) => ({
+        ...trade,
+        strategy: 'nonsense',
+        openedAt: new Date(Date.now() - env.maxTradeDurationMs - 60_000).toISOString(),
+      })),
+    );
+
+    const { closed } = await trades.evaluateTrades();
+
+    assert.equal(closed.length, 1, 'the ceiling ends it even with no horizon to read');
+    assert.equal(closed[0]?.outcome, 'expired', 'it reached no level, so it is not a win or a loss');
+  });
+
+  it('settles the rest of the book when one trade cannot be resolved', async () => {
+    /*
+     * How the zombies were really being made.
+     *
+     * `Promise.all` rejects on the first failure, so one trade whose resolve
+     * threw took the whole pass with it — nothing closed, nothing was
+     * announced, and every position stayed open including the ones that had
+     * hit their stop. Every five minutes, for ever.
+     */
+    script = { GOODUSDT: [[101], [94]] };
+
+    await trades.openTrade(signal('GOOD', 'buy', 100, 95, 110));
+    await trades.openTrade(signal('BAD', 'buy', 100, 95, 110));
+
+    const store = await import('../store/store.js');
+    const active = await store.getJson<Record<string, unknown>[]>(store.storeKey('trades:active'), []);
+    await store.setJson(
+      store.storeKey('trades:active'),
+      /*
+       * `fills` as a number rather than an array. Every helper that reads it
+       * calls a method arrays have and numbers do not, so `resolve` throws
+       * rather than returning — which is the shape of the failure that used
+       * to take the whole pass down with it.
+       */
+      active.map((trade) => (trade.base === 'BAD' ? { ...trade, fills: 42 } : trade)),
+    );
+
+    const { closed } = await trades.evaluateTrades();
+
+    // GOOD hit its stop and settles regardless of what BAD did.
+    assert.equal(closed.length, 1);
+    assert.equal(closed[0]?.base, 'GOOD');
+    assert.equal(closed[0]?.outcome, 'loss');
+  });
+
   it('reports a win rate over decided trades only', async () => {
     assert.equal(trades.winRate({ wins: 3, losses: 1, expired: 0, superseded: 0, voided: 0, breakeven: 0, byStrategy: {}, updatedAt: '' }), 75);
     // Expired and superseded calls must not dilute the denominator.

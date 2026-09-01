@@ -772,7 +772,18 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
    * neither level was reached — and both stay out of the win rate for the same
    * reason, so this cannot flatter the record.
    */
-  const lifetime = MAX_LIFETIME_MS[trade.strategy];
+  /*
+   * The strategy's own horizon, under an absolute ceiling.
+   *
+   * `?? Infinity` is the whole point of the ceiling. A strategy missing from
+   * the table used to produce `age > undefined`, which is false — so the trade
+   * never timed out, never closed, and held one of fifteen slots permanently.
+   * Now the lookup can fail and the trade still ends.
+   */
+  const lifetime = Math.min(
+    MAX_LIFETIME_MS[trade.strategy] ?? Number.POSITIVE_INFINITY,
+    env.maxTradeDurationMs,
+  );
   const stagnant =
     !atBreakeven && age > lifetime * env.stagnantAfterFraction && bestProgress < env.stagnantProgress;
 
@@ -805,6 +816,21 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
   };
 }
 
+/**
+ * The risk a setup calls for, tolerating a strategy nobody defined.
+ *
+ * Reading the profile directly threw on an unfamiliar strategy, and it threw
+ * inside `record` — so a single trade with a corrupted field did not merely
+ * miscount itself, it took down the write that persists *every* close in that
+ * run. The trade the ceiling had just ended stayed open, and did so again on
+ * the next run, and the next.
+ *
+ * A default keeps the arithmetic slightly wrong for one trade instead of
+ * stopping the ledger for all of them.
+ */
+const riskPctFor = (strategy: Strategy): number =>
+  STRATEGY_PROFILES[strategy]?.baseRiskPct ?? STRATEGY_PROFILES.day.baseRiskPct;
+
 /** Folds closed trades into the running statistics and the history log. */
 async function record(closed: ClosedTrade[]): Promise<TradeStats> {
   const stats = await loadStats();
@@ -831,7 +857,7 @@ async function record(closed: ClosedTrade[]): Promise<TradeStats> {
         (
           stats.sums.roiPct +
           closed.reduce(
-            (sum, trade) => sum + realisedR(trade) * STRATEGY_PROFILES[trade.strategy].baseRiskPct,
+            (sum, trade) => sum + realisedR(trade) * riskPctFor(trade.strategy),
             0,
           )
         ).toFixed(2),
@@ -855,7 +881,7 @@ async function record(closed: ClosedTrade[]): Promise<TradeStats> {
             .reduce((sum, trade) => {
               const opened = trade.initialStopLoss ?? trade.stopLoss;
               const cost = tradeCostR(Math.abs(trade.entry - opened) / trade.entry);
-              return sum + cost * STRATEGY_PROFILES[trade.strategy].baseRiskPct;
+              return sum + cost * riskPctFor(trade.strategy);
             }, 0)
         ).toFixed(3),
       ),
@@ -911,7 +937,28 @@ export async function evaluateTrades(now = Date.now()): Promise<{
     return { closed: [], movedToBreakeven: [], progressed: [], stats: await loadStats(), open: 0 };
   }
 
-  const resolutions = await Promise.all(active.map((trade) => resolve(trade, now)));
+  /*
+   * Settled, not all-or-nothing.
+   *
+   * `Promise.all` rejects on the first failure, so a single trade whose resolve
+   * threw took the whole pass with it: nothing closed, nothing was announced,
+   * and every position stayed open — including the ones that had hit their
+   * stop. Repeat that every five minutes and the book fills with trades the
+   * ledger is no longer able to end, which is exactly the zombie this work is
+   * about, arriving through the one door nobody was watching.
+   *
+   * A trade that cannot be resolved is left open and logged. It gets another
+   * run in five minutes, and the ceiling above will end it regardless.
+   */
+  const outcomes = await Promise.allSettled(active.map((trade) => resolve(trade, now)));
+
+  const resolutions = outcomes.flatMap((outcome, index) => {
+    if (outcome.status === 'fulfilled') return [outcome.value];
+
+    const trade = active[index]!;
+    console.error(`[trades] could not resolve ${trade.symbol}:`, outcome.reason);
+    return [{ trade }];
+  });
 
   const closed = resolutions
     .map((resolution) => resolution.closed)
