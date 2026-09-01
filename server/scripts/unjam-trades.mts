@@ -68,7 +68,17 @@ const { deleteKeys, storeKey, storeBackend } = await import('../src/services/sto
 
 const args = process.argv.slice(2);
 const confirm = args.includes('--confirm');
-const toLimit = args.includes('--to-limit');
+const toLimitIndex = args.indexOf('--to-limit');
+const toLimit = toLimitIndex >= 0;
+/*
+ * How many to leave open. Defaults to one under the cap rather than exactly on
+ * it: the engine refuses to open while the book is *at* the limit, so closing
+ * down to it unjams nothing. Pass a number to leave more room.
+ */
+const target = (() => {
+  const given = Number(args[toLimitIndex + 1]);
+  return Number.isFinite(given) && given >= 0 ? given : null;
+})();
 const olderThanIndex = args.indexOf('--older-than');
 const olderThanDays = olderThanIndex >= 0 ? Number(args[olderThanIndex + 1]) : null;
 
@@ -102,11 +112,12 @@ if (olderThanDays !== null && Number.isFinite(olderThanDays)) {
     console.log('  Nothing is that old. Use --to-limit to close oldest-first instead.');
   }
 } else if (toLimit) {
-  victims = byAge.slice(0, Math.max(0, active.length - limit));
-  console.log(`  Rule: oldest first until ${limit} remain — ${victims.length} to close`);
+  const leave = target ?? Math.max(0, limit - 1);
+  victims = byAge.slice(0, Math.max(0, active.length - leave));
+  console.log(`  Rule: oldest first until ${leave} remain — ${victims.length} to close`);
 } else {
   console.log('  Pick a rule:');
-  console.log('    --to-limit            close oldest first until the book fits');
+  console.log('    --to-limit [n]        close oldest first until n remain (default: one under the cap)');
   console.log('    --older-than <days>   close anything past that age');
   process.exit(0);
 }

@@ -577,6 +577,41 @@ describe('trade ledger', () => {
     }
   });
 
+  it('keeps a measured sum when a new field is added beside it', async () => {
+    /*
+     * The seed is for values nobody measured, and it used to outrank ones that
+     * were. Adding `roiCostPct` made every stored `sums` fail a completeness
+     * check, so the whole object was replaced — and an accurately accumulated
+     * +0.6R became the ratio reconstruction's +23.8R, a figure that assumes
+     * every win ran the full ladder. On a live record.
+     *
+     * Each field falls back on its own now. The next field added here lands in
+     * the same position, which is why this is pinned rather than remembered.
+     */
+    const store = await import('../store/store.js');
+    await store.setJson(store.storeKey('trades:stats'), {
+      wins: 26,
+      losses: 18,
+      expired: 0,
+      superseded: 0,
+      voided: 0,
+      breakeven: 0,
+      byStrategy: { day: { wins: 26, losses: 18 } },
+      // The shape before `costR` and `roiCostPct` existed.
+      sums: { r: 0.6, roiPct: 1.96, settled: 44 },
+      updatedAt: new Date().toISOString(),
+    });
+
+    const { sums } = await trades.loadStats();
+
+    assert.equal(sums.r, 0.6, 'a measured sum survives a schema change');
+    assert.equal(sums.roiPct, 1.96);
+    assert.equal(sums.settled, 44);
+    // Only the genuinely absent fields are estimated.
+    assert.ok(sums.costR > 0);
+    assert.ok(sums.roiCostPct > 0);
+  });
+
   it('stops opening once the book is full', async () => {
     /*
      * Sixty-three positions were open against forty-four ever settled. Each one

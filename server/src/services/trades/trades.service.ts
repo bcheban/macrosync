@@ -286,14 +286,30 @@ export const loadStats = async (): Promise<TradeStats> => {
    * rather than failing anywhere a test would see. Checking the numbers
    * themselves is what makes the next field added here safe.
    */
-  const complete =
-    typeof stats.sums?.r === 'number' &&
-    typeof stats.sums?.roiPct === 'number' &&
-    typeof stats.sums?.costR === 'number' &&
-    typeof stats.sums?.roiCostPct === 'number' &&
-    typeof stats.sums?.settled === 'number';
+  /*
+   * Backfilled field by field, never wholesale.
+   *
+   * Replacing the whole object the moment one field was missing is what a
+   * "seed if incomplete" check does, and it destroyed a real record: adding
+   * `roiCostPct` made every stored `sums` incomplete, so an accurately
+   * accumulated +0.6R was overwritten by the ratio reconstruction's +23.8R — a
+   * figure that assumes every win ran the full ladder.
+   *
+   * The seed is for values nobody measured. A measured value outranks it, so
+   * each field falls back on its own and an accumulated number is never thrown
+   * away to satisfy a newly added one.
+   */
+  const seeded = seedSums(stats);
+  const sums = {
+    r: typeof stats.sums?.r === 'number' ? stats.sums.r : seeded.r,
+    roiPct: typeof stats.sums?.roiPct === 'number' ? stats.sums.roiPct : seeded.roiPct,
+    costR: typeof stats.sums?.costR === 'number' ? stats.sums.costR : seeded.costR,
+    roiCostPct:
+      typeof stats.sums?.roiCostPct === 'number' ? stats.sums.roiCostPct : seeded.roiCostPct,
+    settled: typeof stats.sums?.settled === 'number' ? stats.sums.settled : seeded.settled,
+  };
 
-  return complete ? stats : { ...stats, sums: seedSums(stats) };
+  return { ...stats, sums };
 };
 export const loadActive = (): Promise<ActiveTrade[]> => getJson<ActiveTrade[]>(ACTIVE_KEY, []);
 
