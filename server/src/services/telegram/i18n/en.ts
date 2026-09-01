@@ -13,7 +13,7 @@ export const en = {
 
   welcomeIntro: '📡 <b>Ayanox</b> — an automated futures radar.',
   welcomeBody:
-    'It scans the liquid USDT perpetuals on MEXC around the clock, and when a setup confirms you get the call: entry, three take profits, SL, the reasoning in one sentence, and the leverage at which liquidation still sits clear of the stop. When TP1 fills, the stop moves to entry and the card updates itself — past that point the trade cannot cost you anything.',
+    'It scans the liquid USDT perpetuals on MEXC around the clock, and when a setup confirms you get the call: entry, three take profits, SL, the reasoning in one sentence, and the leverage at which liquidation still sits clear of the stop. The card updates itself as each target fills, and once TP2 fills the stop moves to entry — past that point the trade cannot cost you anything.',
   welcomeSubscribed:
     'You are subscribed. The buttons below the keyboard are everything else — settings, the guide, a position calculator, and the record.',
   helpIntro: '📡 <b>Ayanox</b> — an automated futures radar for MEXC perpetuals.',
@@ -176,8 +176,8 @@ export const en = {
    * record and states the count once; this covers whatever the log still holds
    * prices for, and `statsLogged` says so whenever the two differ.
    */
-  statsNet: (r: string, usd: string) =>
-    `📊 <b>Net result ${r}</b> <i>(${usd} if risking $100 per trade)</i>`,
+  statsNet: (net: string, usd: string, gross: string) =>
+    `📊 <b>Net result ${net}</b> <i>after fees (${usd} at $100 risk)</i>\n<i>${gross} gross, before costs</i>`,
   /**
    * The complete record, and the count it is over.
    *
@@ -201,8 +201,8 @@ export const en = {
    * distrust. This one is derived from R and the risk each setup calls for,
    * both of which outlive the prices — so it covers every decided trade.
    */
-  statsRoi: (pct: string) =>
-    `📈 <b>Cumulative ROI ${pct}</b> <i>(of a deposit, at the risk each setup calls for)</i>`,
+  statsRoi: (net: string, gross: string) =>
+    `📈 <b>Cumulative ROI ${net}</b> <i>after fees \u00B7 ${gross} gross</i>\n<i>of a deposit, at the risk each setup calls for</i>`,
   /** Heading for the per-setup split. Only rendered when a setup has a record. */
   statsByStrategy: '<b>By setup</b>',
   statsStrategyRow: (label: string, rate: number, wins: number, losses: number) =>
@@ -222,6 +222,9 @@ export const en = {
     thin
       ? `<code>${label}</code>  <i>${rate}% · ${wins}/${decided} · ${r} (${usd})</i> ⚠️`
       : `<code>${label}</code>  <b>${rate}%</b> · ${wins}/${decided} · ${r} (${usd})`,
+  /** Says once what the fee figure is and is not. */
+  statsFeeNote: (pct: string) =>
+    `<i>Fees assume ${pct}% taker on every fill and exclude slippage, so the real cost is a little higher.</i>`,
   statsRiskNote: (usd: number) =>
     `💡 <i>Dollar figures are a simulation assuming exactly $${usd} is put at risk — the amount lost if SL is hit — on every single trade. 1R = that risk.</i>`,
   statsThinNote: (n: number) =>
@@ -289,11 +292,11 @@ export const en = {
   guideRiskBody: [
     '🛡 <b>Why the win rate is not the point</b>',
     '',
-    'A loss costs 1R — the risk you set when you opened it. A win is not one number: the ladder books 50% at 1R, 30% at 1.5R and 20% at 2.5R, so a call that runs the whole way returns <b>1.45R</b> and one that takes the first rung and then stops at entry returns <b>0.5R</b>.',
+    'A loss costs 1R — the risk you set when you opened it. A win is not one number: the ladder books 25% at 1R, 45% at 1.5R and 30% at 2.5R, so a call that runs the whole way returns <b>1.675R</b> and one that reaches TP2 and then stops at entry returns <b>0.925R</b>.',
     '',
-    'That range is the whole trade-off. Booking half early wins more often and wins less each time.',
+    'The stop moves to entry only after <b>TP2</b>, not after TP1. Until then the trade can still lose: a call that takes TP1 and reverses to its stop returns <b>−0.5R</b>. That is deliberate. Protecting on the first rung made almost every winner worth half a unit while every loser cost a full one, which is a losing arrangement however often it wins.',
     '',
-    'So there is no single break-even win rate. If every winner ran the full ladder it would be <b>41%</b>; if every winner stopped after the first rung it would be <b>67%</b>. The real figure sits between them and moves with the market.',
+    'So there is no single break-even win rate. If every winner ran the full ladder it would be <b>37%</b>; if every winner stopped at TP2 it would be <b>52%</b>. The real figure sits between them and moves with the market.',
     '',
     'Which is why <code>/stats</code> leads with net R rather than a percentage. That number needs no assumption about how far the ladder ran — it is what actually happened.',
     '',

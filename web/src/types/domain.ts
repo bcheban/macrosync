@@ -336,6 +336,12 @@ export interface TradeRecord {
   r: number;
   /** The same record as a share of a deposit, at each setup's own risk. */
   roiPct: number;
+  /** Estimated fees across the record, in risk units. */
+  costR: number;
+  /** `r - costR`. What the account keeps, which is the figure that matters. */
+  netR: number;
+  /** The deposit return with costs subtracted, never scaled. */
+  netRoiPct: number;
 }
 
 export interface TradeHistoryResponse {

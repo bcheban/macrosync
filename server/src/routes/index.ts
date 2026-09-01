@@ -490,6 +490,14 @@ api.get(
       settled: stats.wins + stats.losses,
       r: stats.sums.r,
       roiPct: stats.sums.roiPct,
+      /*
+       * Costs, so the panel can lead with what an account keeps rather than
+       * what the levels implied. Gross stays beside it — both are true, and
+       * only one of them is spendable.
+       */
+      costR: stats.sums.costR ?? 0,
+      netRoiPct: Number((stats.sums.roiPct - (stats.sums.roiCostPct ?? 0)).toFixed(2)),
+      netR: Number((stats.sums.r - (stats.sums.costR ?? 0)).toFixed(2)),
     };
 
     res.json({ trades, stats, record, count: trades.length });

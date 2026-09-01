@@ -4,6 +4,7 @@ import type { Signal, Strategy } from '../../types/domain.js';
 import { getJson, setJson, storeKey } from '../store/store.js';
 import { STRATEGIES, STRATEGY_PROFILES } from '../signal.engine.js';
 import { realisedR } from './confidence.js';
+import { tradeCostR, TYPICAL_STOP_FRACTION } from './expectancy.js';
 import {
   anyTargetHit,
   buildLadder,
@@ -146,7 +147,29 @@ export interface TradeStats {
    * `settled` is what both cover, and it tracks wins + losses exactly once the
    * seed below has run.
    */
-  sums: { r: number; roiPct: number; settled: number };
+  sums: {
+    r: number;
+    roiPct: number;
+    /**
+     * Fees and slippage, in R, accumulated the same way as the result.
+     *
+     * The headline used to be gross, and gross was the number somebody traded
+     * on: an edge of +0.014R per trade against costs of 0.012R at the base fee
+     * tier and 0.037R at a realistic one. A record that reports what it made
+     * and not what it cost is not reporting a result.
+     */
+    costR: number;
+    /**
+     * The same costs expressed against a deposit, so ROI can be net too.
+     *
+     * Kept separately rather than scaled from `costR` at read time: scaling is
+     * multiplicative and gets the direction wrong the moment gross and net
+     * differ in sign — a gross ROI of -16.8% came out as -1.55% "after fees",
+     * which is fees making a loss smaller. Costs subtract. They always subtract.
+     */
+    roiCostPct: number;
+    settled: number;
+  };
   updatedAt: string;
 }
 
@@ -174,7 +197,7 @@ const EMPTY_STATS: TradeStats = {
   voided: 0,
   breakeven: 0,
   byStrategy: {},
-  sums: { r: 0, roiPct: 0, settled: 0 },
+  sums: { r: 0, roiPct: 0, costR: 0, roiCostPct: 0, settled: 0 },
   updatedAt: new Date(0).toISOString(),
 };
 
@@ -227,14 +250,28 @@ const seedSums = (stats: TradeStats): TradeStats['sums'] => {
     const row = stats.byStrategy[strategy] ?? { wins: 0, losses: 0 };
     return {
       r: row.wins * STRATEGY_PROFILES[strategy].rewardRatio - row.losses,
+      settled: row.wins + row.losses,
       riskPct: STRATEGY_PROFILES[strategy].baseRiskPct,
     };
   });
 
+  const settled = stats.wins + stats.losses;
+
   return {
     r: Number(perStrategy.reduce((sum, row) => sum + row.r, 0).toFixed(2)),
     roiPct: Number(perStrategy.reduce((sum, row) => sum + row.r * row.riskPct, 0).toFixed(2)),
-    settled: stats.wins + stats.losses,
+    /*
+     * Seeded at a typical stop width, because the counters do not remember the
+     * stop distances the real cost depends on. Every trade closed from here is
+     * charged its own, so the estimate is diluted rather than compounded.
+     */
+    costR: Number((settled * tradeCostR(TYPICAL_STOP_FRACTION)).toFixed(2)),
+    roiCostPct: Number(
+      perStrategy
+        .reduce((sum, row) => sum + row.settled * tradeCostR(TYPICAL_STOP_FRACTION) * row.riskPct, 0)
+        .toFixed(2),
+    ),
+    settled,
   };
 };
 
@@ -252,6 +289,8 @@ export const loadStats = async (): Promise<TradeStats> => {
   const complete =
     typeof stats.sums?.r === 'number' &&
     typeof stats.sums?.roiPct === 'number' &&
+    typeof stats.sums?.costR === 'number' &&
+    typeof stats.sums?.roiCostPct === 'number' &&
     typeof stats.sums?.settled === 'number';
 
   return complete ? stats : { ...stats, sums: seedSums(stats) };
@@ -311,6 +350,21 @@ const close = (
     closedAt: at,
     resultPct: Number(weighted(fills, (price) => pctAt(trade.side, trade.entry, price)).toFixed(2)),
   };
+};
+
+/**
+ * What a settled trade turned out to be, from what it actually returned.
+ *
+ * Zero is `breakeven` rather than a win or a loss: it moved no money, and
+ * putting it in either column would change a denominator without changing a
+ * sum — the exact defect that had the header counting a different set of
+ * trades from the line beneath it.
+ */
+const grade = (closed: ClosedTrade): Outcome => {
+  const r = realisedR(closed);
+  if (r > 0) return 'win';
+  if (r < 0) return 'loss';
+  return 'breakeven';
 };
 
 /**
@@ -575,10 +629,22 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
          * profit and cannot be un-booked by what happened after it.
          */
         const settled = { ...trade, stopLoss: stop, fills };
-        const outcome: Outcome = anyTargetHit(fills) ? 'win' : atBreakeven ? 'breakeven' : 'loss';
+        /*
+         * Graded on what it returned, not on whether a rung was touched.
+         *
+         * While the stop moved on TP1 the two were the same question: any fill
+         * meant the remainder closed at entry at worst, so a filled rung was
+         * always a win. With the stop waiting for TP2 they diverge — TP1 filled
+         * and then stopped out is `0.25 - 0.75 = -0.5R`, which is a loss with a
+         * rung filled. Labelling that a win would put a negative number in the
+         * winners' column and quietly inflate the rate this whole exercise
+         * exists to deflate.
+         */
+        const graded = close(settled, 'loss', stop, atBreakeven ? 'breakeven' : 'stop');
+
         return {
           trade: settled,
-          closed: close(settled, outcome, stop, atBreakeven ? 'breakeven' : 'stop'),
+          closed: { ...graded, outcome: grade(graded) },
           ...(moved ? { movedToBreakeven: true } : {}),
           ...(filled.length ? { filled } : {}),
         };
@@ -607,8 +673,17 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
         fills = [...fills, fill];
         filled.push(fill);
 
-        // The first rung pays for the trade, so the trade stops being able to lose.
-        if (!atBreakeven) {
+        /*
+         * The stop waits for the rung that earns it.
+         *
+         * Moving on the first fill made a trade safe as soon as it had paid for
+         * a quarter of itself, and capped the average win at that quarter: most
+         * winners never got past TP1 before the entry was retested. Waiting for
+         * the second rung gives the position room against noise, and costs a
+         * trade that fills TP1 and reverses the difference between +0.25R and
+         * -0.5R. `BREAKEVEN_AFTER_RUNG` sets which rung; 1 restores the old rule.
+         */
+        if (!atBreakeven && target.level >= env.breakevenAfterRung) {
           stop = trade.entry;
           atBreakeven = true;
           moved = true;
@@ -681,10 +756,16 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
      * win, not an expiry. It reached a level it published and paid out there;
      * the remainder simply stopped being interesting.
      */
-    const outcome: Outcome = anyTargetHit(fills) ? 'win' : 'expired';
+    /*
+     * An expiry that filled nothing is `expired` and stays out of the rate. One
+     * that filled a rung has a real result — positive or negative — and is
+     * graded like any other close.
+     */
+    const expired = close(updated, 'expired', last, 'expiry');
+
     return {
       trade: updated,
-      closed: close(updated, outcome, last, 'expiry'),
+      closed: anyTargetHit(fills) ? { ...expired, outcome: grade(expired) } : expired,
       ...(moved ? { movedToBreakeven: true } : {}),
       ...(filled.length ? { filled } : {}),
     };
@@ -727,6 +808,29 @@ async function record(closed: ClosedTrade[]): Promise<TradeStats> {
             0,
           )
         ).toFixed(2),
+      ),
+      costR: Number(
+        (
+          stats.sums.costR +
+          closed
+            .filter((trade) => trade.outcome === 'win' || trade.outcome === 'loss')
+            .reduce((sum, trade) => {
+              const opened = trade.initialStopLoss ?? trade.stopLoss;
+              return sum + tradeCostR(Math.abs(trade.entry - opened) / trade.entry);
+            }, 0)
+        ).toFixed(3),
+      ),
+      roiCostPct: Number(
+        (
+          stats.sums.roiCostPct +
+          closed
+            .filter((trade) => trade.outcome === 'win' || trade.outcome === 'loss')
+            .reduce((sum, trade) => {
+              const opened = trade.initialStopLoss ?? trade.stopLoss;
+              const cost = tradeCostR(Math.abs(trade.entry - opened) / trade.entry);
+              return sum + cost * STRATEGY_PROFILES[trade.strategy].baseRiskPct;
+            }, 0)
+        ).toFixed(3),
       ),
       settled:
         stats.sums.settled +
@@ -811,6 +915,64 @@ export async function evaluateTrades(now = Date.now()): Promise<{
   const stats = closed.length ? await record(closed) : await loadStats();
 
   return { closed, movedToBreakeven, progressed, stats, open: remaining.length };
+}
+
+/**
+ * Settles chosen open trades outside the scan, at a price the caller supplies.
+ *
+ * Exists for one job: unwedging a book that has grown past `MAX_OPEN_TRADES`,
+ * where the engine will not open anything new until something settles and
+ * nothing is old enough to expire on its own.
+ *
+ * It closes through the same `close` and `record` the resolver uses, which is
+ * the entire point of putting it here rather than in the script that calls it.
+ * A second implementation of "settle a trade" would be a second definition of
+ * the record, and the two would disagree the first time either changed.
+ *
+ * The grading is honest rather than convenient. A trade that never filled a
+ * rung is `expired`: it reached no level, so it is not a win or a loss and
+ * stays out of the rate entirely. One that did fill has a real result, and is
+ * graded on what it actually returned at the price given.
+ *
+ * Sends nothing. Announcing forty-seven closes would bury the channel, and the
+ * reader's card simply stops updating — which is what the caller is expected
+ * to explain, once, rather than fifty times.
+ */
+export async function forceClose(
+  ids: readonly string[],
+  priceOf: (trade: ActiveTrade) => number | undefined,
+): Promise<{ closed: ClosedTrade[]; remaining: number; skipped: string[] }> {
+  const active = await loadActive();
+  const wanted = new Set(ids);
+
+  const closed: ClosedTrade[] = [];
+  const keep: ActiveTrade[] = [];
+  const skipped: string[] = [];
+
+  for (const trade of active) {
+    if (!wanted.has(trade.id)) {
+      keep.push(trade);
+      continue;
+    }
+
+    const price = priceOf(trade);
+    if (!(typeof price === 'number' && price > 0)) {
+      // No quote, no close. A made-up exit price would be a made-up result.
+      skipped.push(trade.id);
+      keep.push(trade);
+      continue;
+    }
+
+    const settled = close(trade, 'expired', price, 'expiry');
+    closed.push(anyTargetHit(settled.fills ?? []) ? { ...settled, outcome: grade(settled) } : settled);
+  }
+
+  if (closed.length) {
+    await setJson(ACTIVE_KEY, keep);
+    await record(closed);
+  }
+
+  return { closed, remaining: keep.length, skipped };
 }
 
 export async function tradesStatus() {

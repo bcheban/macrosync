@@ -263,6 +263,22 @@ export const env = {
    * is not a setup missed so much as a setup the account had no room for.
    */
   maxOpenTrades: positiveInt(process.env.MAX_OPEN_TRADES, 15),
+
+  /**
+   * The rung that pulls the stop to entry.
+   *
+   * It used to be the first, on the reasoning that a trade which has paid for
+   * itself should stop being able to lose. That reasoning is sound and the
+   * result was still a losing strategy: eighteen of twenty-six winners were
+   * TP1-then-breakeven at +0.5R, so the rule capped the average win at half a
+   * unit while a loss stayed at a full one.
+   *
+   * Waiting for the second rung gives the trade room against noise and costs
+   * something concrete: a trade that fills TP1 and reverses now loses 0.5R
+   * where it used to win 0.5R. Set to 1 to restore the old behaviour without
+   * a release.
+   */
+  breakevenAfterRung: positiveInt(process.env.BREAKEVEN_AFTER_RUNG, 2),
   /**
    * Guards the TradingView webhook. The route 404s while unset.
    *

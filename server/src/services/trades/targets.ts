@@ -36,6 +36,32 @@ export interface Fill {
   reason: 'target' | 'stop' | 'breakeven' | 'expiry';
 }
 
+/*
+ * ## Why the first rung shrank, and the stop stopped moving with it
+ *
+ * The first ladder took half the position at 1R and pulled the stop to entry
+ * on the same fill. It produced a 59% win rate and an edge of +0.014R per
+ * trade, which is less than the fees. Eighteen of twenty-six winners returned
+ * exactly +0.5R: take half at 1R, get stopped at entry, book half a unit. That
+ * is the whole shape of the problem — the rule converted losses into small
+ * wins, which flattered the rate and starved the average win.
+ *
+ * So the first rung now takes a quarter and the stop waits for the second.
+ *
+ * The cost of that is precise and worth stating rather than discovering. A
+ * trade that fills TP1 and comes back no longer books +0.5R; it books
+ * `0.25 - 0.75 = -0.5R`, because three quarters of the position is still
+ * riding the original stop. On the record as it stood, eighteen trades sat in
+ * exactly that state, and **70% of them would have to recover to TP2** for this
+ * to be an improvement. That is the bet. It is a real one, and both `TP_SHARES`
+ * and `BREAKEVEN_AFTER_RUNG` are environment variables so it can be unwound in
+ * a deployment rather than a release.
+ *
+ * One consequence is structural rather than statistical: a filled rung is no
+ * longer proof of a win. `-0.5R` with TP1 filled is a loss, and the resolver
+ * grades on realised R instead of on whether any rung was touched.
+ */
+
 /**
  * The ladder, per setup, in R.
  *
@@ -58,19 +84,19 @@ export interface Fill {
  */
 const LADDER: Record<Strategy, readonly { r: number; share: number }[]> = {
   scalping: [
-    { r: 1.0, share: 0.5 },
-    { r: 1.5, share: 0.3 },
-    { r: 2.5, share: 0.2 },
+    { r: 1.0, share: 0.25 },
+    { r: 1.5, share: 0.45 },
+    { r: 2.5, share: 0.3 },
   ],
   day: [
-    { r: 1.0, share: 0.5 },
-    { r: 1.5, share: 0.3 },
-    { r: 2.5, share: 0.2 },
+    { r: 1.0, share: 0.25 },
+    { r: 1.5, share: 0.45 },
+    { r: 2.5, share: 0.3 },
   ],
   swing: [
-    { r: 1.0, share: 0.5 },
-    { r: 1.5, share: 0.3 },
-    { r: 2.5, share: 0.2 },
+    { r: 1.0, share: 0.25 },
+    { r: 1.5, share: 0.45 },
+    { r: 2.5, share: 0.3 },
   ],
 };
 

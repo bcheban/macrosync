@@ -191,16 +191,28 @@ export function Journal({ onClose }: { onClose: () => void }) {
               */}
               {record && record.settled > 0 && (
                 <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-white/8 pb-3">
+                  {/*
+                    Net of fees, with gross beside it. The headline used to be
+                    gross, and gross was the figure somebody traded on while
+                    the costs quietly outweighed the edge.
+                  */}
                   <span
                     className={cn(
                       'tnum font-mono text-[18px] font-semibold',
-                      record.r >= 0 ? 'text-bull' : 'text-bear',
+                      record.netR >= 0 ? 'text-bull' : 'text-bear',
                     )}
                   >
-                    {record.r >= 0 ? '+' : ''}
-                    {record.r.toFixed(1)}R
+                    {record.netR >= 0 ? '+' : ''}
+                    {record.netR.toFixed(1)}R
                   </span>
-                  <span className="tnum font-mono text-[12px] text-white/50">{simulatedUsd(record.r)}</span>
+                  <span className="tnum font-mono text-[12px] text-white/50">
+                    {simulatedUsd(record.netR)}
+                  </span>
+                  <span className="text-[11px] text-white/30">
+                    {t('journal.grossAfterFees', {
+                      gross: `${record.r >= 0 ? '+' : ''}${record.r.toFixed(1)}R`,
+                    })}
+                  </span>
                   {/*
                     The same record as a share of a deposit. Derived from R and
                     the risk each setup calls for, so unlike the price-movement

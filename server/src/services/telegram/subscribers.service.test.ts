@@ -200,7 +200,12 @@ describe('the published record', () => {
      * 6 losses at -1R is +12R across 15 settled. Nine, not eight — the
      * 40-confidence win is one of them, which is the whole point.
      */
-    assert.match(text, /Net result \+12\.0R/);
+    /*
+     * Net leads, gross follows. The headline used to be gross alone, which is
+     * the figure somebody traded on while the fees quietly outweighed it.
+     */
+    assert.match(text, /Net result \+11\.9R/);
+    assert.match(text, /\+12\.0R gross/);
     assert.match(text, /over 15 settled trades/);
 
     /*
@@ -208,7 +213,8 @@ describe('the published record', () => {
      * because the multiplier lives in two repositories that do not compile
      * against each other — if one drifts, this is what notices.
      */
-    assert.match(text, /\+\$1,200/);
+    // The dollar figure follows the net, not the gross.
+    assert.match(text, /\+\$1,187/);
     // The simulation has to name its assumption and define R in the same
     // breath — that pairing is what stops a first-time reader treating the
     // dollars as an account balance.
@@ -263,14 +269,16 @@ describe('the published record', () => {
      * trade calls for. Derived from R and the setup's risk rather than from
      * stored prices, which is what lets it reach trades the log has dropped.
      */
-    assert.match(text, /Cumulative ROI -14\.25%/);
+    // -14.25% gross becomes a little worse once fees come out.
+    assert.match(text, /-14\.25% gross/);
     // And no line on the message counts a different set of trades.
     assert.ok(!/most recent/i.test(text), 'nothing here describes a narrower window');
     /*
      * 40 wins at the 1.5 the engine targets, less 79 losses at one risk unit
      * each. The log holds five of those trades; the figure covers all 119.
      */
-    assert.match(text, /Net result -19\.0R/);
+    // Gross is the ratio arithmetic; net is what an account would keep.
+    assert.match(text, /-19\.0R gross/);
   });
 
   it('breaks the win rate down by setup, and omits setups with nothing settled', async () => {

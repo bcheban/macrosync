@@ -13,7 +13,7 @@ export const de: Dictionary = {
 
   welcomeIntro: '📡 <b>Ayanox</b> — ein automatischer Futures-Radar.',
   welcomeBody:
-    'Er durchsucht rund um die Uhr die liquiden USDT-Perpetuals auf MEXC. Bestätigt sich ein Setup, bekommst du das Signal: Einstieg, drei Take-Profits, SL, die Begründung in einem Satz und den Hebel, bei dem die Liquidation noch hinter dem Stop liegt. Sobald TP1 gefüllt ist, wandert der Stop auf den Einstieg und die Karte aktualisiert sich selbst — ab da kann der Trade nichts mehr kosten.',
+    'Er durchsucht rund um die Uhr die liquiden USDT-Perpetuals auf MEXC. Bestätigt sich ein Setup, bekommst du das Signal: Einstieg, drei Take-Profits, SL, die Begründung in einem Satz und den Hebel, bei dem die Liquidation noch hinter dem Stop liegt. Die Karte aktualisiert sich mit jedem gefüllten Ziel, und sobald TP2 gefüllt ist, wandert der Stop auf den Einstieg — ab da kann der Trade nichts mehr kosten.',
   welcomeSubscribed:
     'Du bist angemeldet. Die Schaltflächen unter der Tastatur sind alles Weitere: Einstellungen, der Leitfaden, ein Positionsrechner und die Bilanz.',
   helpIntro: '📡 <b>Ayanox</b> — ein automatischer Radar für MEXC-Perpetuals.',
@@ -134,13 +134,13 @@ export const de: Dictionary = {
   statsNone: '📊 Noch keine Trades erfasst. Das erste bestätigte Signal eröffnet die Bilanz.',
   statsOnlyOpen: (open) =>
     `📊 Noch nichts abgeschlossen — ${open} laufen. Die Bilanz beginnt, wenn der erste Trade schließt.`,
-  statsNet: (r, usd) =>
-    `📊 <b>Nettoergebnis ${r}</b> <i>(${usd} bei $100 Risiko pro Trade)</i>`,
+  statsNet: (net, usd, gross) =>
+    `📊 <b>Nettoergebnis ${net}</b> <i>nach Gebühren (${usd} bei $100 Risiko)</i>\n<i>${gross} brutto, vor Kosten</i>`,
   statsRate: (rate, wins, losses) =>
     `📊 <b>Trefferquote ${rate}%</b> — ${wins}G / ${losses}V`,
   statsSettled: (n) => `<i>über ${n} abgeschlossene Trades — die gesamte Bilanz</i>`,
-  statsRoi: (pct) =>
-    `📈 <b>Kumulierter ROI ${pct}</b> <i>(vom Depot, beim Risiko, das das Setup vorsieht)</i>`,
+  statsRoi: (net, gross) =>
+    `📈 <b>Kumulierter ROI ${net}</b> <i>nach Gebühren \u00B7 ${gross} brutto</i>\n<i>vom Depot, beim Risiko, das das Setup vorsieht</i>`,
   statsByStrategy: '<b>Nach Strategie</b>',
   statsStrategyRow: (label, rate, wins, losses) =>
     `${label} — <b>${rate}%</b> · ${wins}G / ${losses}V`,
@@ -150,6 +150,8 @@ export const de: Dictionary = {
     thin
       ? `<code>${label}</code>  <i>${rate}% · ${wins}/${decided} · ${r} (${usd})</i> ⚠️`
       : `<code>${label}</code>  <b>${rate}%</b> · ${wins}/${decided} · ${r} (${usd})`,
+  statsFeeNote: (pct) =>
+    `<i>Gebühren gerechnet mit ${pct}% Taker je Fill, ohne Slippage — real liegt es etwas höher.</i>`,
   statsRiskNote: (usd) =>
     `💡 <i>Dollarwerte sind eine Simulation: genau $${usd} Risiko pro Trade — der Betrag, der bei SL verloren geht. 1R = dieses Risiko.</i>`,
   statsThinNote: (n) =>
@@ -205,11 +207,11 @@ export const de: Dictionary = {
   guideRiskBody: [
     '\u{1F6E1} <b>Warum die Trefferquote nicht der Punkt ist</b>',
     '',
-    'Ein Verlust kostet 1R — das Risiko, mit dem du eröffnet hast. Ein Gewinn ist keine einzelne Zahl: die Leiter realisiert 50% bei 1R, 30% bei 1,5R und 20% bei 2,5R. Ein Trade, der ganz durchläuft, bringt <b>1,45R</b>; einer, der die erste Stufe nimmt und dann am Einstieg ausgestoppt wird, <b>0,5R</b>.',
+    'Ein Verlust kostet 1R — das Risiko, mit dem du eröffnet hast. Ein Gewinn ist keine einzelne Zahl: die Leiter realisiert 25% bei 1R, 45% bei 1,5R und 30% bei 2,5R. Ein Trade, der ganz durchläuft, bringt <b>1,675R</b>; einer, der TP2 erreicht und dann am Einstieg ausgestoppt wird, <b>0,925R</b>.',
     '',
-    'Diese Spanne ist der ganze Kompromiss. Wer früh die Hälfte mitnimmt, gewinnt öfter und pro Mal weniger.',
+    'Der Stop wandert erst nach <b>TP2</b> auf den Einstieg, nicht nach TP1. Bis dahin kann der Trade verlieren: nimmt er TP1 und dreht bis zum Stop, sind es <b>−0,5R</b>. Das ist Absicht. Der Schutz auf der ersten Stufe machte fast jeden Gewinner eine halbe Einheit wert, während jeder Verlierer eine ganze kostete.',
     '',
-    'Eine einzelne Break-even-Trefferquote gibt es deshalb nicht. Liefe jeder Gewinner die volle Leiter, wären es <b>41%</b>; stoppte jeder nach der ersten Stufe, <b>67%</b>. Der echte Wert liegt dazwischen und wandert mit dem Markt.',
+    'Eine einzelne Break-even-Trefferquote gibt es deshalb nicht. Liefe jeder Gewinner die volle Leiter, wären es <b>37%</b>; stoppte jeder bei TP2, <b>52%</b>. Der echte Wert liegt dazwischen und wandert mit dem Markt.',
     '',
     'Darum beginnt <code>/stats</code> mit dem Netto-R statt mit einer Prozentzahl. Diese Zahl braucht keine Annahme darüber, wie weit die Leiter lief — sie ist das, was tatsächlich passiert ist.',
     '',

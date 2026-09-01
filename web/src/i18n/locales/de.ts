@@ -138,6 +138,7 @@ export const de: Translation = {
     whatIsR: 'Was ist R?',
     roiNote: '(1x, ohne Hebel — dieselben Trades wie die Kurve)',
     bySetup: 'Nach Strategie',
+    grossAfterFees: '{{gross}} brutto, vor Gebühren',
     fullRecord: '{{wins}}G / {{losses}}V über {{count}} abgeschlossene Trades — die gesamte Bilanz',
     recentWindow: 'Die {{count}} jüngsten, Trade für Trade',
     thin: 'Noch zu wenige abgeschlossene Trades für eine Kurve. Die ersten schließen ein bis zwei Tage nach einem Scan.',

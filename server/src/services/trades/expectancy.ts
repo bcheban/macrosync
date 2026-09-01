@@ -63,12 +63,23 @@ const FILLS_PER_TRADE = 3;
  * times larger than a 10% stop for the same risk, and therefore seven times the
  * fee for the same R.
  */
+export function tradeCostR(stopFraction: number): number {
+  if (!(stopFraction > 0)) return 0;
+  return (FILLS_PER_TRADE * (env.takerFeePct / 100)) / stopFraction;
+}
+
+/**
+ * A stop width to charge a trade whose own is not recorded.
+ *
+ * The median across the live record. Used only to seed the accumulator
+ * for trades that closed before it existed; every trade after that is
+ * charged the width it actually carried.
+ */
+export const TYPICAL_STOP_FRACTION = 0.07;
+
 function costInR(trade: ClosedTrade): number {
   const opened = trade.initialStopLoss ?? trade.stopLoss;
-  const stopFraction = Math.abs(trade.entry - opened) / trade.entry;
-  if (!(stopFraction > 0)) return 0;
-
-  return (FILLS_PER_TRADE * (env.takerFeePct / 100)) / stopFraction;
+  return tradeCostR(Math.abs(trade.entry - opened) / trade.entry);
 }
 
 /**

@@ -275,7 +275,21 @@ async function statsLine(locale: Locale): Promise<string> {
    * works; this says whether the direction did — a wide-stop swing and a tight
    * scalp weigh the same in R and very differently here.
    */
-  const roi = stats.sums.roiPct;
+  /*
+   * Net of costs, with the gross beside it rather than instead of it.
+   *
+   * The headline used to be gross, and gross was the figure somebody traded
+   * on: an edge of +0.014R per trade against 0.012R of fees at the base tier
+   * and 0.037R at a realistic one. Both numbers are true and only one of them
+   * is what an account keeps, so both are shown and the net one leads.
+   */
+  const grossR = netR;
+  const costR = stats.sums.costR ?? 0;
+  const afterFees = grossR - costR;
+
+  const roiGross = stats.sums.roiPct;
+  // Subtracted, never scaled: a cost has to make a loss bigger, not smaller.
+  const roiNet = roiGross - (stats.sums.roiCostPct ?? 0);
 
   /*
    * The two shorter windows, under the record rather than above it.
@@ -289,8 +303,15 @@ async function statsLine(locale: Locale): Promise<string> {
   const window = tiers(history, stats);
 
   const lines = [
-    t.statsNet(`${netR >= 0 ? '+' : ''}${netR.toFixed(1)}R`, simulatedUsd(netR)),
-    t.statsRoi(`${roi >= 0 ? '+' : ''}${roi.toFixed(2)}%`),
+    t.statsNet(
+      `${afterFees >= 0 ? '+' : ''}${afterFees.toFixed(1)}R`,
+      simulatedUsd(afterFees),
+      `${grossR >= 0 ? '+' : ''}${grossR.toFixed(1)}R`,
+    ),
+    t.statsRoi(
+      `${roiNet >= 0 ? '+' : ''}${roiNet.toFixed(2)}%`,
+      `${roiGross >= 0 ? '+' : ''}${roiGross.toFixed(2)}%`,
+    ),
     t.statsRate(rate, record.wins, record.losses),
     t.statsSettled(record.settled),
     t.statsOpen(active.length),
@@ -369,6 +390,7 @@ async function statsLine(locale: Locale): Promise<string> {
     lines.push(t.statsRiskNote(RISK_PER_TRADE_USD));
   }
 
+  lines.push(t.statsFeeNote(String(env.takerFeePct)));
   lines.push('', t.statsFootnote);
   return lines.join('\n');
 }

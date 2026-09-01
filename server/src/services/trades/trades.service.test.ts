@@ -122,8 +122,8 @@ describe('trade ledger', () => {
   it('settles a long that filled every rung as a win', async () => {
     /*
      * Entry 100 risking 5, so the ladder is 105 / 107.5 / 112.5. The first bar
-     * books half, the second sweeps the rest. Never dips back to entry, so the
-     * stop that first fill moved is never in the way.
+     * books a quarter, the second sweeps the rest. Never dips back to entry, so
+     * the stop TP2 moves is never in the way.
      */
     script = { ETHUSDT: [[105, 113], [102, 106]] };
 
@@ -132,32 +132,58 @@ describe('trade ledger', () => {
 
     assert.equal(closed.length, 1);
     assert.equal(closed[0]?.outcome, 'win');
-    // Position-weighted: half at +5%, three tenths at +7.5%, a fifth at +12.5%.
-    assert.equal(closed[0]?.resultPct, 7.25);
+    // Position-weighted: a quarter at +5%, 45% at +7.5%, 30% at +12.5%.
+    assert.equal(closed[0]?.resultPct, 8.38);
     assert.equal(trades.winRate(stats), 100);
   });
 
-  it('books half at the first rung and protects the rest', async () => {
+  it('lets a trade that only reached TP1 lose, because the stop has not moved', async () => {
     /*
-     * The rule the whole system turns on. One bar reaches 105 and comes back
-     * through entry: half the position is booked at +1R and the remainder
-     * closes at the stop that fill moved, which is entry.
+     * The case the whole ladder was reshaped around, and the price of that
+     * decision stated as a test.
      *
-     * So this is a win worth +0.5R — not the +1R its first target suggests,
-     * and not the 0 its final exit price suggests. No single level can say it.
+     * One bar reaches 105 and the trade then falls to its original stop at 95.
+     * A quarter was booked at +1R; three quarters ride the stop for -1R each.
+     * Net `0.25 - 0.75 = -0.5R`.
+     *
+     * Under the old rules this was a **win** worth +0.5R: half booked, stop
+     * pulled to entry on that same fill. Eighteen of twenty-six winners were
+     * exactly this, which is how a 59% win rate carried an edge smaller than
+     * the fees. Now it is a loss, and the record says so.
      */
-    script = { LADUSDT: [[105, 101], [101, 99]] };
+    script = { LADUSDT: [[105, 101], [101, 94]] };
 
     await trades.openTrade(signal('LAD', 'buy', 100, 95, 110));
     const { closed, stats } = await trades.evaluateTrades();
 
-    assert.equal(closed[0]?.outcome, 'win', 'a booked rung cannot be un-booked');
-    assert.equal(closed[0]?.resultPct, 2.5, 'half of +5%, and nothing on the rest');
-    assert.equal(closed[0]?.fills?.length, 2);
+    assert.equal(closed[0]?.outcome, 'loss', 'a filled rung is not proof of a win');
+    // A quarter of +5%, three quarters of -5%.
+    assert.equal(closed[0]?.resultPct, -2.5);
     assert.equal(closed[0]?.fills?.[0]?.reason, 'target');
-    assert.equal(closed[0]?.fills?.[1]?.reason, 'breakeven');
+    assert.equal(closed[0]?.fills?.[1]?.reason, 'stop');
+    assert.equal(stats.losses, 1);
+    assert.equal(stats.wins, 0);
+  });
+
+  it('protects the trade once TP2 fills, and not before', async () => {
+    /*
+     * The other side of the same rule. The bar sweeps 105 and 107.5, so the
+     * stop moves to entry; the trade then comes back through it.
+     *
+     * Booked: a quarter at +1R and 45% at +1.5R, with the last 30% closing at
+     * entry for nothing. `0.25 + 0.675 = +0.925R`.
+     */
+    script = { LADUSDT: [[108, 101], [101, 99]] };
+
+    await trades.openTrade(signal('LAD', 'buy', 100, 95, 110));
+    const { closed, stats } = await trades.evaluateTrades();
+
+    assert.equal(closed[0]?.outcome, 'win');
+    // A quarter of +5%, 45% of +7.5%, and nothing on the remaining 30%.
+    assert.equal(closed[0]?.resultPct, 4.63);
+    assert.equal(closed[0]?.fills?.length, 3);
+    assert.equal(closed[0]?.fills?.[2]?.reason, 'breakeven');
     assert.equal(stats.wins, 1);
-    assert.equal(stats.breakeven, 0, 'breakeven is unreachable once a rung fills');
   });
 
   it('redistributes a rung that falls outside the sane band', async () => {
@@ -346,8 +372,8 @@ describe('trade ledger', () => {
     const { closed } = await trades.evaluateTrades();
 
     assert.equal(closed[0]?.outcome, 'win');
-    // Half at +5%, three tenths at +7.5%, and the last fifth at entry.
-    assert.equal(closed[0]?.resultPct, 4.75);
+    // A quarter at +5%, 45% at +7.5%, and the last 30% at entry.
+    assert.equal(closed[0]?.resultPct, 4.63);
   });
 
   it('reads the threshold in the trade direction for a short', async () => {
@@ -384,7 +410,8 @@ describe('trade ledger', () => {
     const { closed } = await trades.evaluateTrades();
 
     assert.equal(closed[0]?.outcome, 'win');
-    assert.equal(closed[0]?.resultPct, 7.25);
+    // The same weighting as the long: 25% / 45% / 30% at 1R / 1.5R / 2.5R.
+    assert.equal(closed[0]?.resultPct, 8.38);
   });
 
   it('counts the stop when one bar touched both levels', async () => {

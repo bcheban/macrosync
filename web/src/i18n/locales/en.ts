@@ -137,6 +137,7 @@ export const en = {
     whatIsR: 'What is R?',
     roiNote: '(1x, no leverage — the same trades as the curve)',
     bySetup: 'By setup',
+    grossAfterFees: '{{gross}} gross, before fees',
     fullRecord: '{{wins}}W / {{losses}}L over {{count}} settled trades — the full record',
     recentWindow: 'The {{count}} most recent, trade by trade',
     thin: 'Not enough settled trades yet to draw a curve. The first few close within a day or two of a scan.',
@@ -300,7 +301,7 @@ export const en = {
       '0–100: how much four independent reads agree — trend (EMA), momentum (MACD), stretch (RSI) and participation (volume). High means they point the same way, not that the trade will work.',
     levelsLabel: 'Entry, SL and the TP ladder',
     levels:
-      'Entry is the current price. The SL is a multiple of ATR, so a volatile asset gets a wider stop rather than a fixed percentage. Targets are multiples of that risk: TP1 at 1R takes half the position, TP2 at 1.5R takes 30%, TP3 at 2.5R takes the rest — and the stop moves to entry the moment TP1 fills, so past it the trade cannot lose.',
+      'Entry is the current price. The SL is a multiple of ATR, so a volatile asset gets a wider stop rather than a fixed percentage. Targets are multiples of that risk: TP1 at 1R takes 25% of the position, TP2 at 1.5R takes 45%, TP3 at 2.5R takes the rest. The stop moves to entry after TP2, not after TP1 — so a trade that takes the first target and reverses can still lose, which is the price of letting the winners run.',
     atrLabel: 'What is ATR?',
     atr: 'Average True Range: how far this asset typically travels in one bar, as a percent of price. It is the volatility budget a stop has to respect.',
     rsiLabel: 'What is RSI?',
