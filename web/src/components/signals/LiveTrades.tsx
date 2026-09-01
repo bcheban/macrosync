@@ -390,6 +390,45 @@ export function LiveTrades({ data, loading }: LiveTradesProps) {
         }
       />
 
+      {/*
+        What the open book carries, which the record never showed.
+
+        Every panel here described settled trades, so a board holding sixty
+        positions looked exactly like one holding three. Each open trade is a
+        full risk unit committed at once, and a correlated market closes them
+        together — the only occasion the count matters, and the one nobody was
+        being shown.
+      */}
+      {data?.exposure && data.exposure.open > 0 && (
+        <div
+          className={cn(
+            'mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-[11px]',
+            data.exposure.open >= data.exposure.limit
+              ? 'border-warn/30 bg-warn/8'
+              : 'border-white/8 bg-white/2',
+          )}
+        >
+          <span className="text-white/40">{t('liveTrades.exposure')}</span>
+          <span className="tnum font-mono text-[13px] font-semibold text-white">
+            {t('liveTrades.exposureRisk', { count: data.exposure.open })}
+          </span>
+          {data.exposure.priced > 0 && (
+            <span
+              className={cn(
+                'tnum font-mono',
+                data.exposure.floatingR >= 0 ? 'text-bull/90' : 'text-bear/90',
+              )}
+            >
+              {data.exposure.floatingR >= 0 ? '+' : ''}
+              {data.exposure.floatingR.toFixed(2)}R {t('liveTrades.floating')}
+            </span>
+          )}
+          {data.exposure.open >= data.exposure.limit && (
+            <span className="text-warn/90">{t('liveTrades.exposureFull')}</span>
+          )}
+        </div>
+      )}
+
       {loading && !total ? (
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, index) => (

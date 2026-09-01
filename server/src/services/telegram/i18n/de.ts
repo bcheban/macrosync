@@ -231,6 +231,16 @@ export const de: Dictionary = {
   // --- deep stats -----------------------------------------------------------
   deepTitle: '\u{1F4D0} <b>Tiefenstatistik</b>',
   deepThreshold: (pct) => `<i>Der Stop wandert bei ${pct}% des Wegs zum Ziel auf den Einstieg</i>`,
+  deepPayoffHeading: '<b>Auszahlungsprofil</b>',
+  deepPayoffAvg: (win, loss) =>
+    `  Durchschnittsgewinn <b>+${win}R</b> · Durchschnittsverlust <b>−${loss}R</b>`,
+  deepPayoffBreakEven: (need, actual, margin) =>
+    `  Braucht <b>${need}%</b> für die Null · läuft auf <b>${actual}%</b> · Puffer <b>${margin}</b> Pkt`,
+  deepPayoffNet: (gross, cost, net) =>
+    `  Pro Trade <b>${gross}R</b> brutto − <b>${cost}R</b> Gebühren = <b>${net}R</b> netto`,
+  deepPayoffWarning:
+    '  ⚠️ <i>Nach Kosten verdient diese Bilanz nichts. Nicht die Trefferquote ist das Problem, sondern die Größe des Durchschnittsgewinns.</i>',
+  deepPayoffShape: (shape) => `  Gewinner landeten bei: <i>${shape}</i>`,
   deepRateHeading: '<b>Trefferquote</b>',
   deepRateNone: '  Noch nichts abgeschlossen.',
   deepRateExcl: (rate, wins, losses) => `  Ohne Break-even: <b>${rate}%</b>  (${wins}G / ${losses}V)`,

@@ -1,3 +1,4 @@
+import { env } from '../../config/env.js';
 import { assetBySymbol } from '../../data/assets.js';
 import type { Strategy } from '../../types/domain.js';
 import { getAllTickers24h } from '../market.service.js';
@@ -52,6 +53,13 @@ export interface ActiveSignalsResponse {
   signals: ActiveSignal[];
   /** Counts per strategy, so the panel can label its groups without recounting. */
   counts: Record<string, number>;
+  /**
+   * What the open book carries, as opposed to what the closed one returned.
+   *
+   * The record only ever described settled trades, which made a book of
+   * sixty positions look identical to a book of three.
+   */
+  exposure: { open: number; limit: number; floatingR: number; priced: number };
   winRate: number;
   decided: number;
   updatedAt: string;
@@ -128,11 +136,47 @@ export async function getActiveSignals(): Promise<ActiveSignalsResponse> {
     return totals;
   }, {});
 
+  /*
+   * What the open book is worth right now, in risk units.
+   *
+   * The record only ever showed settled trades, so a book carrying sixty-three
+   * positions looked exactly like a book carrying three. That is the number a
+   * live trader feels and the one the bot was silent about: each open trade is
+   * a full risk unit committed, and the floating total says how much of it the
+   * market has taken back so far.
+   *
+   * Priced trades only. A missing quote leaves the trade out of the sum rather
+   * than counting it as flat, which would quietly understate the exposure it
+   * is supposed to be reporting.
+   */
+  const floating = signals.reduce(
+    (total, signal) => {
+      const risk = Math.abs(signal.entry - signal.initialStopLoss);
+      if (!(risk > 0) || signal.price === null) return total;
+
+      const moved =
+        signal.side === 'buy' ? signal.price - signal.entry : signal.entry - signal.price;
+      return { r: total.r + moved / risk, priced: total.priced + 1 };
+    },
+    { r: 0, priced: 0 },
+  );
+
+  const exposure = {
+    /** Open positions, each carrying one risk unit. */
+    open: signals.length,
+    /** The ceiling the engine stops opening at. */
+    limit: env.maxOpenTrades,
+    /** Unrealised result across the priced ones, in R. */
+    floatingR: Number(floating.r.toFixed(2)),
+    priced: floating.priced,
+  };
+
   return {
     signals,
     counts,
     winRate: winRate(stats),
     decided: stats.wins + stats.losses,
+    exposure,
     updatedAt: new Date().toISOString(),
   };
 }

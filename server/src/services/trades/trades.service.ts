@@ -330,7 +330,7 @@ const close = (
  * had the webhook answering "the ledger refused these levels" to somebody whose
  * levels were fine and whose trade was already running.
  */
-export type RefusalReason = 'wait' | 'levels' | 'ladder' | 'standing';
+export type RefusalReason = 'wait' | 'levels' | 'ladder' | 'standing' | 'full';
 
 export async function openTrade(
   signal: Signal,
@@ -367,6 +367,23 @@ export async function openTrade(
 
   // The identical call standing already — nothing to record.
   if (existing && existing.side === signal.verdict) return { opened: false, reason: 'standing' };
+
+  /*
+   * Room in the book, before anything else is decided.
+   *
+   * Every open trade carries a full risk unit, so sixty-three of them is
+   * sixty-three units of exposure at once — and a correlated market closes
+   * them together, which is the only time the number matters. The engine keeps
+   * scanning and simply stops opening; a setup refused here is not one missed
+   * so much as one the account had no room for.
+   *
+   * A reversal is exempt. It replaces a position rather than adding one, so
+   * blocking it would leave the account holding a call the engine has already
+   * changed its mind about — strictly worse than either taking it or not.
+   */
+  if (!existing && active.length >= env.maxOpenTrades) {
+    return { opened: false, reason: 'full' };
+  }
 
   /*
    * The ladder is built here, not in the engine, and from the published levels.

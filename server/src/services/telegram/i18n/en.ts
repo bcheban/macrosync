@@ -325,6 +325,23 @@ export const en = {
    */
   deepThreshold: (pct: number) =>
     `<i>Historic rule: the stop moved at ${pct}% of the way to target. It now moves when TP1 fills.</i>`,
+  /**
+   * The payoff block. It leads the panel because it is what a rate means.
+   *
+   * A 59% win rate on a 0.72R average win needs 58.3% to break even. Reading
+   * the rate without the payoff is how a losing strategy passes for a winning
+   * one, which is exactly what happened here.
+   */
+  deepPayoffHeading: '<b>Payoff</b>',
+  deepPayoffAvg: (win: string, loss: string) =>
+    `  Average win <b>+${win}R</b> · average loss <b>−${loss}R</b>`,
+  deepPayoffBreakEven: (need: string, actual: string, margin: string) =>
+    `  Needs <b>${need}%</b> to break even · running at <b>${actual}%</b> · margin <b>${margin}</b> pts`,
+  deepPayoffNet: (gross: string, cost: string, net: string) =>
+    `  Per trade <b>${gross}R</b> gross − <b>${cost}R</b> fees = <b>${net}R</b> net`,
+  deepPayoffWarning:
+    '  ⚠️ <i>Net of costs this record does not make money. The win rate is not the problem — the size of the average win is.</i>',
+  deepPayoffShape: (shape: string) => `  Winners landed at: <i>${shape}</i>`,
   deepRateHeading: '<b>Win rate</b>',
   deepRateNone: '  Nothing settled yet.',
   deepRateExcl: (rate: number, wins: number, losses: number) =>

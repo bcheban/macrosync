@@ -241,6 +241,16 @@ export const uk: Dictionary = {
   // --- deep stats -----------------------------------------------------------
   deepTitle: '\u{1F4D0} <b>Глибока статистика</b>',
   deepThreshold: (pct) => `<i>Стоп переноситься в беззбиток на ${pct}% шляху до цілі</i>`,
+  deepPayoffHeading: '<b>Виплата</b>',
+  deepPayoffAvg: (win, loss) =>
+    `  Середній виграш <b>+${win}R</b> · середній програш <b>−${loss}R</b>`,
+  deepPayoffBreakEven: (need, actual, margin) =>
+    `  Потрібно <b>${need}%</b> щоб вийти в нуль · маємо <b>${actual}%</b> · запас <b>${margin}</b> п.п.`,
+  deepPayoffNet: (gross, cost, net) =>
+    `  На угоду <b>${gross}R</b> брутто − <b>${cost}R</b> комісії = <b>${net}R</b> нетто`,
+  deepPayoffWarning:
+    '  ⚠️ <i>Після витрат цей запис не заробляє. Справа не у вінрейті — а в розмірі середнього виграшу.</i>',
+  deepPayoffShape: (shape) => `  Виграші сіли на: <i>${shape}</i>`,
   deepRateHeading: '<b>Вінрейт</b>',
   deepRateNone: '  Ще нічого не закрито.',
   deepRateExcl: (rate, wins, losses) => `  Без нульових: <b>${rate}%</b>  (${wins}П / ${losses}З)`,

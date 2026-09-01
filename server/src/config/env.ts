@@ -8,6 +8,19 @@ import { DEFAULT_SYMBOLS } from '../data/assets.js';
  * and is empty is `''`, which `??` passes through and `Number` turns into 0.
  * Anything unparseable or non-positive falls back.
  */
+/**
+ * A percentage fee in 0..1 percent, or the fallback.
+ *
+ * Zero is allowed and meaningful: a maker rebate tier, or somebody who wants
+ * to read the gross edge on its own. Anything above one percent is a typo —
+ * no futures venue charges it — and silently accepting it would make the cost
+ * line swamp every other figure on the page.
+ */
+const feeRate = (value: string | undefined, fallback: number): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : fallback;
+};
+
 const positiveInt = (value: string | undefined, fallback: number): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
@@ -209,6 +222,47 @@ export const env = {
 
   /** Shared secret for `/api/cron/signals`. The route 404s while unset. */
   cronSecret: process.env.CRON_SECRET ?? '',
+
+  /**
+   * The exchange's taker fee, in percent, for estimating what a record costs.
+   *
+   * MEXC's futures taker fee is 0.02% at the base tier. It is a variable rather
+   * than a constant because the number decides whether a thin edge is an edge
+   * at all: at a per-trade expectancy of +0.014R, a 0.02% fee removes about
+   * three fifths of it and 0.06% removes twice it. Anyone reading the record
+   * needs to be able to put their own fee in.
+   */
+  takerFeePct: feeRate(process.env.TAKER_FEE_PCT, 0.02),
+
+  /**
+   * Confidence bands the engine is allowed to publish.
+   *
+   * A blunt instrument, and deliberately so. The record showed the 70–80 and
+   * 90+ bands losing while 60–70 and 80–90 made money, and while those samples
+   * are far too small to be evidence about the bands themselves, cutting the
+   * publish rate is defensible on its own: at an edge this thin, every trade
+   * not taken is a fee not paid.
+   *
+   * Empty means every band passes. Set as a comma-separated list of the band
+   * ids used everywhere else — `60-70,80-90`.
+   */
+  confidenceBands: (process.env.CONFIDENCE_BANDS ?? '60-70,80-90')
+    .split(',')
+    .map((band) => band.trim())
+    .filter(Boolean),
+
+  /**
+   * How many trades may be open at once, across every strategy.
+   *
+   * Sixty-three open positions is not a portfolio, it is an index fund bought
+   * with leverage. Each one carries a full risk unit, so the account is exposed
+   * to sixty-three times the per-trade risk simultaneously — and a correlated
+   * market takes them together, which is exactly when it matters.
+   *
+   * The engine keeps scanning; it simply stops opening. A setup rejected here
+   * is not a setup missed so much as a setup the account had no room for.
+   */
+  maxOpenTrades: positiveInt(process.env.MAX_OPEN_TRADES, 15),
   /**
    * Guards the TradingView webhook. The route 404s while unset.
    *

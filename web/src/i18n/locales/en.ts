@@ -121,6 +121,11 @@ export const en = {
     short: 'Short',
     entry: 'Entry',
     record: '{{rate}}% · {{decided}} settled',
+    exposure: 'Open exposure',
+    exposureRisk_one: '{{count}} position · 1R at risk',
+    exposureRisk_other: '{{count}} positions · {{count}}R at risk',
+    floating: 'floating',
+    exposureFull: 'at the limit — the engine has stopped opening',
     empty:
       'No trades open. The scanner sweeps the liquid MEXC pairs every few minutes and opens one here the moment a call is confirmed.',
   },

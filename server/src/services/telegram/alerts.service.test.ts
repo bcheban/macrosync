@@ -53,7 +53,12 @@ after(() => {
   globalThis.fetch = realFetch;
 });
 
-const signal = (base: string, verdict: 'buy' | 'sell' | 'wait', confidence = 70, strategy = 'day') =>
+/*
+ * 82 sits in the 80-90 band, which the emitter publishes. The default used to
+ * be 70 — the bottom of a band the band filter now holds back — so every case
+ * here was silently testing a signal the engine would refuse to send.
+ */
+const signal = (base: string, verdict: 'buy' | 'sell' | 'wait', confidence = 82, strategy = 'day') =>
   ({
     id: base,
     symbol: `${base}USDT`,
@@ -188,9 +193,44 @@ describe('alert dispatch', () => {
     assert.equal(posted.length, 0);
   });
 
-  it('sends the highest-conviction calls when the run is capped', async () => {
+  it('holds back the bands the record has not earned', async () => {
+    /*
+     * 70-80 and 90+ lost money over the first weeks; 60-70 and 80-90 made it.
+     * Those samples are far too small to be evidence about the bands, and the
+     * filter is not really a claim about them — it is a volume control. At a
+     * per-trade edge near zero, every call not published is a fee not paid.
+     *
+     * A reading under 60 belongs to no band at all and is blocked with them:
+     * the bands are the only cut the record can speak to, so a call the
+     * analysis cannot place is one nobody could later defend.
+     */
     const run = await alerts.notifySignals(
-      [signal('AAA', 'buy', 64), signal('BBB', 'buy', 91), signal('CCC', 'buy', 78)],
+      [
+        signal('AAA', 'buy', 75),
+        signal('BBB', 'buy', 93),
+        signal('CCC', 'buy', 52),
+        signal('DDD', 'buy', 84),
+      ],
+      undefined,
+    );
+
+    assert.equal(run.sent, 1);
+    assert.equal(posted.length, 1);
+    assert.match(posted[0] ?? '', /DDD/);
+
+    // Blocked, not dropped: `dropped` means the per-run cap, and conflating
+    // the two would hide a filter that was cutting far more than intended.
+    assert.equal(run.dropped, 0);
+  });
+
+  it('sends the highest-conviction calls when the run is capped', async () => {
+    /*
+     * All three inside published bands, so the cap is the only thing choosing.
+     * They used to be 64 / 91 / 78, two of which the band filter now holds
+     * back — which would have made this pass for the wrong reason.
+     */
+    const run = await alerts.notifySignals(
+      [signal('AAA', 'buy', 61), signal('BBB', 'buy', 88), signal('CCC', 'buy', 84)],
       undefined,
     );
 
@@ -210,8 +250,8 @@ describe('alert dispatch', () => {
     const run = await alerts.notifySignals(
       [
         signal('AAA', 'buy', 66, 'scalping'),
-        signal('BBB', 'buy', 95, 'swing'),
-        signal('CCC', 'buy', 71, 'day'),
+        signal('BBB', 'buy', 89, 'swing'),
+        signal('CCC', 'buy', 84, 'day'),
       ],
       undefined,
     );

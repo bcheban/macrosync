@@ -105,7 +105,9 @@ const signal = (base: string, verdict: 'buy' | 'sell' = 'buy', strategy = 'day')
     direction: 'long',
     verdict,
     summary: { text: 'reason' },
-    confidence: 70,
+    // 82 is inside a published band. 70 sits in one the emitter holds back,
+    // so every dispatch case here would have tested a call it refuses to send.
+    confidence: 82,
     status: 'live',
     price: 100,
     entry: 100,

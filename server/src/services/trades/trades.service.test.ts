@@ -550,6 +550,51 @@ describe('trade ledger', () => {
     }
   });
 
+  it('stops opening once the book is full', async () => {
+    /*
+     * Sixty-three positions were open against forty-four ever settled. Each one
+     * carries a full risk unit, so that is sixty-three units of exposure at
+     * once — and a correlated market closes them together, which is the only
+     * time the number matters.
+     *
+     * The engine keeps scanning. It simply stops opening, and says why.
+     */
+    const store = await import('../store/store.js');
+    const { env } = await import('../../config/env.js');
+    const limit = env.maxOpenTrades;
+
+    await store.setJson(
+      store.storeKey('trades:active'),
+      Array.from({ length: limit }, (_, i) => ({
+        id: `FULL${i}`,
+        symbol: `FULL${i}USDT`,
+        base: `FULL${i}`,
+        strategy: 'day',
+        side: 'buy',
+        entry: 100,
+        stopLoss: 95,
+        initialStopLoss: 95,
+        takeProfit: 110,
+        targets: [{ level: 1, price: 105, share: 1 }],
+        fills: [],
+        timeframe: '1h',
+        openedAt: new Date().toISOString(),
+      })),
+    );
+
+    const refused = await trades.openTrade(signal('NEWONE', 'buy', 100, 95, 110));
+    assert.equal(refused.opened, false);
+    assert.equal(refused.reason, 'full');
+
+    /*
+     * A reversal is exempt. It replaces a position rather than adding one, so
+     * blocking it would leave the account holding a call the engine has already
+     * changed its mind about — strictly worse than taking it or not.
+     */
+    const reversal = await trades.openTrade(signal('FULL0', 'sell', 100, 105, 90));
+    assert.equal(reversal.opened, true, 'a reversal replaces rather than adds');
+  });
+
   it('reports a win rate over decided trades only', async () => {
     assert.equal(trades.winRate({ wins: 3, losses: 1, expired: 0, superseded: 0, voided: 0, breakeven: 0, byStrategy: {}, updatedAt: '' }), 75);
     // Expired and superseded calls must not dilute the denominator.

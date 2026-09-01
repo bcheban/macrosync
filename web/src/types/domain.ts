@@ -261,9 +261,26 @@ export interface CandlesResponse {
   candles: Candle[];
 }
 
+/**
+ * What the open book costs, as opposed to what the closed one returned.
+ *
+ * The record has always described settled trades, which made a book of sixty
+ * positions look identical to a book of three. This is the number a live
+ * trader actually carries.
+ */
+export interface Exposure {
+  open: number;
+  /** Where the engine stops opening new positions. */
+  limit: number;
+  /** Unrealised result across the priced positions, in risk units. */
+  floatingR: number;
+  priced: number;
+}
+
 export interface ActiveSignalsResponse {
   signals: ActiveSignal[];
   counts: Record<string, number>;
+  exposure?: Exposure;
   winRate: number;
   /** Trades that reached a level — the denominator behind the win rate. */
   decided: number;

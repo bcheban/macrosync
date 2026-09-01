@@ -14,6 +14,7 @@ import { displayTicker } from '../../utils/ticker.js';
 import { getPrefs } from './preferences.service.js';
 import type { Channel, Locale, Prefs } from './preferences.service.js';
 import { dict } from './i18n/index.js';
+import { bucketOf } from '../trades/confidence.js';
 import { getAccount, mexcFuturesUrl, planPosition } from './sizing.service.js';
 import type { ActiveTrade, Progress, RefusalReason } from '../trades/trades.service.js';
 import { announceFills, forgetCards, rememberCards, updateCards, type Card } from './signal-cards.js';
@@ -361,6 +362,20 @@ export function formatClose(trade: ClosedTrade, stats: TradeStats, locale: Local
  * messages intended — and let each strategy rank its calls in isolation.
  */
 /**
+ * Whether a reading falls in a band the engine may publish.
+ *
+ * A score below the lowest band belongs to none of them, and those are
+ * blocked too: the bands are the only cut the record can speak to, and a
+ * call the analysis cannot place is a call nobody can later defend. An empty
+ * allowlist turns the filter off entirely.
+ */
+const bandAllowed = (confidence: number): boolean => {
+  if (!env.confidenceBands.length) return true;
+  const band = bucketOf(confidence);
+  return band !== null && env.confidenceBands.includes(band);
+};
+
+/**
  * Answers the watches this scan resolved.
  *
  * Sent per chat rather than broadcast, and deliberately without consulting the
@@ -423,6 +438,7 @@ export async function notifySignals(signals: Signal[], event: MacroEvent | undef
   let dirty = false;
 
   const candidates: Signal[] = [];
+  let blockedByBand = 0;
 
   for (const signal of signals) {
     const key = keyFor(signal);
@@ -434,6 +450,24 @@ export async function notifySignals(signals: Signal[], event: MacroEvent | undef
         state[key] = { ...previous, verdict: 'wait' };
         dirty = true;
       }
+      continue;
+    }
+
+    /*
+     * Bands the record has not earned the right to publish.
+     *
+     * Checked before the cooldown so a blocked band cannot consume a slot or
+     * leave state behind — a signal rejected here is one the bot never had an
+     * opinion about, and the next scan should treat it the same way.
+     *
+     * The honest caveat, because somebody will read this filter as a finding:
+     * the bands were chosen on a handful of trades each, which is nowhere near
+     * enough to conclude anything about a band. What it is enough for is
+     * cutting the publish rate, and at a per-trade edge near zero every trade
+     * not taken is a fee not paid.
+     */
+    if (!bandAllowed(signal.confidence)) {
+      blockedByBand += 1;
       continue;
     }
 
@@ -452,6 +486,10 @@ export async function notifySignals(signals: Signal[], event: MacroEvent | undef
    * fires a dozen messages at once is one nobody reads. Conviction decides which
    * survive the cap, and the rest are reported as dropped rather than vanishing.
    */
+  if (blockedByBand > 0) {
+    console.info(`[alerts] ${blockedByBand} call(s) held back by the confidence band filter`);
+  }
+
   candidates.sort((a, b) => b.confidence - a.confidence);
   const chosen = candidates.slice(0, env.alertsMaxPerRun);
   const dropped = candidates.length - chosen.length;

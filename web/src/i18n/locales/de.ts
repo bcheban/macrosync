@@ -122,6 +122,11 @@ export const de: Translation = {
     short: 'Short',
     entry: 'Einstieg',
     record: '{{rate}}% · {{decided}} abgeschlossen',
+    exposure: 'Offenes Risiko',
+    exposureRisk_one: '{{count}} Position · 1R im Risiko',
+    exposureRisk_other: '{{count}} Positionen · {{count}}R im Risiko',
+    floating: 'unrealisiert',
+    exposureFull: 'Limit erreicht — die Engine öffnet nichts mehr',
     empty:
       'Keine offenen Trades. Der Scanner geht die liquiden MEXC-Paare alle paar Minuten durch und eröffnet hier einen, sobald ein Signal bestätigt ist.',
   },

@@ -126,6 +126,13 @@ export const uk: Translation = {
     short: 'Шорт',
     entry: 'Вхід',
     record: '{{rate}}% · {{decided}} закрито',
+    exposure: 'Відкрита експозиція',
+    exposureRisk_one: '{{count}} позиція · 1R під ризиком',
+    exposureRisk_few: '{{count}} позиції · {{count}}R під ризиком',
+    exposureRisk_many: '{{count}} позицій · {{count}}R під ризиком',
+    exposureRisk_other: '{{count}} позицій · {{count}}R під ризиком',
+    floating: 'плаваючий',
+    exposureFull: 'ліміт вичерпано — рушій припинив відкривати',
     empty:
       'Відкритих угод немає. Сканер обходить ліквідні пари MEXC кожні кілька хвилин і відкриє угоду тут, щойно підтвердиться сигнал.',
   },

@@ -1,4 +1,5 @@
 import { getKlines } from '../market.service.js';
+import { expectancy, winShape, type Expectancy } from '../trades/expectancy.js';
 import { getJson, setJson, storeKey } from '../store/store.js';
 import { dict } from '../telegram/i18n/index.js';
 import type { Locale } from '../telegram/preferences.service.js';
@@ -95,6 +96,15 @@ export interface Analytics {
   rate: RateBreakdown;
   confidence: ConfidenceCorrelation;
   whatIf: BreakevenWhatIf;
+  /**
+   * What a win is worth against what a loss costs.
+   *
+   * Null on an empty record, which is a different statement from a payoff
+   * of zero. Everything else on this panel describes how often the engine
+   * is right; this is the only part that says whether being right that
+   * often is enough.
+   */
+  payoff: (Expectancy & { shape: { r: number; count: number }[] }) | null;
 }
 
 const pct = (part: number, whole: number): number | null =>
@@ -311,6 +321,13 @@ export async function buildAnalytics(threshold: number): Promise<Analytics> {
     breakevenThreshold: threshold,
     rate,
     confidence: correlateConfidence(decided),
+    /*
+     * The payoff profile, beside the rate rather than instead of it.
+     */
+    payoff: (() => {
+      const e = expectancy(history);
+      return e ? { ...e, shape: winShape(history) } : null;
+    })(),
     whatIf,
   };
 }
@@ -356,10 +373,41 @@ export function formatAnalyticsFor(analytics: Analytics, locale: Locale): string
 
   const ageMinutes = Math.max(0, Math.round((Date.now() - Date.parse(analytics.generatedAt)) / 60_000));
 
+  /*
+   * The payoff leads, above the win rate it explains.
+   *
+   * A rate is only meaningful next to what a win is worth. This record read 59%
+   * and lost money, because the average win was 0.72R against a 1R loss — a
+   * payoff that needs 58.3% just to stand still. Putting the rate first invited
+   * exactly the reading that cost somebody money.
+   */
+  const payoff = analytics.payoff;
+
   const lines = [
     t.deepTitle,
     t.deepThreshold(Math.round(analytics.breakevenThreshold * 100)),
     '',
+    ...(payoff
+      ? [
+          t.deepPayoffHeading,
+          t.deepPayoffAvg(payoff.avgWinR.toFixed(2), payoff.avgLossR.toFixed(2)),
+          t.deepPayoffBreakEven(
+            payoff.breakEvenWinRatePct.toFixed(1),
+            payoff.winRatePct.toFixed(1),
+            payoff.marginPts.toFixed(1),
+          ),
+          t.deepPayoffNet(
+            payoff.perTradeR.toFixed(3),
+            payoff.costR.toFixed(3),
+            payoff.netPerTradeR.toFixed(3),
+          ),
+          ...(payoff.netPerTradeR <= 0 ? [t.deepPayoffWarning] : []),
+          ...(payoff.shape.length
+            ? [t.deepPayoffShape(payoff.shape.map((row) => `${row.count}x ${row.r}R`).join(' · '))]
+            : []),
+          '',
+        ]
+      : []),
     t.deepRateHeading,
     rate.excludingBreakeven === null
       ? t.deepRateNone
