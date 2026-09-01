@@ -128,6 +128,21 @@ const roundPrice = (value: number): number => {
  * trade in that case; it does not invent a single-target fallback, because a
  * call whose 1R target is already absurd is not a call worth publishing.
  */
+/**
+ * The first two rungs, for arithmetic that has to stay true when they move.
+ *
+ * The conversion threshold — how often TP1 must reach TP2 for waiting to be
+ * worth it — falls out of these four numbers. Quoting it as a constant would
+ * leave a stale 70% on screen the first time the shares are retuned, arguing
+ * for a rule nobody is running.
+ */
+export const LADDER_SHAPE = {
+  r1: LADDER.day[0]!.r,
+  share1: LADDER.day[0]!.share,
+  r2: LADDER.day[1]!.r,
+  share2: LADDER.day[1]!.share,
+} as const;
+
 export function buildLadder(
   strategy: Strategy,
   side: 'buy' | 'sell',

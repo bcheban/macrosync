@@ -345,6 +345,25 @@ export const en = {
   deepPayoffWarning:
     '  ⚠️ <i>Net of costs this record does not make money. The win rate is not the problem — the size of the average win is.</i>',
   deepPayoffShape: (shape: string) => `  Winners landed at: <i>${shape}</i>`,
+  /**
+   * The TP2 bet, measured.
+   *
+   * Waiting for the second rung before pulling the stop to entry buys the
+   * winners room and costs -0.5R every time a first rung reverses. Whether
+   * that trade is worth making is not an opinion once there is a record, and
+   * this block is what decides `BREAKEVEN_AFTER_RUNG`.
+   */
+  deepTp1Heading: '<b>After TP1</b>',
+  deepTp1Split: (reached: number, toTp2: number, stalled: number, rescued: number) =>
+    `  ${reached} reached TP1 → <b>${toTp2}</b> went on to TP2 · ${stalled} reversed into the stop · ${rescued} closed flat or better`,
+  deepTp1Verdict: (rate: string, need: string, avg: string) =>
+    `  Conversion <b>${rate}%</b> · needs <b>${need}%</b> to beat protecting at TP1 · stalled trades average <b>${avg}R</b>`,
+  deepTp1Rollback:
+    '  ⚠️ <i>Below the threshold. On this evidence protecting at TP1 was better — set BREAKEVEN_AFTER_RUNG=1 to go back.</i>',
+  deepTp1Thin: (n: number) =>
+    `  <i>Only ${n} TP1 fills so far — not yet enough to act on.</i>`,
+  deepTp1OtherRule: (n: number) =>
+    `  <i>${n} settled trade(s) ran the earlier rule and are left out — their stop moved at TP1, so they could not have reached TP2.</i>`,
   deepRateHeading: '<b>Win rate</b>',
   deepRateNone: '  Nothing settled yet.',
   deepRateExcl: (rate: number, wins: number, losses: number) =>

@@ -1,5 +1,11 @@
 import { getKlines } from '../market.service.js';
-import { expectancy, winShape, type Expectancy } from '../trades/expectancy.js';
+import {
+  expectancy,
+  tp1Conversion,
+  winShape,
+  type Expectancy,
+  type Tp1Conversion,
+} from '../trades/expectancy.js';
 import { getJson, setJson, storeKey } from '../store/store.js';
 import { dict } from '../telegram/i18n/index.js';
 import type { Locale } from '../telegram/preferences.service.js';
@@ -105,6 +111,13 @@ export interface Analytics {
    * often is enough.
    */
   payoff: (Expectancy & { shape: { r: number; count: number }[] }) | null;
+  /**
+   * What happens after TP1 fills — the measurement the ladder rests on.
+   *
+   * Waiting for TP2 before protecting the trade buys the winners room and
+   * costs -0.5R every time a first rung reverses. This says which is winning.
+   */
+  tp1: Tp1Conversion;
 }
 
 const pct = (part: number, whole: number): number | null =>
@@ -324,6 +337,7 @@ export async function buildAnalytics(threshold: number): Promise<Analytics> {
     /*
      * The payoff profile, beside the rate rather than instead of it.
      */
+    tp1: tp1Conversion(history),
     payoff: (() => {
       const e = expectancy(history);
       return e ? { ...e, shape: winShape(history) } : null;
@@ -408,6 +422,49 @@ export function formatAnalyticsFor(analytics: Analytics, locale: Locale): string
           '',
         ]
       : []),
+    /*
+     * The TP2 bet, reported before the win rate, because it is the decision
+     * that most changes what the win rate will be next month.
+     */
+    ...(analytics.tp1.reachedTp1 > 0 || analytics.tp1.otherRule > 0
+      ? [
+          t.deepTp1Heading,
+          t.deepTp1Split(
+            analytics.tp1.reachedTp1,
+            analytics.tp1.reachedTp2,
+            analytics.tp1.stalled,
+            analytics.tp1.rescued,
+          ),
+          /*
+           * A verdict needs something to judge. With nothing closed under this
+           * rule the conversion is 0/0, and "0% against a 53% threshold" reads
+           * as a failing grade for a rule that has not been marked yet.
+           */
+          ...(analytics.tp1.reachedTp1 > 0
+            ? [
+                t.deepTp1Verdict(
+                  (analytics.tp1.conversionPct ?? 0).toFixed(0),
+                  analytics.tp1.breakEvenPct.toFixed(0),
+                  analytics.tp1.stalledAvgR.toFixed(2),
+                ),
+              ]
+            : []),
+          /*
+           * And a recommendation to undo the change needs enough of it. The
+           * rollback line is an instruction; firing it on a thin sample would
+           * have the metric argue against its own experiment before the
+           * experiment had run.
+           */
+          ...(analytics.tp1.reliable &&
+          (analytics.tp1.conversionPct ?? 0) < analytics.tp1.breakEvenPct
+            ? [t.deepTp1Rollback]
+            : []),
+          ...(analytics.tp1.reliable ? [] : [t.deepTp1Thin(analytics.tp1.reachedTp1)]),
+          ...(analytics.tp1.otherRule > 0 ? [t.deepTp1OtherRule(analytics.tp1.otherRule)] : []),
+          '',
+        ]
+      : []),
+
     t.deepRateHeading,
     rate.excludingBreakeven === null
       ? t.deepRateNone

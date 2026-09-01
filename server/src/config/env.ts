@@ -279,6 +279,29 @@ export const env = {
    * a release.
    */
   breakevenAfterRung: positiveInt(process.env.BREAKEVEN_AFTER_RUNG, 2),
+
+  /**
+   * How long one ticker stays quiet after a call is accepted for it.
+   *
+   * Across every strategy, deliberately. The same chart confirming on the 5m,
+   * the 1h and the 4h inside an hour is one idea, and publishing it three
+   * times spends three slots on one opinion — which is most of how the book
+   * reached sixty-two positions in a day.
+   *
+   * Twelve hours by default. Longer than any scalp and shorter than a swing,
+   * so it never silences an asset for the whole life of a trade in it.
+   */
+  assetCooldownMs: positiveInt(process.env.ASSET_COOLDOWN_MS, 12 * 60 * 60 * 1000),
+
+  /**
+   * Accepted calls allowed in any rolling hour, across every asset.
+   *
+   * The per-asset rule cannot see a market where everything confirms at once.
+   * That is when the book fills with correlated positions a single reversal
+   * closes together, and it is the burst worth refusing rather than rationing
+   * after the fact.
+   */
+  signalsPerHour: positiveInt(process.env.SIGNALS_PER_HOUR, 4),
   /**
    * Guards the TradingView webhook. The route 404s while unset.
    *

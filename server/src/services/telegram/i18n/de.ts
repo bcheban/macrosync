@@ -243,6 +243,16 @@ export const de: Dictionary = {
   deepPayoffWarning:
     '  ⚠️ <i>Nach Kosten verdient diese Bilanz nichts. Nicht die Trefferquote ist das Problem, sondern die Größe des Durchschnittsgewinns.</i>',
   deepPayoffShape: (shape) => `  Gewinner landeten bei: <i>${shape}</i>`,
+  deepTp1Heading: '<b>Nach TP1</b>',
+  deepTp1Split: (reached, toTp2, stalled, rescued) =>
+    `  ${reached} erreichten TP1 → <b>${toTp2}</b> liefen weiter bis TP2 · ${stalled} drehten in den Stop · ${rescued} schlossen neutral oder besser`,
+  deepTp1Verdict: (rate, need, avg) =>
+    `  Konversion <b>${rate}%</b> · nötig sind <b>${need}%</b>, um den Schutz bei TP1 zu schlagen · gestoppte Trades im Mittel <b>${avg}R</b>`,
+  deepTp1Rollback:
+    '  ⚠️ <i>Unter der Schwelle. Nach dieser Datenlage war der Schutz bei TP1 besser — BREAKEVEN_AFTER_RUNG=1 setzt ihn zurück.</i>',
+  deepTp1Thin: (n) => `  <i>Bisher nur ${n} TP1-Fills — noch zu wenig zum Handeln.</i>`,
+  deepTp1OtherRule: (n) =>
+    `  <i>${n} abgeschlossene Trades liefen nach der früheren Regel und bleiben draußen — ihr Stop wanderte bei TP1, TP2 war unerreichbar.</i>`,
   deepRateHeading: '<b>Trefferquote</b>',
   deepRateNone: '  Noch nichts abgeschlossen.',
   deepRateExcl: (rate, wins, losses) => `  Ohne Break-even: <b>${rate}%</b>  (${wins}G / ${losses}V)`,

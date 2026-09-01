@@ -15,6 +15,13 @@ import { getPrefs } from './preferences.service.js';
 import type { Channel, Locale, Prefs } from './preferences.service.js';
 import { dict } from './i18n/index.js';
 import { bucketOf } from '../trades/confidence.js';
+import {
+  cooldownFor,
+  loadCooldown,
+  noteAccepted,
+  saveCooldown,
+  type CooldownState,
+} from '../trades/cooldown.js';
 import { getAccount, mexcFuturesUrl, planPosition } from './sizing.service.js';
 import type { ActiveTrade, Progress, RefusalReason } from '../trades/trades.service.js';
 import { announceFills, forgetCards, rememberCards, updateCards, type Card } from './signal-cards.js';
@@ -437,8 +444,16 @@ export async function notifySignals(signals: Signal[], event: MacroEvent | undef
   const now = Date.now();
   let dirty = false;
 
+  /*
+   * One read for the whole batch. The scan touches 150 tickers and asking the
+   * store per candidate would cost more than the scan itself; the document is
+   * small, and nothing else writes it while a run is in flight.
+   */
+  let cooldown = await loadCooldown();
+
   const candidates: Signal[] = [];
   let blockedByBand = 0;
+  const blockedByRate: Record<string, number> = {};
 
   for (const signal of signals) {
     const key = keyFor(signal);
@@ -471,6 +486,17 @@ export async function notifySignals(signals: Signal[], event: MacroEvent | undef
       continue;
     }
 
+    /*
+     * Checked here, before anything is formatted or sent, rather than at
+     * `openTrade` where the ledger would refuse a call the channel had already
+     * announced. A silenced signal should leave no trace anywhere.
+     */
+    const rejection = cooldownFor(cooldown, signal.base, now);
+    if (rejection) {
+      blockedByRate[rejection] = (blockedByRate[rejection] ?? 0) + 1;
+      continue;
+    }
+
     // The same call standing is not news, whatever the cooldown says.
     if (previous?.verdict === signal.verdict) continue;
 
@@ -490,6 +516,10 @@ export async function notifySignals(signals: Signal[], event: MacroEvent | undef
     console.info(`[alerts] ${blockedByBand} call(s) held back by the confidence band filter`);
   }
 
+  for (const [reason, count] of Object.entries(blockedByRate)) {
+    console.info(`[alerts] ${count} call(s) held back — ${reason}`);
+  }
+
   candidates.sort((a, b) => b.confidence - a.confidence);
   const chosen = candidates.slice(0, env.alertsMaxPerRun);
   const dropped = candidates.length - chosen.length;
@@ -499,6 +529,7 @@ export async function notifySignals(signals: Signal[], event: MacroEvent | undef
   let failed = 0;
   let deliveries = 0;
   let pruned = 0;
+  let cooldownDirty = false;
 
   for (const signal of chosen) {
     const key = keyFor(signal);
@@ -534,6 +565,16 @@ ${sizing}` : body;
        * pair went silent for an hour and a half as though it had been announced.
        */
       state[key] = { verdict: signal.verdict, sentAt: now, failures: 0 };
+
+      /*
+       * The asset's quiet period starts on the same condition that commits the
+       * alert state, and for the same reason: a send that failed announced
+       * nothing, and silencing the ticker for twelve hours over a message
+       * nobody received would be the failure costing twice.
+       */
+      cooldown = noteAccepted(cooldown, signal.base, now);
+      cooldownDirty = true;
+
       if (!result.silent) sent += 1;
       // Only track what was actually published, so the record matches the channel.
       const { trade } = await openTrade(signal);
@@ -571,6 +612,8 @@ ${sizing}` : body;
   }
 
   if (dirty) await setJson(ALERTS_KEY, state);
+  // Written once per run, only when something actually claimed a slot.
+  if (cooldownDirty) await saveCooldown(cooldown);
   return { sent, failed, dropped, deliveries, pruned };
 }
 

@@ -253,6 +253,16 @@ export const uk: Dictionary = {
   deepPayoffWarning:
     '  ⚠️ <i>Після витрат цей запис не заробляє. Справа не у вінрейті — а в розмірі середнього виграшу.</i>',
   deepPayoffShape: (shape) => `  Виграші сіли на: <i>${shape}</i>`,
+  deepTp1Heading: '<b>Після TP1</b>',
+  deepTp1Split: (reached, toTp2, stalled, rescued) =>
+    `  ${reached} дійшли до TP1 → <b>${toTp2}</b> пішли далі до TP2 · ${stalled} розвернулися в стоп · ${rescued} закрилися в нуль або краще`,
+  deepTp1Verdict: (rate, need, avg) =>
+    `  Конверсія <b>${rate}%</b> · треба <b>${need}%</b>, щоб перебити захист на TP1 · ті, що спинилися, дають у середньому <b>${avg}R</b>`,
+  deepTp1Rollback:
+    '  ⚠️ <i>Нижче порога. За цими даними захист на TP1 був кращий — постав BREAKEVEN_AFTER_RUNG=1, щоб повернути.</i>',
+  deepTp1Thin: (n) => `  <i>Поки лише ${n} спрацювань TP1 — замало, щоб діяти.</i>`,
+  deepTp1OtherRule: (n) =>
+    `  <i>${n} закритих угод жили за попереднім правилом і не враховані — їхній стоп їхав на TP1, тож дійти до TP2 вони не могли.</i>`,
   deepRateHeading: '<b>Вінрейт</b>',
   deepRateNone: '  Ще нічого не закрито.',
   deepRateExcl: (rate, wins, losses) => `  Без нульових: <b>${rate}%</b>  (${wins}П / ${losses}З)`,

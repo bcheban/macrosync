@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { expectancy, winShape } from './expectancy.js';
+import { expectancy, tp1Conversion, winShape } from './expectancy.js';
 import type { ClosedTrade } from './trades.service.js';
 
 /**
@@ -123,5 +123,135 @@ describe('expectancy', () => {
       { r: 0.5, count: 2 },
       { r: 1.45, count: 1 },
     ]);
+  });
+});
+
+
+/**
+ * The measurement that decides whether the ladder stays as it is.
+ *
+ * Waiting for TP2 before protecting a trade costs -0.5R every time a first rung
+ * reverses, and pays when it does not. Roughly 70% of TP1 fills have to convert
+ * for that to be worth it, so the conversion rate is not a curiosity — it is
+ * the input to `BREAKEVEN_AFTER_RUNG`.
+ */
+describe('the TP1 conversion tracker', () => {
+  /** A trade whose fills say how far up the ladder it got. */
+  const laddered = (levels: number[], finalR: number, outcome: 'win' | 'loss'): ClosedTrade => {
+    const entry = 100;
+    const stop = 95;
+    const risk = entry - stop;
+    const shares: Record<number, number> = { 1: 0.25, 2: 0.45, 3: 0.3 };
+
+    const rungs = levels.map((level) => ({
+      level,
+      price: entry + risk * (level === 1 ? 1 : level === 2 ? 1.5 : 2.5),
+      share: shares[level]!,
+      at: '',
+      reason: 'target' as const,
+    }));
+
+    const booked = rungs.reduce(
+      (sum, fill) => sum + (fill.share * (fill.price - entry)) / risk,
+      0,
+    );
+    const rest = 1 - rungs.reduce((sum, fill) => sum + fill.share, 0);
+    // One closing fill priced so the whole trade lands on `finalR`.
+    const exit = rest > 0 ? entry + ((finalR - booked) / rest) * risk : entry;
+
+    return {
+      id: `t${Math.random()}`,
+      symbol: 'XUSDT',
+      base: 'X',
+      strategy: 'day',
+      side: 'buy',
+      entry,
+      stopLoss: stop,
+      initialStopLoss: stop,
+      takeProfit: entry + risk * 2.5,
+      timeframe: '1h',
+      openedAt: '',
+      closedAt: '',
+      outcome,
+      resultPct: 0,
+      // Ran the current rule, so it counts toward the current question.
+      protectAfterRung: 2,
+      fills: [
+        ...rungs,
+        ...(rest > 0 ? [{ level: 0, price: exit, share: rest, at: '', reason: 'stop' as const }] : []),
+      ],
+    } as unknown as ClosedTrade;
+  };
+
+  it('counts nothing when nothing has reached the first rung', () => {
+    const conversion = tp1Conversion([]);
+
+    assert.equal(conversion.reachedTp1, 0);
+    assert.equal(conversion.conversionPct, null, 'zero of zero is not a rate');
+  });
+
+  it('excludes trades that ran the rule this is deciding whether to restore', () => {
+    /*
+     * The trap this metric walks into if left alone.
+     *
+     * Under the old rule the stop moved at TP1, so a trade that filled the
+     * first rung and pulled back was *closed* right there. It could not have
+     * reached TP2. Counting it as a failure to convert argues for a rollback
+     * using evidence manufactured by the thing being rolled back to — and on
+     * the live record that read 28% against a 53% threshold, which is a
+     * recommendation to undo the change based on data that cannot see it.
+     */
+    const oldRule = { ...laddered([1], -0.5, 'loss'), protectAfterRung: 1 } as ClosedTrade;
+    const currentRule = laddered([1, 2], 0.925, 'win');
+
+    const conversion = tp1Conversion([oldRule, currentRule]);
+
+    assert.equal(conversion.reachedTp1, 1, 'only the trade that ran this rule');
+    assert.equal(conversion.otherRule, 1, 'and the other is reported, not hidden');
+    assert.equal(conversion.conversionPct, 100);
+  });
+
+  it('splits TP1 fills into converted, stalled and rescued', () => {
+    const history = [
+      laddered([1, 2, 3], 1.675, 'win'),
+      laddered([1, 2], 0.925, 'win'),
+      // TP1 only, back to the stop: the -0.5R the bet is against.
+      laddered([1], -0.5, 'loss'),
+      laddered([1], -0.5, 'loss'),
+      // TP1 only, but expired above entry — neither the win nor the loss.
+      laddered([1], 0.1, 'win'),
+    ];
+
+    const conversion = tp1Conversion(history);
+
+    assert.equal(conversion.reachedTp1, 5);
+    assert.equal(conversion.reachedTp2, 2);
+    assert.equal(conversion.stalled, 2);
+    assert.equal(conversion.rescued, 1, 'flat-or-better is counted apart, not folded in');
+    assert.equal(Math.round(conversion.conversionPct!), 40);
+  });
+
+  it('derives the threshold from the ladder rather than quoting it', () => {
+    /*
+     * At 25% on the first rung and 45% on the second, protecting at TP1 banks
+     * +0.25R, converting banks +0.925R and stalling costs -0.5R. The break-even
+     * conversion is (0.25 + 0.5) / (0.925 + 0.5) — about 53%.
+     *
+     * Computed rather than hard-coded so a retuned ladder cannot leave a stale
+     * number on screen arguing for a rule nobody is running.
+     */
+    const conversion = tp1Conversion([laddered([1], -0.5, 'loss')]);
+
+    assert.ok(conversion.breakEvenPct > 50 && conversion.breakEvenPct < 56, String(conversion.breakEvenPct));
+  });
+
+  it('says when the sample is too small to act on', () => {
+    const thin = tp1Conversion([laddered([1, 2], 0.925, 'win')]);
+    assert.equal(thin.reliable, false);
+
+    const enough = tp1Conversion(
+      Array.from({ length: 20 }, () => laddered([1, 2], 0.925, 'win')),
+    );
+    assert.equal(enough.reliable, true);
   });
 });

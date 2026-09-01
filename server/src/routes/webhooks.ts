@@ -8,6 +8,7 @@ import {
   parseAlert,
   toSignal,
 } from '../services/webhooks/tradingview.service.js';
+import { claimSlot } from '../services/trades/cooldown.js';
 
 /**
  * Inbound alerts from outside the engine.
@@ -120,6 +121,28 @@ webhooks.post(
      */
     if (!(await claimAlert(parsed.alert.dedupeKey))) {
       res.json({ ok: true, duplicate: true, symbol: parsed.alert.symbol });
+      return;
+    }
+
+    /*
+     * The rate limits apply to TradingView too.
+     *
+     * An alert set to fire on every bar is exactly the hyperactivity the
+     * cooldown exists for, and an external call spends the same slot in the
+     * same book as one the engine found. Claimed before publishing, so two
+     * alerts arriving together cannot both get through.
+     *
+     * Answered as `200 ok` with a reason rather than an error: TradingView
+     * retries and eventually disables an alert that keeps failing, and being
+     * throttled is not a failure — it is the system working.
+     */
+    const throttled = await claimSlot(parsed.alert.base);
+    if (throttled) {
+      res.json({
+        ok: true,
+        rejected: throttled === 'cooldown' ? 'cooldown_active' : 'velocity_limit',
+        symbol: parsed.alert.symbol,
+      });
       return;
     }
 

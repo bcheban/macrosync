@@ -80,6 +80,15 @@ export interface ActiveTrade {
   /** When the stop was moved to entry, if it has been. */
   breakevenAt?: string;
   /**
+   * The rung this trade protects at, stamped when it opened.
+   *
+   * Analytics needs it. A trade run under the old rule had its stop pulled to
+   * entry at TP1, so it was *closed* before it could reach TP2 — measuring its
+   * conversion tells you about a rule nobody is running any more, and the
+   * answer it gives is the wrong one in the dangerous direction.
+   */
+  protectAfterRung?: number;
+  /**
    * The confluence score the call was published with, 0-100.
    *
    * Optional because trades opened before this field existed do not carry it,
@@ -494,6 +503,8 @@ export async function openTrade(
     takeProfit: targets[targets.length - 1]!.price,
     targets,
     fills: [],
+    // The rule this trade resolves under, so analytics can scope to it.
+    protectAfterRung: env.breakevenAfterRung,
     confidence: signal.confidence,
     timeframe: signal.timeframe,
     openedAt: new Date().toISOString(),

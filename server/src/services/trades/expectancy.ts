@@ -1,5 +1,6 @@
 import { env } from '../../config/env.js';
 import { realisedR } from './confidence.js';
+import { LADDER_SHAPE } from './targets.js';
 import type { ClosedTrade } from './trades.service.js';
 
 /**
@@ -150,4 +151,113 @@ export function winShape(history: ClosedTrade[]): { r: number; count: number }[]
   return [...buckets.entries()]
     .map(([r, count]) => ({ r, count }))
     .sort((a, b) => a.r - b.r);
+}
+
+/**
+ * What happens after the first rung fills — the number the ladder rests on.
+ *
+ * The stop waits for TP2 now, which buys the winners room and costs a specific
+ * thing: a trade that takes TP1 and reverses returns `0.25 - 0.75 = -0.5R`
+ * where the old rule banked `+0.5R`. Roughly **70% of TP1 fills must go on to
+ * TP2** for that trade to be worth making.
+ *
+ * Nobody can know that in advance, and it is not a matter of opinion once there
+ * is a record. So it is measured here, and `BREAKEVEN_AFTER_RUNG` is the lever
+ * it decides: below the threshold, the old rule was better and should come
+ * back.
+ *
+ * `stalled` is the case that costs money — TP1 filled, TP2 never reached, and
+ * the trade closed down. `rescued` is the same path ending flat or better,
+ * which happens on an expiry above entry; it is neither the win the bet was
+ * for nor the loss it was risking, so it is counted apart rather than folded
+ * into whichever number looks better.
+ */
+export interface Tp1Conversion {
+  /** Settled trades whose first rung filled. The denominator. */
+  reachedTp1: number;
+  /** Of those, how many went on to fill TP2. */
+  reachedTp2: number;
+  /** TP1 only, closed at a loss. The -0.5R case the bet is against. */
+  stalled: number;
+  /** TP1 only, closed flat or better without reaching TP2. */
+  rescued: number;
+  /** `reachedTp2 / reachedTp1`, or null with nothing to divide. */
+  conversionPct: number | null;
+  /** Mean R of the trades that stopped at TP1, whatever they returned. */
+  stalledAvgR: number;
+  /** The share of TP1 fills that must convert for the current rule to pay. */
+  breakEvenPct: number;
+  /** Enough trades to mean something. Below this it is an anecdote. */
+  reliable: boolean;
+  /**
+   * Settled trades excluded because they ran under a different rule.
+   *
+   * The number that stops this metric answering the wrong question. Under the
+   * old rule the stop moved at TP1, so a trade that filled the first rung and
+   * pulled back was *closed* there — it could not have reached TP2 and counting
+   * it as a failure to convert argues for a rollback using evidence produced by
+   * the thing being rolled back to.
+   */
+  otherRule: number;
+}
+
+/** Under this many TP1 fills, the conversion rate is noise. */
+const CONVERSION_SAMPLE = 20;
+
+export function tp1Conversion(history: ClosedTrade[]): Tp1Conversion {
+  const decided = history.filter(
+    (trade) => trade.outcome === 'win' || trade.outcome === 'loss',
+  );
+
+  /*
+   * Only trades that actually ran the rule being measured. A trade with no
+   * stamp predates the field and therefore ran the old one.
+   */
+  const settled = decided.filter(
+    (trade) => (trade.protectAfterRung ?? 1) === env.breakevenAfterRung,
+  );
+
+  const filled = (trade: ClosedTrade, level: number): boolean =>
+    (trade.fills ?? []).some((fill) => fill.reason === 'target' && fill.level >= level);
+
+  const reachedTp1 = settled.filter((trade) => filled(trade, 1));
+  const reachedTp2 = reachedTp1.filter((trade) => filled(trade, 2));
+  const onlyTp1 = reachedTp1.filter((trade) => !filled(trade, 2));
+
+  const stalled = onlyTp1.filter((trade) => realisedR(trade) < 0);
+  const rescued = onlyTp1.length - stalled.length;
+
+  const stalledAvgR = onlyTp1.length
+    ? onlyTp1.reduce((sum, trade) => sum + realisedR(trade), 0) / onlyTp1.length
+    : 0;
+
+  /*
+   * The threshold, derived rather than quoted.
+   *
+   * Under the old rule a TP1 fill banked `share1 x 1R` and stopped there. Under
+   * this one it is worth `+tp2Value` if it converts and `-stallValue` if it does
+   * not, so conversion has to satisfy
+   *
+   *     p x tp2Value - (1 - p) x stallValue >= oldValue
+   *
+   * which rearranges to the fraction below. Computed from the ladder rather
+   * than hard-coded so it stays true if the shares are retuned.
+   */
+  const ladder = LADDER_SHAPE;
+  const oldValue = ladder.share1 * ladder.r1;
+  const tp2Value = ladder.share1 * ladder.r1 + ladder.share2 * ladder.r2;
+  const stallValue = ladder.share1 * ladder.r1 - (1 - ladder.share1);
+  const breakEvenPct = ((oldValue - stallValue) / (tp2Value - stallValue)) * 100;
+
+  return {
+    reachedTp1: reachedTp1.length,
+    reachedTp2: reachedTp2.length,
+    stalled: stalled.length,
+    rescued,
+    conversionPct: reachedTp1.length ? (reachedTp2.length / reachedTp1.length) * 100 : null,
+    stalledAvgR,
+    breakEvenPct,
+    reliable: reachedTp1.length >= CONVERSION_SAMPLE,
+    otherRule: decided.length - settled.length,
+  };
 }
