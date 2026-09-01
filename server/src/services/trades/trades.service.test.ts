@@ -757,6 +757,46 @@ describe('trade ledger', () => {
     assert.equal(closed[0]?.outcome, 'loss');
   });
 
+  it('does not stop a trade with a stop that did not exist yet', async () => {
+    /*
+     * The bug that was capping every winner at its first rung.
+     *
+     * The walk began at `trade.stopLoss` — the *current* stop, which for a
+     * protected trade is entry — and applied it to every bar since the trade
+     * opened, including bars that printed long before the stop moved there. A
+     * trade is opened at a price the market has just been trading around, so an
+     * early dip through entry is the normal case rather than an edge one: on
+     * the next run that dip read as a stop-out, and the trade closed at
+     * breakeven having never been stopped.
+     *
+     * Live example: UNI's swing call filled TP1 at 04:00 and was closed at
+     * breakeven by a bar from 16:00 the previous day, discarding a TP2 the tape
+     * had genuinely reached.
+     *
+     * Bar 1 dips to 99 — under entry, over the real stop at 95, so nothing
+     * happens. Bar 2 sweeps 105 and 107.5, booking TP1 and TP2 and moving the
+     * stop to entry. Bar 3 runs to the last rung. If bar 1 could reach forward
+     * and stop the trade, none of that would ever be booked.
+     */
+    script = { RETROUSDT: [[101, 108, 109], [99, 101, 106]] };
+
+    await trades.openTrade(signal('RETRO', 'buy', 100, 95, 110));
+
+    // First pass books TP1 and TP2 and moves the stop to entry. TP3 is out of
+    // reach, so the trade stays open carrying a stop it did not open with.
+    const first = await trades.evaluateTrades();
+    assert.equal(first.closed.length, 0, 'still running after two rungs');
+
+    // Second pass re-walks the same tape, including bar 1 dipping to 99.
+    const second = await trades.evaluateTrades();
+
+    assert.equal(second.closed.length, 0, 'the early dip must not close it at entry');
+    const store = await import('../store/store.js');
+    const [open] = await store.getJson<Record<string, unknown>[]>(store.storeKey('trades:active'), []);
+    const booked = ((open?.fills ?? []) as { reason: string }[]).filter((f) => f.reason === 'target');
+    assert.equal(booked.length, 2, 'and both booked rungs survive');
+  });
+
   it('reports a win rate over decided trades only', async () => {
     assert.equal(trades.winRate({ wins: 3, losses: 1, expired: 0, superseded: 0, voided: 0, breakeven: 0, byStrategy: {}, updatedAt: '' }), 75);
     // Expired and superseded calls must not dilute the denominator.

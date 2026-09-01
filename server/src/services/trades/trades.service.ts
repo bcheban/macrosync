@@ -623,7 +623,44 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
   const ladder = trade.targets ?? [];
   const laddered = ladder.length > 0;
 
-  let stop = trade.stopLoss;
+  /*
+   * The walk starts where the trade started, not where it has got to.
+   *
+   * This was reading `trade.stopLoss` — the *current* stop, which for a
+   * protected trade is entry — and then applying it to every bar since the
+   * trade opened, including the many that printed before the stop ever moved.
+   * Any dip below entry in the trade's early life therefore read as a
+   * stop-out on the next run, and the trade closed at breakeven having never
+   * been stopped at all.
+   *
+   * It is not a rare edge. A trade is opened at a price the market has just
+   * been trading around, so an early bar dipping through entry is the normal
+   * case, and every trade whose stop later moved was liable to it. UNI's swing
+   * call filled TP1 at 04:00 and was closed at breakeven by a bar from 16:00
+   * the previous day — twelve hours before the stop existed at that level —
+   * discarding a TP2 the tape had actually reached.
+   *
+   * That mechanism caps winners at their first rung, which is exactly the
+   * shape the record showed and was being read as a flaw in the ladder.
+   *
+   * `stopAt` reconstructs the stop in force at a given moment from the fills,
+   * which carry the time each rung filled. The persisted stop is no longer
+   * consulted for the walk at all.
+   */
+  const protectFrom = (trade.fills ?? [])
+    .filter((fill) => fill.reason === 'target' && fill.level >= (trade.protectAfterRung ?? 1))
+    .map((fill) => Date.parse(fill.at))
+    .filter((at) => Number.isFinite(at))
+    .sort((a, b) => a - b)[0];
+
+  const opened = trade.initialStopLoss ?? trade.stopLoss;
+
+  /* Set by the persisted fills, and again by a rung that fills during this walk. */
+  let protectedAt: number | undefined = protectFrom;
+  const stopAt = (when: number): number =>
+    protectedAt !== undefined && when >= protectedAt ? trade.entry : opened;
+
+  let stop = opened;
   let atBreakeven = Boolean(trade.breakevenAt);
   let moved = false;
   let fills: Fill[] = [...(trade.fills ?? [])];
@@ -642,6 +679,12 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
 
     for (const candle of set.candles) {
       if (candle.openTime < openedAt) continue;
+
+      /*
+       * The stop this bar actually faced. A rung that filled later cannot
+       * reach back and stop a bar that had already printed.
+       */
+      stop = stopAt(candle.openTime);
 
       const hitStop = long ? candle.low <= stop : candle.high >= stop;
 
@@ -711,6 +754,8 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
          * -0.5R. `BREAKEVEN_AFTER_RUNG` sets which rung; 1 restores the old rule.
          */
         if (!atBreakeven && target.level >= env.breakevenAfterRung) {
+          // Remembered as a moment, so later bars see it and earlier ones do not.
+          protectedAt = candle.openTime;
           stop = trade.entry;
           atBreakeven = true;
           moved = true;
@@ -746,6 +791,13 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
        * the levels, so a bar cannot both save and settle itself.
        */
       if (!laddered && !atBreakeven && (long ? candle.high >= trigger : candle.low <= trigger)) {
+        /*
+         * Recorded as a moment for the same reason a rung is. A pre-ladder
+         * trade has no fill to reconstruct the move from, so without this the
+         * next bar would read the stop back to where it opened and the trade
+         * would never be protected at all.
+         */
+        protectedAt = candle.openTime;
         stop = trade.entry;
         atBreakeven = true;
         moved = true;
