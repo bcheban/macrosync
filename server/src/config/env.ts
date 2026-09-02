@@ -304,6 +304,19 @@ export const env = {
   signalsPerHour: positiveInt(process.env.SIGNALS_PER_HOUR, 4),
 
   /**
+   * Which currencies' macro prints reach a reader.
+   *
+   * The dollar's, and by default only the dollar's. Crypto is priced in dollars
+   * and moves on dollar liquidity; a Bank of England speech under a crypto
+   * signal card is a real event about a market this bot does not trade, and it
+   * implies a connection that is not there.
+   */
+  calendarCurrencies: (process.env.CALENDAR_CURRENCIES ?? 'USD')
+    .split(',')
+    .map((code) => code.trim().toUpperCase())
+    .filter(Boolean),
+
+  /**
    * The longest any trade may stay open, whatever its strategy says.
    *
    * A backstop, not the schedule. Each strategy already has its own horizon —

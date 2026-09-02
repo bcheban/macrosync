@@ -33,14 +33,39 @@ interface RawEvent {
 }
 
 /** Currencies whose prints actually move crypto. */
-const TRACKED = new Set(['USD', 'EUR', 'GBP', 'JPY', 'CNY', 'ALL']);
+/**
+ * Whose macro this desk cares about, which is the dollar's.
+ *
+ * Crypto is priced in dollars and moves on dollar liquidity. A Frankfurt survey
+ * or a Bank of England speech is a real event about a market this bot does not
+ * trade, and putting it under a signal card implies a connection that is not
+ * there — the reader who acts on it is acting on noise the bot supplied.
+ *
+ * This used to track five currencies plus `ALL`, and the practical effect was
+ * "BOE Gov Bailey Speaks" sitting under crypto calls. Of the high-impact prints
+ * in a typical week the feed carries four USD and eleven from elsewhere, so the
+ * filter is not trimming an edge case; it is most of what was getting through.
+ *
+ * Configurable because the judgement is a product one rather than a technical
+ * one — set `CALENDAR_CURRENCIES=USD,EUR` to widen it without a release.
+ *
+ * (`ALL` was in the old set and never matched anything: the feed writes that
+ * country as `All`. It has been dropped rather than fixed — the three events a
+ * week it covers are bank holidays and G20 photocalls.)
+ */
+const TRACKED = new Set(env.calendarCurrencies);
 
 /**
  * Crypto trades against the dollar, so a US print moves this tape harder than
  * the same print out of Frankfurt or Tokyo. This is the weight that pushes the
  * FOMC ahead of a German ifo survey in the queue.
+ *
+ * Only the currencies `TRACKED` admits are listed. A weight for something that
+ * can never arrive reads as a rule that is running when it is not, and the next
+ * person to widen the filter should have to think about the weight rather than
+ * inherit a number nobody chose.
  */
-const CURRENCY_WEIGHT: Record<string, number> = { USD: 14, ALL: 6, EUR: 4, GBP: 2, JPY: 2, CNY: 2 };
+const CURRENCY_WEIGHT: Record<string, number> = { USD: 14 };
 
 const REGION: Record<string, string> = {
   USD: 'US',
