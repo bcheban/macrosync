@@ -213,9 +213,13 @@ function TradeCard({
       </div>
 
       {/*
-        The rungs, when the trade has any. Shown as a row of small chips rather
-        than three more label/value pairs: the interesting thing at a glance is
-        which of them have paid, not what each is worth to four decimal places.
+        The rungs, as prices.
+
+        These carried the share of the position each rung closes — `TP1 · 25%`
+        — which reads as a target and is not one. A reader checking the board
+        against the Telegram card found two different numbers under the same
+        label, and the card's was the price. The share moved to the tooltip:
+        useful, but not what somebody is looking for when they read "TP1".
       */}
       {trade.targets && trade.targets.length > 1 && (
         <div className="mt-1.5 flex flex-wrap items-center gap-1">
@@ -224,13 +228,14 @@ function TradeCard({
             return (
               <span
                 key={target.level}
-                title={formatPrice(target.price)}
+                title={t('liveTrades.rungShare', { pct: String(Math.round(target.share * 100)) })}
                 className={cn(
                   'tnum rounded px-1.5 py-0.5 font-mono text-[9.5px]',
                   hit ? 'bg-bull/15 text-bull/90' : 'bg-white/5 text-white/35',
                 )}
               >
-                {hit ? '✓' : ''}TP{target.level} · {Math.round(target.share * 100)}%
+                {hit ? '✓ ' : ''}TP{target.level}{' '}
+                <span className={hit ? 'text-bull' : 'text-white/55'}>{formatPrice(target.price)}</span>
               </span>
             );
           })}

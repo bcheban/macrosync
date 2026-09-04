@@ -122,6 +122,7 @@ export const en = {
     entry: 'Entry',
     record: '{{rate}}% · {{decided}} settled',
     exposure: 'Open exposure',
+    rungShare: 'closes {{pct}}% of the position',
     timeLeft: '⏳ {{pct}}% of its time used',
     exposureRisk_one: '{{count}} position · 1R at risk',
     exposureRisk_other: '{{count}} positions · {{count}}R at risk',

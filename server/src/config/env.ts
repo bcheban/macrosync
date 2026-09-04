@@ -234,22 +234,6 @@ export const env = {
    */
   takerFeePct: feeRate(process.env.TAKER_FEE_PCT, 0.02),
 
-  /**
-   * Confidence bands the engine is allowed to publish.
-   *
-   * A blunt instrument, and deliberately so. The record showed the 70–80 and
-   * 90+ bands losing while 60–70 and 80–90 made money, and while those samples
-   * are far too small to be evidence about the bands themselves, cutting the
-   * publish rate is defensible on its own: at an edge this thin, every trade
-   * not taken is a fee not paid.
-   *
-   * Empty means every band passes. Set as a comma-separated list of the band
-   * ids used everywhere else — `60-70,80-90`.
-   */
-  confidenceBands: (process.env.CONFIDENCE_BANDS ?? '60-70,80-90')
-    .split(',')
-    .map((band) => band.trim())
-    .filter(Boolean),
 
   /**
    * How many trades may be open at once, across every strategy.
