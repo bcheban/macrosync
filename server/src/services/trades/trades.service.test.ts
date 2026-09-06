@@ -290,27 +290,6 @@ describe('trade ledger', () => {
     }
   });
 
-  it('closes a trade that has gone nowhere for half its horizon', async () => {
-    /*
-     * A day trade lives 36 hours, so the check bites after 18. Forty bars that
-     * barely move means the call is holding a slot it is not using.
-     */
-    const highs = Array.from({ length: 40 }, () => 101);
-    script = { STAUSDT: [highs, highs.map(() => 99)] };
-
-    await trades.openTrade(signal('STA', 'buy', 100, 95, 110));
-    const active = await trades.loadActive();
-    const aged = active.map((t) => ({ ...t, openedAt: new Date(Date.now() - 20 * 60 * 60_000).toISOString() }));
-    const { setJson, storeKey } = await import('../store/store.js');
-    await setJson(storeKey('trades:active'), aged);
-
-    const { closed } = await trades.evaluateTrades();
-
-    assert.equal(closed[0]?.outcome, 'expired');
-    // Expired stays out of the rate, so an early close cannot flatter it.
-    assert.equal((await trades.loadStats()).wins + (await trades.loadStats()).losses, 0);
-  });
-
   it('spares a trade that travelled, even if it came back', async () => {
     /*
      * Progress is the best the trade ever managed, not where it sits now. One
@@ -444,20 +423,6 @@ describe('trade ledger', () => {
 
     assert.equal(closed.length, 0);
     assert.equal(open, 1);
-  });
-
-  it('expires a trade that outlived its horizon without counting it', async () => {
-    script = { ATOMUSDT: [[101], [99]] };
-
-    await trades.openTrade(signal('ATOM', 'buy', 100, 95, 110));
-    // Two days on a day-trade horizon (36h) is well past.
-    const { closed, stats, open } = await trades.evaluateTrades(Date.now() + 48 * 60 * 60_000);
-
-    assert.equal(closed[0]?.outcome, 'expired');
-    assert.equal(open, 0);
-    assert.equal(stats.expired, 1);
-    // An unresolved call is neither a win nor a loss.
-    assert.equal(stats.wins + stats.losses, 0);
   });
 
   it('supersedes the standing trade when the call reverses', async () => {
@@ -657,71 +622,6 @@ describe('trade ledger', () => {
     assert.equal(reversal.opened, true, 'a reversal replaces rather than adds');
   });
 
-  it('closes a trade that outlived its strategy, and leaves a younger one alone', async () => {
-    /*
-     * The zombie: a position sitting near entry, reaching neither level,
-     * holding one of fifteen slots for ever. A day trade gets 36 hours.
-     *
-     * Both trades are flat — the tape never touches a rung or the stop — so the
-     * only thing separating them is the clock.
-     */
-    script = { OLDUSDT: [[101], [99]], NEWUSDT: [[101], [99]] };
-
-    await trades.openTrade(signal('OLD', 'buy', 100, 95, 110));
-    await trades.openTrade(signal('NEW', 'buy', 100, 95, 110));
-
-    // Age the first one past its horizon by resolving from a later clock.
-    const later = Date.now() + 37 * 60 * 60_000;
-    const store = await import('../store/store.js');
-    const active = await store.getJson<Record<string, unknown>[]>(store.storeKey('trades:active'), []);
-    await store.setJson(
-      store.storeKey('trades:active'),
-      active.map((trade) =>
-        trade.base === 'OLD'
-          ? { ...trade, openedAt: new Date(Date.now() - 37 * 60 * 60_000).toISOString() }
-          : trade,
-      ),
-    );
-
-    const { closed, open } = await trades.evaluateTrades();
-
-    assert.equal(closed.length, 1, 'only the one past its horizon');
-    assert.equal(closed[0]?.base, 'OLD');
-    assert.equal(open, 1, 'the young trade keeps its slot');
-    void later;
-  });
-
-  it('ends a trade whose strategy has no horizon at all', async () => {
-    /*
-     * The case the per-strategy table cannot catch and the ceiling exists for.
-     *
-     * A strategy missing from `MAX_LIFETIME_MS` produced `age > undefined`,
-     * which is false — so the trade never timed out, never closed, and held a
-     * slot permanently. A field corrupted in the store or a strategy added to
-     * the engine and forgotten here both land exactly there.
-     */
-    script = { GHOSTUSDT: [[101], [99]] };
-
-    await trades.openTrade(signal('GHOST', 'buy', 100, 95, 110));
-
-    const store = await import('../store/store.js');
-    const { env } = await import('../../config/env.js');
-    const active = await store.getJson<Record<string, unknown>[]>(store.storeKey('trades:active'), []);
-    await store.setJson(
-      store.storeKey('trades:active'),
-      active.map((trade) => ({
-        ...trade,
-        strategy: 'nonsense',
-        openedAt: new Date(Date.now() - env.maxTradeDurationMs - 60_000).toISOString(),
-      })),
-    );
-
-    const { closed } = await trades.evaluateTrades();
-
-    assert.equal(closed.length, 1, 'the ceiling ends it even with no horizon to read');
-    assert.equal(closed[0]?.outcome, 'expired', 'it reached no level, so it is not a win or a loss');
-  });
-
   it('settles the rest of the book when one trade cannot be resolved', async () => {
     /*
      * How the zombies were really being made.
@@ -795,6 +695,42 @@ describe('trade ledger', () => {
     const [open] = await store.getJson<Record<string, unknown>[]>(store.storeKey('trades:active'), []);
     const booked = ((open?.fills ?? []) as { reason: string }[]).filter((f) => f.reason === 'target');
     assert.equal(booked.length, 2, 'and both booked rungs survive');
+  });
+
+  it('holds a trade open indefinitely until a level decides it', async () => {
+    /*
+     * The guarantee that replaced the clock.
+     *
+     * Trades used to expire on a horizon — six hours, thirty-six, ten days —
+     * and a call that had reached neither level was closed at whatever the tape
+     * happened to print. "$ETC closed on time after 1 day at +0.00R" while the
+     * position was still open on the exchange, still moving, and still on its
+     * way to a real target or a real stop. The record and the account were
+     * describing different trades.
+     *
+     * A hundred bars of nothing, spanning far past every horizon that used to
+     * exist, and the trade is still open at the end of them.
+     */
+    const bars = 100;
+    script = { PATIENTUSDT: [Array.from({ length: bars }, () => 101), Array.from({ length: bars }, () => 99)] };
+
+    await trades.openTrade(signal('PATIENT', 'buy', 100, 95, 110));
+
+    // Aged well past the old ten-day ceiling, and past the old day horizon.
+    const store = await import('../store/store.js');
+    const active = await store.getJson<Record<string, unknown>[]>(store.storeKey('trades:active'), []);
+    await store.setJson(
+      store.storeKey('trades:active'),
+      active.map((trade) => ({
+        ...trade,
+        openedAt: new Date(Date.now() - 30 * 24 * 60 * 60_000).toISOString(),
+      })),
+    );
+
+    const { closed, open } = await trades.evaluateTrades();
+
+    assert.equal(closed.length, 0, 'no clock may close a trade');
+    assert.equal(open, 1, 'it keeps its slot until a level decides it');
   });
 
   it('reports a win rate over decided trades only', async () => {

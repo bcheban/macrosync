@@ -1,3 +1,4 @@
+import { toContractForm } from '../market.service.js';
 import type { Signal } from '../../types/domain.js';
 import { deleteKey, getJson, setJson, storeKey } from '../store/store.js';
 
@@ -153,7 +154,7 @@ export function planPosition(account: Account, signal: Signal): PositionPlan | n
  * and there is no way to attach a fallback to an inline URL.
  */
 export const mexcFuturesUrl = (symbol: string): string =>
-  `https://www.mexc.com/futures/${symbol.includes('_') ? symbol : symbol.replace(/(USDT|USDC)$/, '_$1')}`;
+  `https://www.mexc.com/futures/${toContractForm(symbol)}`;
 
 export interface CalcInput {
   balance: number;

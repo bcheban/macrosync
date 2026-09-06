@@ -1,3 +1,4 @@
+import { toContractForm } from './mexc';
 /**
  * MEXC's public perpetual-contract stream.
  *
@@ -28,7 +29,7 @@ export const MEXC_WS_URL = 'wss://contract.mexc.com/edge';
 
 /** Perpetuals are quoted `BTC_USDT`; everything else here uses `BTCUSDT`. */
 const toContract = (symbol: string): string =>
-  symbol.includes('_') ? symbol : symbol.replace(/(USDT|USDC)$/, '_$1');
+  toContractForm(symbol);
 
 const fromContract = (symbol: string): string => symbol.replace('_', '');
 

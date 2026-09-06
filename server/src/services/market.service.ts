@@ -38,8 +38,35 @@ const INTERVAL_MS: Record<Interval, number> = {
  * have invalidated every saved watchlist and every open trade in the ledger for
  * a difference that exists only in one API's URL.
  */
-export const toContractSymbol = (symbol: string): string =>
-  symbol.includes('_') ? symbol : symbol.replace(/(USDT|USDC)$/, '_$1');
+/**
+ * Every quote currency MEXC lists futures against, longest first.
+ *
+ * The order matters: `USD` is a prefix of `USD1` and of `USDT`, so a shorter
+ * match tried first would split `ZECUSD1` into `ZECUSD` + `1`.
+ */
+const CONTRACT_QUOTES = ['USDT', 'USDC', 'USD1', 'USD'] as const;
+
+/**
+ * `BTCUSDT` → `BTC_USDT`, the form the exchange uses in its own URLs.
+ *
+ * This was a regex that knew `USDT` and `USDC` and silently passed anything
+ * else through unchanged. MEXC lists 1,183 contracts across four quotes, and
+ * the 45 quoted in `USD` and `USD1` came out without their underscore — so
+ * `BTC_USD` produced `https://www.mexc.com/futures/BTCUSD`, which answers 400.
+ *
+ * An unrecognised symbol is returned untouched rather than mangled: a link that
+ * fails is better than one that quietly points at a different contract.
+ */
+export const toContractForm = (symbol: string): string => {
+  if (symbol.includes('_')) return symbol;
+
+  const quote = CONTRACT_QUOTES.find(
+    (candidate) => symbol.endsWith(candidate) && symbol.length > candidate.length,
+  );
+  return quote ? `${symbol.slice(0, -quote.length)}_${quote}` : symbol;
+};
+
+export const toContractSymbol = (symbol: string): string => toContractForm(symbol);
 
 export const fromContractSymbol = (symbol: string): string => symbol.replace('_', '');
 

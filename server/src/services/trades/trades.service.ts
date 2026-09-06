@@ -213,25 +213,37 @@ const EMPTY_STATS: TradeStats = {
 export const INTERVAL: Record<Strategy, Interval> = { scalping: '5m', day: '1h', swing: '4h' };
 
 /**
- * How long a call is given to resolve, roughly three times the duration the
- * alert advertises.
+ * A trade ends where the reader was told it would end: at a target or a stop.
  *
- * Without this a trade that never reaches either level stays open forever: the
- * active list grows without bound, every run re-fetches candles for all of it,
- * and the win rate silently counts only the decisive calls — which is the most
- * flattering possible sample.
+ * There used to be a clock. Every setup had a horizon and a stagnation rule,
+ * and a call that had reached neither level was closed at whatever the tape
+ * happened to print — "$ETC closed on time after 1 day at +0.00R" while the
+ * position was still open on the exchange and went on to resolve properly.
+ * The record and the account were describing different trades.
+ *
+ * The clock existed to stop the book growing without bound. `MAX_OPEN_TRADES`
+ * does that now, and does it honestly: it declines to open a sixteenth
+ * position rather than inventing an exit for one of the fifteen.
+ *
+ * `MAX_LIFETIME_MS`, `MAX_TRADE_DURATION_DAYS`, `STAGNANT_AFTER` and
+ * `STAGNANT_PROGRESS` are all gone with it. `expired` survives as an outcome
+ * because the unjam script still produces one deliberately, by hand.
  */
-export const MAX_LIFETIME_MS: Record<Strategy, number> = {
-  scalping: 6 * 60 * 60_000,
-  day: 36 * 60 * 60_000,
-  swing: 10 * 24 * 60 * 60_000,
-};
 
-/** Bars fetched per resolve — must span the longest a trade can stay open. */
+/**
+ * Bars fetched per resolve.
+ *
+ * No longer derived from a lifetime, because there is no lifetime. It only has
+ * to reach back further than the gap since the last scan — five minutes in
+ * normal running — and every fill is persisted, so a bar already accounted for
+ * costs nothing to re-read. Two hundred is roughly seventeen hours of 5m bars
+ * and a month of 4h ones: enough to ride out an outage without asking the
+ * exchange for a trade's entire history on every pass.
+ */
 export const LOOKBACK: Record<Strategy, number> = {
-  scalping: Math.ceil(MAX_LIFETIME_MS.scalping / (5 * 60_000)) + 5, // 77
-  day: Math.ceil(MAX_LIFETIME_MS.day / (60 * 60_000)) + 5, // 41
-  swing: Math.ceil(MAX_LIFETIME_MS.swing / (4 * 60 * 60_000)) + 5, // 65
+  scalping: 200,
+  day: 200,
+  swing: 200,
 };
 
 export const winRate = (stats: TradeStats): number => {
@@ -813,54 +825,13 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
   };
 
   /*
-   * Timed out, or going nowhere.
+   * Nothing closes here any more.
    *
-   * The second is the newer of the two: a call that has spent `stagnantAfter` of
-   * its horizon without covering `stagnantProgress` of the distance to target is
-   * holding a slot it is not using. Closing it early frees the slot and stops
-   * the board showing a position the reader abandoned hours ago.
-   *
-   * Both close at the last price we can see rather than at a level, because
-   * neither level was reached — and both stay out of the win rate for the same
-   * reason, so this cannot flatter the record.
+   * This is where the horizon and the stagnation rule used to settle a trade at
+   * the last printed price. Both are gone: a position the exchange still holds
+   * is a position the record has to hold, and an invented exit put a number in
+   * the ledger that no account ever realised.
    */
-  /*
-   * The strategy's own horizon, under an absolute ceiling.
-   *
-   * `?? Infinity` is the whole point of the ceiling. A strategy missing from
-   * the table used to produce `age > undefined`, which is false — so the trade
-   * never timed out, never closed, and held one of fifteen slots permanently.
-   * Now the lookup can fail and the trade still ends.
-   */
-  const lifetime = Math.min(
-    MAX_LIFETIME_MS[trade.strategy] ?? Number.POSITIVE_INFINITY,
-    env.maxTradeDurationMs,
-  );
-  const stagnant =
-    !atBreakeven && age > lifetime * env.stagnantAfterFraction && bestProgress < env.stagnantProgress;
-
-  if (age > lifetime || stagnant) {
-    const last = set?.candles[set.candles.length - 1]?.close ?? trade.entry;
-    /*
-     * A laddered call that ran out of time with a rung already booked is a
-     * win, not an expiry. It reached a level it published and paid out there;
-     * the remainder simply stopped being interesting.
-     */
-    /*
-     * An expiry that filled nothing is `expired` and stays out of the rate. One
-     * that filled a rung has a real result — positive or negative — and is
-     * graded like any other close.
-     */
-    const expired = close(updated, 'expired', last, 'expiry');
-
-    return {
-      trade: updated,
-      closed: anyTargetHit(fills) ? { ...expired, outcome: grade(expired) } : expired,
-      ...(moved ? { movedToBreakeven: true } : {}),
-      ...(filled.length ? { filled } : {}),
-    };
-  }
-
   return {
     trade: updated,
     ...(moved ? { movedToBreakeven: true } : {}),

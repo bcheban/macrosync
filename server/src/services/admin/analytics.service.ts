@@ -12,7 +12,6 @@ import type { Locale } from '../telegram/preferences.service.js';
 import {
   INTERVAL,
   LOOKBACK,
-  MAX_LIFETIME_MS,
   loadHistory,
   loadStats,
   winRate,
@@ -123,6 +122,9 @@ export interface Analytics {
 const pct = (part: number, whole: number): number | null =>
   whole > 0 ? Math.round((part / whole) * 1000) / 10 : null;
 
+/** How long after a scratch the tape is still asked what happened next. */
+const WHAT_IF_HORIZON_MS = 7 * 24 * 60 * 60_000;
+
 /**
  * Point-biserial correlation between confluence score and outcome.
  *
@@ -218,7 +220,16 @@ async function replayAfterScratch(trade: ClosedTrade): Promise<BreakevenCase['af
   if (!set?.candles.length) return 'unknown';
 
   const closedAt = Date.parse(trade.closedAt);
-  const deadline = Date.parse(trade.openedAt) + MAX_LIFETIME_MS[strategy];
+  /*
+   * How far past the scratch to keep asking "and then what?".
+   *
+   * This used to be the strategy's own horizon, which no longer exists — a
+   * trade now runs until a level decides it. The question here is different
+   * anyway: not how long a trade may live, but how long after a breakeven exit
+   * the tape still says anything about that exit. A week is generous for all
+   * three setups and bounded, which the old value stopped being.
+   */
+  const deadline = Date.parse(trade.openedAt) + WHAT_IF_HORIZON_MS;
 
   const oldest = set.candles[0]?.openTime ?? Number.POSITIVE_INFINITY;
   // The scratch happened before the tape we can see begins.

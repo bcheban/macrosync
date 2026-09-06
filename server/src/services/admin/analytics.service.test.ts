@@ -140,15 +140,19 @@ describe('analytics', () => {
 
   it('stops replaying where the trade would have expired', async () => {
     /*
-     * A day trade lives 36 hours. Reaching the target on the fortieth bar is not
-     * a win the strategy would have held for, and counting it would credit the
-     * record with patience it does not have.
+     * The what-if asks what the tape did *after* a scratch, and it stops asking
+     * a week later. Trades themselves no longer expire — a position runs until
+     * a level decides it — but the question here is different: how long after a
+     * breakeven exit the tape still says anything about that exit.
+     *
+     * Reaching the target nine days on says nothing about the trade that was
+     * scratched, so it is not counted.
      */
-    const highs = Array.from({ length: 45 }, (_, i) => (i >= 40 ? 111 : 101));
+    const highs = Array.from({ length: 220 }, (_, i) => (i >= 200 ? 111 : 101));
     const lows = highs.map(() => 99);
     script = { BHUSDT: [highs, lows] };
 
-    tapeStart = Math.floor((Date.now() - 45 * 60 * 60_000) / 1000) * 1000;
+    tapeStart = Math.floor((Date.now() - 220 * 60 * 60_000) / 1000) * 1000;
     await seed([trade({ base: 'BH', outcome: 'breakeven' })], { breakeven: 1 });
 
     const { whatIf } = await analytics.buildAnalytics(0.75);
