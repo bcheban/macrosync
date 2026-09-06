@@ -256,6 +256,22 @@ async function attempt(html: string, options: SendOptions): Promise<SendResult &
 }
 
 /**
+ * Holds a call back until both clocks allow it, then stamps them.
+ *
+ * Telegram limits per chat and overall, and it counts edits alongside sends.
+ * One queue for both is the only way a burst of card rewrites cannot starve
+ * the alerts they are about.
+ */
+async function pace(chat: string): Promise<void> {
+  const wait = Math.max(nextGlobalSendAt, nextChatSendAt.get(chat) ?? 0) - Date.now();
+  if (wait > 0) await sleep(wait);
+
+  const now = Date.now();
+  nextGlobalSendAt = now + GLOBAL_GAP_MS;
+  nextChatSendAt.set(chat, now + env.alertsSendGapMs);
+}
+
+/**
  * Posts one message to the configured chat, retrying what is worth retrying.
  *
  * Never throws — a notifier that can take down the run it is attached to is
@@ -268,9 +284,7 @@ export async function sendTelegramMessage(html: string, options: SendOptions = {
 
   const chat = options.chatId ?? env.telegramChatId;
 
-  // Whichever clock is further out decides when this message may go.
-  const wait = Math.max(nextGlobalSendAt, nextChatSendAt.get(chat) ?? 0) - Date.now();
-  if (wait > 0) await sleep(wait);
+  await pace(chat);
 
   let retries = 0;
   let last: SendResult = { delivered: false, error: 'no attempt made' };
@@ -357,6 +371,43 @@ export async function answerCallbackQuery(id: string, text?: string, showAlert =
  * — live in the text rather than in the keyboard, so editing only the buttons
  * would leave a warning on screen that no longer applies.
  */
+/** One attempt. `retry` is Telegram's own backoff when it asks for one. */
+async function attemptEdit(
+  chatId: string,
+  messageId: number,
+  html: string,
+  keyboard?: InlineKeyboard,
+): Promise<{ ok: boolean; retryAfterMs?: number }> {
+  const response = await fetch(`${API}/bot${env.telegramBotToken}/editMessageText`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      message_id: messageId,
+      text: html,
+      parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true },
+      ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
+    }),
+  });
+
+  const body = (await response.json().catch(() => null)) as
+    | { ok?: boolean; description?: string; parameters?: { retry_after?: number } }
+    | null;
+
+  if (response.status === 429) {
+    return { ok: false, retryAfterMs: (body?.parameters?.retry_after ?? 1) * 1000 };
+  }
+
+  // A double tap edits nothing, and Telegram calls that an error. It is not.
+  if (body?.ok !== true && !body?.description?.includes('not modified')) {
+    console.warn('[telegram] message edit failed:', body?.description ?? response.status);
+    return { ok: false };
+  }
+
+  return { ok: true };
+}
+
 export async function editMessageText(
   chatId: string,
   messageId: number,
@@ -365,29 +416,29 @@ export async function editMessageText(
 ): Promise<boolean> {
   if (!telegramConfigured()) return false;
 
+  /*
+   * Edits count against the same limits as sends, and this had no pacing at
+   * all — no gap, no backoff, no reading of `retry_after`. One volatile candle
+   * progressing a dozen trades rewrites a card per trade per subscriber, back
+   * to back, and the moment Telegram answers 429 the edit returned false and
+   * the card silently stopped updating. Silence about a stale card is the worst
+   * available failure: it goes on showing a target as pending after it filled.
+   *
+   * Sharing the send clocks also means a burst of edits cannot starve the
+   * alerts they are about — one queue, one pace, whichever kind of call it is.
+   */
   try {
-    const response = await fetch(`${API}/bot${env.telegramBotToken}/editMessageText`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        message_id: messageId,
-        text: html,
-        parse_mode: 'HTML',
-        link_preview_options: { is_disabled: true },
-        ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
-      }),
-    });
+    await pace(chatId);
+    const first = await attemptEdit(chatId, messageId, html, keyboard);
+    if (first.ok || first.retryAfterMs === undefined) return first.ok;
 
-    const body = (await response.json().catch(() => null)) as { ok?: boolean; description?: string } | null;
-
-    // A double tap edits nothing, and Telegram calls that an error. It is not.
-    if (body?.ok !== true && !body?.description?.includes('not modified')) {
-      console.warn('[telegram] message edit failed:', body?.description ?? response.status);
-      return false;
-    }
-
-    return true;
+    /*
+     * Told to wait, so wait — once. A card is worth one retry and not a queue
+     * of them: the next scan is five minutes away and will rewrite it anyway.
+     */
+    await sleep(Math.min(first.retryAfterMs, 8_000));
+    await pace(chatId);
+    return (await attemptEdit(chatId, messageId, html, keyboard)).ok;
   } catch (error) {
     console.warn('[telegram] message edit errored:', (error as Error).message);
     return false;

@@ -240,13 +240,21 @@ export const env = {
    *
    * Sixty-three open positions is not a portfolio, it is an index fund bought
    * with leverage. Each one carries a full risk unit, so the account is exposed
-   * to sixty-three times the per-trade risk simultaneously — and a correlated
+   * to that many times the per-trade risk simultaneously — and a correlated
    * market takes them together, which is exactly when it matters.
    *
    * The engine keeps scanning; it simply stops opening. A setup rejected here
    * is not a setup missed so much as a setup the account had no room for.
+   *
+   * Thirty rather than fifteen since trades stopped expiring on a clock. A
+   * position now leaves only when a level decides it, so the book drains more
+   * slowly and fifteen slots filled and stayed full — the cap stopped bounding
+   * risk and started bounding publication. Thirty is still a real ceiling: at
+   * the per-trade risk this bot suggests it is well inside what an account can
+   * carry, and the number is the one thing standing between a correlated
+   * drawdown and an unbounded one.
    */
-  maxOpenTrades: positiveInt(process.env.MAX_OPEN_TRADES, 15),
+  maxOpenTrades: positiveInt(process.env.MAX_OPEN_TRADES, 30),
 
   /**
    * The rung that pulls the stop to entry.
