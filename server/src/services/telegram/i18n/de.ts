@@ -113,6 +113,9 @@ export const de: Dictionary = {
     `✅ <b>TP${level}</b> <code>${price}</code> — erreicht, ${share}% realisiert`,
   cardTpPending: (level, price, share) =>
     `⏳ <b>TP${level}</b> <code>${price}</code> — offen, ${share}%`,
+  cardStopUnmoved: '⚠️ <i>Stop noch auf dem ursprünglichen Niveau — er wandert auf den Einstieg, sobald TP2 füllt.</i>',
+  cardStopTrailed: (price) =>
+    `🔒 <i>Stop auf TP1 (${price}) nachgezogen — der Rest des Trades ist im Gewinn gesichert.</i>`,
   cardStopAtEntry: '🛡 <i>Stop auf Einstieg gezogen — dieser Trade kann nicht mehr verlieren.</i>',
   cardRunning: (share) => `<i>${share}% laufen weiter.</i>`,
   cardClosedWon: (pct) => `🏁 <b>Geschlossen ${pct}</b> <i>(positionsgewichtet)</i>`,

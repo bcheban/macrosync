@@ -123,6 +123,9 @@ export const uk: Dictionary = {
     `✅ <b>TP${level}</b> <code>${price}</code> — взято, зафіксовано ${share}%`,
   cardTpPending: (level, price, share) =>
     `⏳ <b>TP${level}</b> <code>${price}</code> — очікується, ${share}%`,
+  cardStopUnmoved: '⚠️ <i>Стоп ще на початковому рівні — переїде у вхід, коли спрацює TP2.</i>',
+  cardStopTrailed: (price) =>
+    `🔒 <i>Стоп підтягнуто до TP1 (${price}) — решта угоди вже в прибутку.</i>`,
   cardStopAtEntry: '🛡 <i>Стоп переставлено у вхід — ця угода вже не може піти в мінус.</i>',
   cardRunning: (share) => `<i>Ще працює ${share}% позиції.</i>`,
   cardClosedWon: (pct) => `🏁 <b>Закрито ${pct}</b> <i>(зважено за часткою позиції)</i>`,

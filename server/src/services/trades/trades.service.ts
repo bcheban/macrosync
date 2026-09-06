@@ -89,6 +89,15 @@ export interface ActiveTrade {
    */
   protectAfterRung?: number;
   /**
+   * When the stop was trailed up to TP1, if it has been.
+   *
+   * A moment rather than a flag, for the same reason `breakevenAt` is one: the
+   * resolver re-walks the tape from the trade's start on every run, and a stop
+   * that cannot say *when* it moved gets applied to bars that printed before it
+   * existed. That bug closed trades at breakeven using twelve-hour-old candles.
+   */
+  trailedAt?: string;
+  /**
    * The confluence score the call was published with, 0-100.
    *
    * Optional because trades opened before this field existed do not carry it,
@@ -666,14 +675,31 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
     .sort((a, b) => a - b)[0];
 
   const opened = trade.initialStopLoss ?? trade.stopLoss;
+  const firstRung = (trade.targets ?? [])[0]?.price;
 
-  /* Set by the persisted fills, and again by a rung that fills during this walk. */
+  /*
+   * The stop in force at a given moment, across all three stages.
+   *
+   *   1. the level the call was published with, through TP1
+   *   2. entry, once TP2 fills
+   *   3. TP1's price, once the trade is reaching for TP3
+   *
+   * Read newest first: a trailed stop outranks a breakeven one, which outranks
+   * the original. Each stage is remembered as a timestamp so a bar is only ever
+   * judged against the stop that actually existed when it printed.
+   */
   let protectedAt: number | undefined = protectFrom;
-  const stopAt = (when: number): number =>
-    protectedAt !== undefined && when >= protectedAt ? trade.entry : opened;
+  let trailedAt: number | undefined = trade.trailedAt ? Date.parse(trade.trailedAt) : undefined;
+
+  const stopAt = (when: number): number => {
+    if (trailedAt !== undefined && when >= trailedAt && firstRung !== undefined) return firstRung;
+    if (protectedAt !== undefined && when >= protectedAt) return trade.entry;
+    return opened;
+  };
 
   let stop = opened;
   let atBreakeven = Boolean(trade.breakevenAt);
+  let trailed = Boolean(trade.trailedAt);
   let moved = false;
   let fills: Fill[] = [...(trade.fills ?? [])];
   const filled: Fill[] = [];
@@ -722,7 +748,12 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
          * winners' column and quietly inflate the rate this whole exercise
          * exists to deflate.
          */
-        const graded = close(settled, 'loss', stop, atBreakeven ? 'breakeven' : 'stop');
+        const graded = close(
+          settled,
+          'loss',
+          stop,
+          trailed ? 'trail' : atBreakeven ? 'breakeven' : 'stop',
+        );
 
         return {
           trade: settled,
@@ -799,6 +830,34 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
       if (span !== 0) bestProgress = Math.max(bestProgress, (reach - trade.entry) / span);
 
       /*
+       * Stage three: the stop trails to TP1 as the trade reaches for TP3.
+       *
+       * Only once the second stage has run, so it can never jump the queue and
+       * protect a trade the market has not paid for yet. The trigger is a
+       * fraction of the way from TP2 to TP3 — "approaching" needed a number —
+       * and the effect is that the last of the position is closed in profit
+       * rather than at entry if the move gives up.
+       *
+       * Checked after the rungs, so a bar that fills TP2 and runs on can do
+       * both; checked after the stop, so a bar that did both is read as the
+       * stop, which is the reading that flatters least.
+       */
+      if (atBreakeven && !trailed && ladder.length >= 3) {
+        const second = ladder[1]?.price;
+        const third = ladder[2]?.price;
+
+        if (second !== undefined && third !== undefined && third !== second) {
+          const travelled = (reach - second) / (third - second);
+          if (travelled >= env.trailToTp1At) {
+            trailedAt = candle.openTime;
+            trailed = true;
+            stop = stopAt(candle.openTime);
+            moved = true;
+          }
+        }
+      }
+
+      /*
        * The old trigger, for trades that have no rung to fill. Checked after
        * the levels, so a bar cannot both save and settle itself.
        */
@@ -822,6 +881,9 @@ async function resolve(trade: ActiveTrade, now: number): Promise<Resolution> {
     stopLoss: stop,
     ...(fills.length ? { fills } : {}),
     ...(atBreakeven && !trade.breakevenAt ? { breakevenAt: new Date().toISOString() } : {}),
+    ...(trailedAt !== undefined && !trade.trailedAt
+      ? { trailedAt: new Date(trailedAt).toISOString() }
+      : {}),
   };
 
   /*

@@ -33,7 +33,13 @@ export interface Fill {
   price: number;
   share: number;
   at: string;
-  reason: 'target' | 'stop' | 'breakeven' | 'expiry';
+  /**
+   * `breakeven` is a stop sitting at entry; `trail` is one that has moved past
+   * it and is closing the remainder in profit. Separate because they say
+   * different things about the trade — one gave nothing back, the other kept
+   * something — and a reader deserves to be told which.
+   */
+  reason: 'target' | 'stop' | 'breakeven' | 'trail' | 'expiry';
 }
 
 /*

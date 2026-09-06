@@ -244,6 +244,13 @@ export interface ActiveSignal {
   ageMinutes: number;
   /** Set once the stop has been pulled to entry. */
   breakevenAt?: string;
+  /**
+   * Set once the stop has trailed past entry, up to TP1.
+   *
+   * The third stage of the stop. Where `breakevenAt` means the trade can no
+   * longer lose, this means the remainder is already holding a profit.
+   */
+  trailedAt?: string;
 }
 
 export interface Candle {

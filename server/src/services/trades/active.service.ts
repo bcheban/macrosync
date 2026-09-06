@@ -47,6 +47,8 @@ export interface ActiveSignal {
   ageMinutes: number;
   /** Set once the stop has been pulled to entry. */
   breakevenAt?: string;
+  /** Set once the stop has trailed past entry, up to TP1. */
+  trailedAt?: string;
 }
 
 export interface ActiveSignalsResponse {
@@ -103,6 +105,8 @@ function priceTrade(trade: ActiveTrade, price: number | undefined): ActiveSignal
     ...(trade.targets?.length ? { targets: trade.targets } : {}),
     ...(trade.fills?.length ? { fills: trade.fills } : {}),
     ...(trade.breakevenAt ? { breakevenAt: trade.breakevenAt } : {}),
+    // Stage three: the stop has moved past entry and now holds profit.
+    ...(trade.trailedAt ? { trailedAt: trade.trailedAt } : {}),
   };
 }
 

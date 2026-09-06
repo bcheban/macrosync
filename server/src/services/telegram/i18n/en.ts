@@ -139,6 +139,9 @@ export const en = {
     `✅ <b>TP${level}</b> <code>${price}</code> — hit, ${share}% booked`,
   cardTpPending: (level: number, price: string, share: number) =>
     `⏳ <b>TP${level}</b> <code>${price}</code> — pending, ${share}%`,
+  cardStopUnmoved: '⚠️ <i>Stop still at its original level — it moves to entry when TP2 fills.</i>',
+  cardStopTrailed: (price: string) =>
+    `🔒 <i>Stop trailed up to TP1 (${price}) — the rest of this trade is locked in profit.</i>`,
   cardStopAtEntry: '🛡 <i>Stop moved to entry — this trade can no longer lose.</i>',
   cardRunning: (share: number) => `<i>${share}% still running.</i>`,
   cardClosedWon: (pct: string) => `🏁 <b>Closed ${pct}</b> <i>(position-weighted)</i>`,

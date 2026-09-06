@@ -88,6 +88,8 @@ function progressBlock(
   fills: readonly Fill[],
   locale: Locale,
   closed?: ClosedTrade,
+  /** Where the stop actually is, which the fills alone cannot say. */
+  stopStage?: { protected: boolean; trailed: boolean },
 ): string {
   const t = dict(locale);
   const hit = new Map(fills.filter((fill) => fill.reason === 'target').map((fill) => [fill.level, fill]));
@@ -102,8 +104,18 @@ function progressBlock(
 
   const lines = [...rungs];
 
-  // Stated once a rung has filled, because that is when it becomes true.
-  if (anyTargetHit(fills)) lines.push(t.cardStopAtEntry);
+  /*
+   * What the stop is actually doing, in three states rather than one.
+   *
+   * This said "stop moved to entry" the moment any rung filled, which stopped
+   * being true when the second stage started waiting for TP2: a reader whose
+   * TP1 had filled was told the trade could no longer lose, while it was still
+   * riding its original stop. That is the wrong direction for a message about
+   * risk to be wrong in.
+   */
+  if (stopStage?.trailed) lines.push(t.cardStopTrailed(String(targets[0]?.price ?? '')));
+  else if (stopStage?.protected) lines.push(t.cardStopAtEntry);
+  else if (anyTargetHit(fills)) lines.push(t.cardStopUnmoved);
 
   if (closed) {
     const pct = `${closed.resultPct >= 0 ? '+' : ''}${closed.resultPct}%`;
@@ -141,7 +153,10 @@ export async function updateCards(
   let edited = 0;
 
   for (const card of cards) {
-    const block = progressBlock(targets, fills, card.locale, options.closed);
+    const block = progressBlock(targets, fills, card.locale, options.closed, {
+      protected: Boolean(trade.breakevenAt),
+      trailed: Boolean(trade.trailedAt),
+    });
     const ok = await editMessageText(
       card.chatId,
       card.messageId,

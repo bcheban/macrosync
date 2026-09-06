@@ -200,7 +200,17 @@ function TradeCard({
         </div>
         <div className="min-w-0">
           <div className="text-white/30">{t('signals.stop')}</div>
-          <div className={cn('tnum truncate font-mono', trade.breakevenAt ? 'text-bull/80' : 'text-white/50')}>
+          {/*
+            Three states, not two. A stop at entry is safe; a stop trailed to
+            TP1 is already holding money, and colouring them the same hid the
+            difference the whole staged design exists to create.
+          */}
+          <div
+            className={cn(
+              'tnum truncate font-mono',
+              trade.trailedAt ? 'text-bull' : trade.breakevenAt ? 'text-bull/80' : 'text-white/50',
+            )}
+          >
             {formatPrice(trade.stopLoss)}
           </div>
         </div>

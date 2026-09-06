@@ -733,6 +733,53 @@ describe('trade ledger', () => {
     assert.equal(open, 1, 'it keeps its slot until a level decides it');
   });
 
+  it('trails the stop to TP1 as the trade reaches for TP3', async () => {
+    /*
+     * The third stage, and the point of it.
+     *
+     * Entry 100 risking 5, so the rungs are 105 / 107.5 / 112.5. Bar 1 sweeps
+     * TP1 and TP2 — the stop moves to entry — and runs to 110, which is the
+     * whole distance from TP2 to TP3, so the stop trails to TP1 at 105. Bar 2
+     * collapses to 99.
+     *
+     * Without the trail the last 30% closes at entry for nothing. With it, that
+     * 30% closes at 105 — a full risk unit of profit that the pullback would
+     * otherwise have taken back.
+     */
+    script = { TRAILUSDT: [[110, 101], [101, 99]] };
+
+    await trades.openTrade(signal('TRAIL', 'buy', 100, 95, 110));
+    const { closed } = await trades.evaluateTrades();
+
+    assert.equal(closed[0]?.outcome, 'win');
+    const last = closed[0]?.fills?.at(-1);
+    assert.equal(last?.reason, 'trail', 'closed by a stop that had moved into profit');
+    assert.equal(last?.price, 105, 'at TP1, not at entry');
+
+    /*
+     * 25% at +1R, 45% at +1.5R, and the last 30% at +1R rather than at zero.
+     * `0.25 + 0.675 + 0.30 = 1.225R`, against 0.925R under the old rule.
+     */
+    assert.equal(closed[0]?.resultPct, 6.13);
+  });
+
+  it('does not trail before the trade has paid for the stop at entry', async () => {
+    /*
+     * Stage three may never jump the queue. A trade that has only filled TP1
+     * still rides its original stop — that is stage one, and the whole reason
+     * the second stage waits for TP2 is to let the trade breathe through
+     * exactly this kind of move.
+     */
+    script = { EARLYUSDT: [[106, 101], [101, 94]] };
+
+    await trades.openTrade(signal('EARLY', 'buy', 100, 95, 110));
+    const { closed } = await trades.evaluateTrades();
+
+    const last = closed[0]?.fills?.at(-1);
+    assert.equal(last?.reason, 'stop', 'the original stop, not a trailed one');
+    assert.equal(last?.price, 95);
+  });
+
   it('reports a win rate over decided trades only', async () => {
     assert.equal(trades.winRate({ wins: 3, losses: 1, expired: 0, superseded: 0, voided: 0, breakeven: 0, byStrategy: {}, updatedAt: '' }), 75);
     // Expired and superseded calls must not dilute the denominator.

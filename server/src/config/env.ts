@@ -265,6 +265,19 @@ export const env = {
   breakevenAfterRung: positiveInt(process.env.BREAKEVEN_AFTER_RUNG, 2),
 
   /**
+   * How far from TP2 towards TP3 the price must travel before the stop trails
+   * up to TP1.
+   *
+   * "Approaching TP3" needed a number, and this is it: half the distance
+   * between the two rungs, by default. Earlier and the last third of the
+   * position is stopped out by the same noise the second stage exists to
+   * tolerate; later and there is nothing left to protect by the time it fires.
+   *
+   * Set to 1 to disable the stage — the stop then simply never leaves entry.
+   */
+  trailToTp1At: fraction(process.env.TRAIL_TO_TP1_AT, 0.5),
+
+  /**
    * How long one ticker stays quiet after a call is accepted for it.
    *
    * Across every strategy, deliberately. The same chart confirming on the 5m,
