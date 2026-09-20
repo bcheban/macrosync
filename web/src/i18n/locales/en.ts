@@ -294,7 +294,7 @@ export const en = {
     leverage:
       'The highest leverage at which the liquidation price still sits comfortably beyond the stop — computed from this contract’s own maintenance margin, which varies from 0.04% to 5% across the board. It says liquidation will not be what closes the trade. It says nothing about whether the position is sensibly sized.',
     liveTrades:
-      'The trades behind the Telegram alerts. Each one opened when a call was confirmed and closes when the ladder finishes or the stop is hit. Any filled rung makes it a win, however far the rest ran. Tap a row to chart that asset.',
+      'The trades behind the Telegram alerts. Each opened when a call was confirmed and stays open until price reaches a target or the stop — there is no timer, so a position waits as long as a limit order would. Up to 30 run at once. Tap a row to chart that asset.',
     signalsLabel: 'What are strategy signals?',
     signals:
       'Each card is one asset on one timeframe. Indicators are computed from live MEXC candles — nothing is predicted, they only describe what the tape has already done. If a macro release lands inside the trade’s horizon, the card says so.',
@@ -303,7 +303,7 @@ export const en = {
       '0–100: how much four independent reads agree — trend (EMA), momentum (MACD), stretch (RSI) and participation (volume). High means they point the same way, not that the trade will work.',
     levelsLabel: 'Entry, SL and the TP ladder',
     levels:
-      'Entry is the current price. The SL is a multiple of ATR, so a volatile asset gets a wider stop rather than a fixed percentage. Targets are multiples of that risk: TP1 at 1R takes 25% of the position, TP2 at 1.5R takes 45%, TP3 at 2.5R takes the rest. The stop moves to entry after TP2, not after TP1 — so a trade that takes the first target and reverses can still lose, which is the price of letting the winners run.',
+      'Entry is the current price. The SL is a multiple of ATR, so a volatile asset gets a wider stop rather than a fixed percentage. Targets are multiples of that risk, and the stop climbs in three stages: TP1 books 25% and the stop does not move, TP2 books 45% and the stop goes to entry, TP3 books the last 30% with the stop trailed up to the TP1 price on the way. Holding the stop through TP1 is deliberate — protecting there capped almost every winner at a quarter of a risk unit while every loser still cost a whole one.',
     atrLabel: 'What is ATR?',
     atr: 'Average True Range: how far this asset typically travels in one bar, as a percent of price. It is the volatility budget a stop has to respect.',
     rsiLabel: 'What is RSI?',

@@ -1,3 +1,4 @@
+import { activeStrategies } from '../signal.engine.js';
 import { env } from '../../config/env.js';
 import { assetBySymbol } from '../../data/assets.js';
 import type { Strategy } from '../../types/domain.js';
@@ -62,6 +63,8 @@ export interface ActiveSignalsResponse {
    * sixty positions look identical to a book of three.
    */
   exposure: { open: number; limit: number; floatingR: number; priced: number };
+  /** The bands and strategies this deployment publishes. */
+  policy: { strategies: Strategy[]; confidenceBands: string[] };
   winRate: number;
   decided: number;
   updatedAt: string;
@@ -165,6 +168,18 @@ export async function getActiveSignals(): Promise<ActiveSignalsResponse> {
     { r: 0, priced: 0 },
   );
 
+  /*
+   * What this deployment will and will not publish.
+   *
+   * Sent with the board because the interface has to hide what the engine
+   * refuses, and the alternative is a second copy of the rule in React that
+   * parts company with this one the first time an environment variable moves.
+   */
+  const policy = {
+    strategies: activeStrategies(),
+    confidenceBands: env.confidenceBands,
+  };
+
   const exposure = {
     /** Open positions, each carrying one risk unit. */
     open: signals.length,
@@ -181,6 +196,7 @@ export async function getActiveSignals(): Promise<ActiveSignalsResponse> {
     winRate: winRate(stats),
     decided: stats.wins + stats.losses,
     exposure,
+    policy,
     updatedAt: new Date().toISOString(),
   };
 }

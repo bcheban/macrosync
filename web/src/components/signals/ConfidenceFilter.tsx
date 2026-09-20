@@ -1,6 +1,7 @@
+import { usePolicy } from '@/hooks/usePolicy';
 import { useTranslation } from 'react-i18next';
 import { InfoTip } from '@/components/ui/InfoTip';
-import { BUCKET_IDS, BUCKET_LABEL, recordByBucket, type Bucket } from '@/lib/confidence';
+import { BUCKET_LABEL, recordByBucket, type Bucket } from '@/lib/confidence';
 import { cn } from '@/lib/cn';
 import { RISK_PER_TRADE_USD, simulatedUsd } from '@/lib/money';
 import type { JournalTrade } from '@/types/domain';
@@ -35,7 +36,17 @@ export function ConfidenceFilter({
   className?: string;
 }) {
   const { t } = useTranslation();
-  const rows = recordByBucket(trades);
+
+  /*
+   * Only the bands this deployment publishes.
+   *
+   * Two are blocked at the engine, so their chips filter a board that can
+   * never hold them and their rows in the heat map are permanently blank.
+   * A column of dashes reads as missing data rather than as a band nobody
+   * trades, which is the opposite of what it means.
+   */
+  const { bands } = usePolicy();
+  const rows = recordByBucket(trades).filter((row) => bands.includes(row.bucket));
   const settled = rows.some((row) => row.rate !== null);
 
   return (
@@ -59,7 +70,7 @@ export function ConfidenceFilter({
           className="flex flex-wrap items-center gap-1"
         >
           <Chip active={value === null} onClick={() => onChange(null)} label={t('common.all')} />
-          {BUCKET_IDS.map((bucket) => (
+          {bands.map((bucket) => (
             <Chip
               key={bucket}
               active={value === bucket}

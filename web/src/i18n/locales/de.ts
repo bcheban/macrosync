@@ -298,7 +298,7 @@ export const de: Translation = {
     leverage:
       'Der höchste Hebel, bei dem der Liquidationspreis noch deutlich hinter dem Stop liegt — berechnet aus der Erhaltungsmarge dieses Kontrakts, die auf der Börse zwischen 0,04% und 5% schwankt. Er sagt, dass nicht die Liquidation den Trade beendet. Über eine sinnvolle Positionsgröße sagt er nichts.',
     liveTrades:
-      'Die Trades hinter den Telegram-Meldungen. Jeder wurde eröffnet, als ein Signal bestätigt war, und schließt, wenn der Kurs sein Ziel oder seinen Stop erreicht — die Trefferquote zählt nur diese beiden Ausgänge. Auf eine Karte tippen, um das Asset zu charten.',
+      'Die Trades hinter den Telegram-Meldungen. Jeder wurde eröffnet, als ein Signal bestätigt war, und bleibt offen, bis der Kurs ein Ziel oder den Stop erreicht — es gibt keinen Timer, eine Position wartet so lange wie eine Limit-Order. Bis zu 30 laufen gleichzeitig. Auf eine Karte tippen, um das Asset zu charten.',
     signalsLabel: 'Was sind Strategie-Signale?',
     signals:
       'Jede Karte ist ein Asset in einem Zeitfenster. Die Indikatoren stammen aus echten MEXC-Kerzen — nichts wird vorhergesagt, sie beschreiben nur, was der Markt bereits getan hat. Fällt eine Makro-Veröffentlichung in den Horizont des Trades, steht das auf der Karte.',

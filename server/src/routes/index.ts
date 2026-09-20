@@ -1,3 +1,4 @@
+import { activeStrategies } from '../services/signal.engine.js';
 import { Router, type Request, type Response } from 'express';
 import { env } from '../config/env.js';
 import { round } from '../utils/indicators.js';
@@ -147,6 +148,15 @@ api.get('/strategies', (_req, res) => {
       timeframe,
       rewardRatio,
       stopAtr,
+      /*
+       * Whether this deployment publishes it at all.
+       *
+       * Reported rather than omitted: a strategy that exists and is switched
+       * off is a different fact from one that was never built, and a reader
+       * comparing the site against the documentation deserves to tell them
+       * apart.
+       */
+      enabled: activeStrategies().includes(strategy),
     })),
   });
 });

@@ -290,16 +290,45 @@ export const en = {
   guideStrategiesBody: [
     '📖 <b>Which strategy is which</b>',
     '',
-    '⚡ <b>Scalping</b> — 5-minute bars, 15 minutes to 2 hours.',
-    'Fast, frequent, and it wants your attention. Wrong for anyone who cannot watch a screen.',
+    '📅 <b>Day trading</b> — hourly bars.',
+    'A handful of calls a day, each with room to breathe.',
     '',
-    '📅 <b>Day trading</b> — hourly bars, 2 to 12 hours.',
-    'The middle setting: a handful of calls a day, each with room to breathe.',
+    '🌊 <b>Swing</b> — 4-hour bars.',
+    'Few calls, wide stops, long waits. The one that suits a job.',
     '',
-    '🌊 <b>Swing</b> — 4-hour bars, 1 to 4 days.',
-    'Few calls, wide stops, and long waits. The one that suits a job.',
+    '⚡ <b>Scalping is switched off.</b>',
+    'Not because it lost more often, but because it paid more to trade. A fee costs the same on every position, and a scalp\u2019s stop is the tightest of the three \u2014 so the same commission eats several times more of its edge. On a record already measured near zero, that is the one to stop.',
     '',
-    '<i>Turn off what you cannot trade. A scalp you see three hours late is not a scalp.</i>',
+    '<i>Day trading and swing are what the bot publishes today. Both aim for a wider reward against the same risk.</i>',
+  ].join('\n'),
+
+  /**
+   * How a call is managed once it is open.
+   *
+   * The part readers ask about most, and the part that changed most: the stop
+   * now climbs in three stages and nothing closes on a timer. Written as what
+   * happens rather than as settings, because a reader wants to know what their
+   * position will do, not which variables produced it.
+   */
+  guideLifecycle: '🎯 How a trade is managed',
+  guideLifecycleBody: [
+    '🎯 <b>What happens after you are in</b>',
+    '',
+    'Every call carries three targets and one stop, and the stop climbs as the trade pays for itself.',
+    '',
+    '<b>TP1</b> — books <b>25%</b>. The stop does <b>not</b> move.',
+    'This is the change people notice. Protecting here made almost every winner worth a quarter of a risk unit while every loser still cost a whole one. The trade needs room to breathe through the pullback that follows a first target.',
+    '',
+    '<b>TP2</b> — books <b>45%</b>. The stop moves to your <b>entry</b>.',
+    'Seventy percent of the position is now closed and the rest cannot cost you anything.',
+    '',
+    '<b>TP3</b> — books the last <b>30%</b>.',
+    'On the way there the stop trails up to the TP1 price, so the tail closes in profit rather than at entry if the move gives up.',
+    '',
+    '⏳ <b>Nothing closes on a clock.</b>',
+    'There are no 24-hour timers any more. A call stays open until price reaches a target or the stop — the same thing a limit order on the exchange would do. The record and your account now describe the same trade.',
+    '',
+    '📊 Up to <b>30</b> calls may be open at once. Past that the engine keeps scanning and stops opening, rather than inventing an exit for something already running.',
   ].join('\n'),
 
   guideRiskBody: [

@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { usePolicy } from '@/hooks/usePolicy';
 import { m } from 'framer-motion';
 import { Gauge, Hourglass, Zap } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -32,6 +34,26 @@ export function StrategyTabs({ value, onChange }: StrategyTabsProps) {
   const { t } = useTranslation();
 
   /*
+   * Only the strategies this deployment publishes.
+   *
+   * Scalping is switched off at the engine, so a tab for it would open an
+   * empty board and read as a fault rather than a decision. Asked rather than
+   * hard-coded: the switch is an environment variable, and a second copy of it
+   * here would be wrong the moment somebody turned scalping back on.
+   */
+  const { strategies } = usePolicy();
+  const tabs = STRATEGY_TABS.filter((tab) => strategies.includes(tab.key));
+
+  /*
+   * A selection that is no longer offered has to go somewhere. Left alone the
+   * board would keep polling a strategy with no tab lit, which looks like a
+   * bug in the tab strip rather than a strategy that was retired.
+   */
+  useEffect(() => {
+    if (tabs.length && !tabs.some((tab) => tab.key === value)) onChange(tabs[0]!.key);
+  }, [tabs, value, onChange]);
+
+  /*
    * The strip scrolls horizontally rather than shrinking: "Внутрішньоденна" is
    * twice the width of "Day Trading", and truncating a tab label would hide
    * which strategy is selected. Snap points keep the scroll feeling deliberate.
@@ -42,7 +64,7 @@ export function StrategyTabs({ value, onChange }: StrategyTabsProps) {
       aria-label={t('signals.strategyAria')}
       className="glass-soft no-scrollbar flex snap-x snap-mandatory items-center gap-1 overflow-x-auto rounded-2xl p-1"
     >
-      {STRATEGY_TABS.map(({ key, timeframe, icon: Icon }) => {
+      {tabs.map(({ key, timeframe, icon: Icon }) => {
         const active = key === value;
         return (
           <button

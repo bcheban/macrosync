@@ -458,12 +458,17 @@ const glossaryLines = (specs: CommandSpec[], locale: Locale): string[] => {
  * does not need the strategy comparison in the same breath, and a wall of text
  * is where people stop reading — which costs more than the extra tap.
  */
-const GUIDE_TOPICS = ['strategies', 'risk', 'leverage'] as const;
+const GUIDE_TOPICS = ['lifecycle', 'strategies', 'risk', 'leverage'] as const;
 type GuideTopic = (typeof GUIDE_TOPICS)[number];
 
 const guideKeyboard = (locale: Locale): InlineKeyboard => {
   const t = dict(locale);
   return [
+    /*
+     * First, because it is what readers ask about most and what changed most:
+     * the stop climbs in three stages and nothing closes on a timer.
+     */
+    [{ text: t.guideLifecycle, callback_data: 'guide:lifecycle' }],
     [{ text: t.guideStrategies, callback_data: 'guide:strategies' }],
     [{ text: t.guideRisk, callback_data: 'guide:risk' }],
     [{ text: t.guideLeverage, callback_data: 'guide:leverage' }],
@@ -477,7 +482,12 @@ const guideMenu = (locale: Locale): string => {
 
 const guideBody = (locale: Locale, topic: GuideTopic): string => {
   const t = dict(locale);
-  return { strategies: t.guideStrategiesBody, risk: t.guideRiskBody, leverage: t.guideLeverageBody }[topic];
+  return {
+    lifecycle: t.guideLifecycleBody,
+    strategies: t.guideStrategiesBody,
+    risk: t.guideRiskBody,
+    leverage: t.guideLeverageBody,
+  }[topic];
 };
 
 const LANGUAGE_KEYBOARD: InlineKeyboard = [

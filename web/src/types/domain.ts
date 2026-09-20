@@ -284,10 +284,24 @@ export interface Exposure {
   priced: number;
 }
 
+/**
+ * What the engine will and will not publish.
+ *
+ * Served rather than mirrored, because a copy of this rule in React parts
+ * company with the real one the first time an environment variable moves — and
+ * the visible failure is a strategy the engine publishes that the site has no
+ * tab for.
+ */
+export interface Policy {
+  strategies: Strategy[];
+  confidenceBands: string[];
+}
+
 export interface ActiveSignalsResponse {
   signals: ActiveSignal[];
   counts: Record<string, number>;
   exposure?: Exposure;
+  policy?: Policy;
   winRate: number;
   /** Trades that reached a level — the denominator behind the win rate. */
   decided: number;
