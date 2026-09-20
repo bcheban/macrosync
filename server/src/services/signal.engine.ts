@@ -165,6 +165,17 @@ export const STRATEGY_PROFILES: Record<Strategy, StrategyProfile> = {
 
 export const STRATEGIES = Object.keys(STRATEGY_PROFILES) as Strategy[];
 
+/**
+ * The strategies this deployment publishes, which is not always all of them.
+ *
+ * Scanning a strategy nobody will publish costs a candle fetch per symbol and
+ * produces cards the engine is going to throw away, so the filter belongs here
+ * rather than at the emitter: a disabled strategy is not computed, not shown on
+ * the site, not written to the ledger and not counted against the open cap.
+ */
+export const activeStrategies = (): Strategy[] =>
+  STRATEGIES.filter((name) => env.enabledStrategies.includes(name));
+
 export const isStrategy = (value: string): value is Strategy =>
   (STRATEGIES as string[]).includes(value);
 
@@ -422,7 +433,13 @@ export async function getSignals(
   strategy?: Strategy,
   symbols: string[] = [...env.symbols],
 ): Promise<Signal[]> {
-  const profiles = strategy ? [STRATEGY_PROFILES[strategy]] : STRATEGIES.map((key) => STRATEGY_PROFILES[key]);
+  /*
+   * An explicitly requested strategy still has to be one this deployment
+   * publishes: `/api/signals?strategy=scalping` must not be a way around the
+   * switch that turned it off.
+   */
+  const wanted = strategy ? [strategy].filter((name) => activeStrategies().includes(name)) : activeStrategies();
+  const profiles = wanted.map((key) => STRATEGY_PROFILES[key]);
 
   const pairs = profiles.flatMap((profile) => symbols.map((symbol) => ({ profile, symbol })));
 

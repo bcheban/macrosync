@@ -375,6 +375,20 @@ export function formatClose(trade: ClosedTrade, stats: TradeStats, locale: Local
  * messages intended — and let each strategy rank its calls in isolation.
  */
 /**
+ * Whether a reading falls in a band this deployment publishes.
+ *
+ * A score below the lowest band belongs to none of them and is blocked with
+ * the rest: the bands are the only cut the record can speak to, so a call the
+ * analysis cannot place is one nobody could later defend. An empty allowlist
+ * turns the filter off entirely.
+ */
+const bandAllowed = (confidence: number): boolean => {
+  if (!env.confidenceBands.length) return true;
+  const band = bucketOf(confidence);
+  return band !== null && env.confidenceBands.includes(band);
+};
+
+/**
  * Answers the watches this scan resolved.
  *
  * Sent per chat rather than broadcast, and deliberately without consulting the
@@ -456,6 +470,21 @@ export async function notifySignals(signals: Signal[], event: MacroEvent | undef
         state[key] = { ...previous, verdict: 'wait' };
         dirty = true;
       }
+      continue;
+    }
+
+    /*
+     * Bands this deployment does not publish.
+     *
+     * Checked before the cooldown so a blocked band cannot consume a slot
+     * or leave state behind — a signal refused here is one the bot never
+     * had an opinion about, and the next scan should treat it the same.
+     *
+     * It costs nothing downstream: nothing is formatted, nothing is sent,
+     * `openTrade` is never reached, so it cannot occupy a slot in the book.
+     */
+    if (!bandAllowed(signal.confidence)) {
+      blockedByRate.band = (blockedByRate.band ?? 0) + 1;
       continue;
     }
 

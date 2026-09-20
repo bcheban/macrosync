@@ -309,6 +309,41 @@ export const env = {
   signalsPerHour: positiveInt(process.env.SIGNALS_PER_HOUR, 4),
 
   /**
+   * Confidence bands the engine may publish.
+   *
+   * Back by request after being removed once. The honest caveat stands and is
+   * worth keeping in front of whoever reads this next: the bands were chosen
+   * on six to seventeen settled trades each, which is not enough to conclude
+   * anything about a band, and the record has since been reset — so there is
+   * currently no evidence for or against any of them at all.
+   *
+   * What it is good for regardless is cutting the publication rate, and at an
+   * edge measured near zero every trade not taken is a fee not paid. Empty the
+   * list to publish every band.
+   */
+  confidenceBands: (process.env.CONFIDENCE_BANDS ?? '60-70,80-90')
+    .split(',')
+    .map((band) => band.trim())
+    .filter(Boolean),
+
+  /**
+   * Strategies the engine may publish at all.
+   *
+   * Scalping is out by default. Its stops are the tightest of the three, and
+   * cost in R scales as `fills x feeRate / stopFraction` — so the same fee eats
+   * several times more of a scalp's edge than of a swing's. On a strategy whose
+   * gross edge was already inside its costs, that is the one to stop first.
+   *
+   * Filtered before anything is computed rather than before it is sent: a
+   * dropped strategy costs no candles, reaches no database, and never occupies
+   * a slot in the book.
+   */
+  enabledStrategies: (process.env.ENABLED_STRATEGIES ?? 'day,swing')
+    .split(',')
+    .map((name) => name.trim().toLowerCase())
+    .filter(Boolean),
+
+  /**
    * Which currencies' macro prints reach a reader.
    *
    * The dollar's, and by default only the dollar's. Crypto is priced in dollars

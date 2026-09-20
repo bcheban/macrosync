@@ -193,36 +193,33 @@ describe('alert dispatch', () => {
     assert.equal(posted.length, 0);
   });
 
-  it('publishes a call the confidence filter used to swallow', async () => {
+  it('publishes only the confidence bands this deployment allows', async () => {
     /*
-     * There was a band filter here, and it was a mistake.
+     * 60-70 and 80-90 pass; 70-80 and 90+ do not, and nor does a reading below
+     * every band — the bands are the only cut the record can speak to, so a
+     * call the analysis cannot place is one nobody could later defend.
      *
-     * It dropped anything outside 60-70 and 80-90 on the strength of six to
-     * seventeen settled trades per band — nowhere near enough to conclude
-     * anything about a band. The silence was the worse half: a call in a
-     * blocked band reached nobody and said nothing, so from the outside it was
-     * indistinguishable from the engine having found nothing at all.
-     *
-     * Every reading now goes out. 52 belongs to no band and would have been
-     * refused for that alone; 75 sat in a band the filter blocked outright.
+     * The caveat is worth carrying next to the test rather than only in the
+     * commit: the bands were picked on a handful of trades each, and the record
+     * has since been reset, so there is currently no evidence for or against
+     * any of them. What the filter reliably does is cut the publication rate,
+     * which on an edge measured near zero is a fee not paid.
      */
     const run = await alerts.notifySignals(
-      // Two, because the per-run cap is 2 in this suite — a third would be
-      // dropped by the cap and prove nothing about the filter. Tickers unused
-      // elsewhere in the file, so the 12h per-asset cooldown cannot interfere.
-      [signal('WEAK', 'buy', 52), signal('MIDD', 'buy', 75)],
+      // Tickers unused elsewhere in this file, so the 12h cooldown cannot interfere.
+      [signal('BLOKA', 'buy', 75), signal('ALLOW', 'buy', 84)],
       undefined,
     );
 
-    assert.equal(run.sent, 2, 'nothing is hidden for being the wrong shade of confident');
+    assert.equal(run.sent, 1);
+    assert.match(posted[0] ?? '', /ALLOW/);
+    assert.ok(!posted.some((message) => message.includes('BLOKA')), '70-80 is held back');
+
+    // Blocked, not dropped: `dropped` means the per-run cap, and conflating the
+    // two would hide a filter cutting far more than intended.
     assert.equal(run.dropped, 0);
-    for (const base of ['WEAK', 'MIDD']) {
-      assert.ok(
-        posted.some((message) => message.includes(base)),
-        `${base} reached the channel`,
-      );
-    }
   });
+
 
 
   it('sends the highest-conviction calls when the run is capped', async () => {

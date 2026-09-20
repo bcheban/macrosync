@@ -34,6 +34,13 @@ const PATTERNS = [
   'analytics:snapshot',
   'telegram:daily-report',
   'telegram:delivery',
+  /*
+   * The rate limiter's memory. Added after this list was written, and it
+   * has to go with the rest: a reset that leaves it behind starts the new
+   * record with a dozen assets already silenced for twelve hours by calls
+   * that no longer exist anywhere.
+   */
+  'trades:cooldown',
   'cron:last',
 ];
 

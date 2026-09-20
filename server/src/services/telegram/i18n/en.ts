@@ -134,6 +134,8 @@ export const en = {
    */
   replyHit: (ticker: string, tps: string, share: number) =>
     `✅ <b>$${ticker}</b> hit ${tps}! Secured ${share}%.`,
+  replyStopWaiting: (rung: number) =>
+    `⚠️ Stop still at its original level — it moves to entry after TP${rung}.`,
   replyBreakeven: '🛡 Stop-loss moved to breakeven.',
   cardTpHit: (level: number, price: string, share: number) =>
     `✅ <b>TP${level}</b> <code>${price}</code> — hit, ${share}% booked`,

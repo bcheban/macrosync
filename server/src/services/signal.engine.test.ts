@@ -112,7 +112,18 @@ describe('signal levels', () => {
   it('still shows prices on a card it refuses to trade', async () => {
     series = violent();
 
+    /*
+     * About the engine's arithmetic, not about publication policy. Scalping is
+     * switched off for this deployment, and `getSignals` honours that — so the
+     * strategy is enabled here to reach the code path under test rather than
+     * the filter in front of it.
+     */
+    const { env } = await import('../config/env.js');
+    const enabled = env.enabledStrategies;
+    (env as { enabledStrategies: string[] }).enabledStrategies = ['scalping'];
+
     const [refused] = await getSignals('scalping', ['TIGHTUSDT']);
+    (env as { enabledStrategies: string[] }).enabledStrategies = enabled;
 
     /*
      * Refusing the trade is not the end of it: the card still renders a
@@ -167,5 +178,36 @@ describe('signal levels', () => {
     // The band is decoration on a card, and must still be made of prices.
     assert.ok(signal.stopLoss > 0, `stop ${signal.stopLoss} is not a price`);
     assert.ok(signal.takeProfit > 0);
+  });
+});
+
+/**
+ * Which strategies a deployment publishes at all.
+ *
+ * Scalping runs the tightest stops of the three, and cost in R scales as
+ * `fills x feeRate / stopFraction` — so the same exchange fee eats several
+ * times more of a scalp's edge than of a swing's. On a strategy whose gross
+ * edge was already inside its costs, that is the one to stop first.
+ */
+describe('the strategy switch', () => {
+  it('computes nothing for a strategy this deployment does not publish', async () => {
+    const { env } = await import('../config/env.js');
+    const { activeStrategies } = await import('./signal.engine.js');
+
+    assert.ok(!activeStrategies().includes('scalping'), 'scalping is off by default');
+    assert.ok(activeStrategies().includes('day'));
+    assert.ok(activeStrategies().includes('swing'));
+    assert.deepEqual(env.enabledStrategies, ['day', 'swing']);
+  });
+
+  it('cannot be reached around by naming the strategy in a request', async () => {
+    /*
+     * `/api/signals?strategy=scalping` must not be a way past the switch that
+     * turned it off. A filter with a documented bypass is not a filter.
+     */
+    series = calm();
+    const asked = await getSignals('scalping', ['TIGHTUSDT']);
+
+    assert.equal(asked.length, 0);
   });
 });

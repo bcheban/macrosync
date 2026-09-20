@@ -221,8 +221,24 @@ export async function announceFills(
     .filter((target) => fresh.includes(target.level))
     .reduce((sum, target) => sum + target.share, 0);
 
-  /* The stop moves on the first rung, so it is news exactly once. */
-  const protectedNow = fresh.includes(Math.min(...targets.map((target) => target.level)));
+  /*
+   * Which rung actually moves the stop, and whether this batch is the one.
+   *
+   * This read the *first* rung, on the reasoning that the stop moved there.
+   * It stopped moving there when `BREAKEVEN_AFTER_RUNG` became 2, and the ping
+   * was never updated — so every TP1 announced "stop moved to breakeven" while
+   * the trade was still riding its published stop. A reader acting on that
+   * believed a position was risk-free when it was not, which is the worst
+   * direction for a message about risk to be wrong in.
+   *
+   * `announced` is the record of what has already been pinged, so a level in
+   * it means an earlier batch covered that rung: the stop can only become news
+   * on the batch that first reaches the protecting one.
+   */
+  const protectAfter = trade.protectAfterRung ?? 1;
+  const alreadyProtected = doc.announced.some((level) => level >= protectAfter);
+  const protectedNow = !alreadyProtected && fresh.some((level) => level >= protectAfter);
+  const stillOriginal = !alreadyProtected && !protectedNow;
   const ticker = displayTicker(trade.base);
 
   let sent = 0;
@@ -242,7 +258,12 @@ export async function announceFills(
     const t = dict(card.locale);
     const body = [
       t.replyHit(ticker, fresh.map((level) => `TP${level}`).join(' + '), Math.round(share * 100)),
-      ...(protectedNow ? [t.replyBreakeven] : []),
+      /*
+       * Three states rather than two. A rung that does not move the stop still
+       * has something to say — that the stop has *not* moved — and saying
+       * nothing left the reader to assume the old behaviour.
+       */
+      ...(protectedNow ? [t.replyBreakeven] : stillOriginal ? [t.replyStopWaiting(protectAfter)] : []),
     ].join(' ');
 
     const result = await sendTelegramMessage(body, { chatId: card.chatId, replyTo: card.messageId });

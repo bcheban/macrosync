@@ -108,6 +108,8 @@ export const de: Dictionary = {
     `👁 <b>${base}</b> — das beobachtete ${strategy}-Setup ist jetzt ein Call.`,
   replyHit: (ticker, tps, share) =>
     `✅ <b>$${ticker}</b> hat ${tps} erreicht! ${share}% realisiert.`,
+  replyStopWaiting: (rung) =>
+    `⚠️ Stop noch auf dem ursprünglichen Niveau — er wandert nach TP${rung} auf den Einstieg.`,
   replyBreakeven: '🛡 Stop-Loss auf Einstieg gezogen.',
   cardTpHit: (level, price, share) =>
     `✅ <b>TP${level}</b> <code>${price}</code> — erreicht, ${share}% realisiert`,

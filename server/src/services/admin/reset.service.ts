@@ -50,6 +50,13 @@ const LEDGER_PATTERNS = [
   'analytics:snapshot',
   'telegram:delivery',
   'radar:cursor',
+  /*
+   * The rate limiter's memory. Added after this list was written, and it
+   * has to go with the rest: a reset that leaves it behind starts the new
+   * record with a dozen assets already silenced for twelve hours by calls
+   * that no longer exist anywhere.
+   */
+  'trades:cooldown',
   'cron:last',
   // Cheap to rebuild — one request — and an operator resetting the record
   // almost certainly wants the board re-ranked rather than replayed.

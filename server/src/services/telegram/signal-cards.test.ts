@@ -199,6 +199,56 @@ describe('the take-profit ping', () => {
     assert.equal(posted.length, 0);
   });
 
+  it('does not claim the stop moved when it has not', async () => {
+    /*
+     * The bug this replaces told everyone their position was safe when it was
+     * not.
+     *
+     * The ping read the *first* rung and announced "stop moved to breakeven".
+     * The stop stopped moving there when `BREAKEVEN_AFTER_RUNG` became 2, and
+     * the text was never updated — so every TP1 said the trade could no longer
+     * lose while it was still riding its published stop. A reader acting on
+     * that is sizing the next trade against risk they think they have released.
+     */
+    await seed();
+    const laddered = { ...trade(), protectAfterRung: 2 };
+
+    await announceFills(laddered, [fill(1)], EVERYONE);
+
+    assert.match(posted[0]!.text, /TP1/);
+    assert.doesNotMatch(posted[0]!.text, /breakeven|беззбиток/i, 'the stop has not moved yet');
+    assert.match(posted[0]!.text, /original level|початковому/i, 'and it says so');
+  });
+
+  it('announces the stop moving on the rung that actually moves it', async () => {
+    await seed();
+    const laddered = { ...trade(), protectAfterRung: 2 };
+
+    await announceFills(laddered, [fill(1)], EVERYONE);
+    posted = [];
+    await announceFills(laddered, [fill(2)], EVERYONE);
+
+    assert.match(posted[0]!.text, /TP2/);
+    assert.match(posted[0]!.text, /breakeven/i, 'TP2 is when it becomes true');
+    assert.doesNotMatch(posted[0]!.text, /original level/i);
+  });
+
+  it('says it once, not again on the rung after', async () => {
+    /*
+     * A third rung filling is news about the rung, not about the stop — that
+     * moved one batch ago and repeating it reads as a second move.
+     */
+    await seed();
+    const laddered = { ...trade(), protectAfterRung: 2 };
+
+    await announceFills(laddered, [fill(1), fill(2)], EVERYONE);
+    posted = [];
+    await announceFills(laddered, [fill(3)], EVERYONE);
+
+    assert.match(posted[0]!.text, /TP3/);
+    assert.doesNotMatch(posted[0]!.text, /breakeven|original level/i);
+  });
+
   it('restores fetch', () => {
     globalThis.fetch = realFetch;
   });

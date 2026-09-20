@@ -118,6 +118,8 @@ export const uk: Dictionary = {
     `👁 <b>${base}</b> — сетап ${strategy}, за яким ти стежив, став викликом.`,
   replyHit: (ticker, tps, share) =>
     `✅ <b>$${ticker}</b> взяв ${tps}! Зафіксовано ${share}%.`,
+  replyStopWaiting: (rung) =>
+    `⚠️ Стоп ще на початковому рівні (чекає TP${rung}).`,
   replyBreakeven: '🛡 Стоп переставлено в беззбиток.',
   cardTpHit: (level, price, share) =>
     `✅ <b>TP${level}</b> <code>${price}</code> — взято, зафіксовано ${share}%`,
