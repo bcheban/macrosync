@@ -12,7 +12,9 @@ import { cn } from '@/lib/cn';
  */
 export function SignalCardSkeleton({ className }: { className?: string }) {
   return (
-    <div className={cn('glass rounded-card p-4 sm:p-5', className)}>
+    /* Hidden from readers: the grid carries `aria-busy`, and a dozen
+       shapes with no text announce as a dozen empty groups. */
+    <div aria-hidden className={cn('glass rounded-card p-4 sm:p-5', className)}>
       {/* header: base + badges, then the price */}
       <div className="flex items-start justify-between gap-2.5">
         <div className="space-y-1.5">

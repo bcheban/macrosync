@@ -4,7 +4,7 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { SectionHeader } from '@/components/ui/SectionHeader';
-import { Skeleton } from '@/components/ui/Skeleton';
+import { Skeleton, TradesBoardSkeleton } from '@/components/ui/Skeleton';
 import { cn } from '@/lib/cn';
 import { displayTicker } from '@/lib/ticker';
 import { consumeDeepLink, deepLinkSymbol } from '@/lib/deep-link';
@@ -389,7 +389,12 @@ export function LiveTrades({ data, loading }: LiveTradesProps) {
   };
 
   return (
-    <GlassCard className="p-4 sm:p-5">
+    /*
+     * `aria-busy` because the placeholders are `aria-hidden`: without it a
+     * screen reader is told the section is empty during a cold start, which is
+     * a different and worse claim than "still loading".
+     */
+    <GlassCard className="p-4 sm:p-5" aria-busy={loading && !total}>
       <SectionHeader
         icon={Radio}
         title={t('liveTrades.title')}
@@ -445,11 +450,15 @@ export function LiveTrades({ data, loading }: LiveTradesProps) {
       )}
 
       {loading && !total ? (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, index) => (
-            <Skeleton key={index} className="h-32 w-full" />
-          ))}
-        </div>
+        /*
+         * Only before the first payload — `!total` is doing that work.
+         *
+         * The board re-polls on a timer, and showing these on every refresh
+         * would blink the whole section several times a minute while the
+         * reader is trying to read it. A cold start is the one moment there is
+         * genuinely nothing to show.
+         */
+        <TradesBoardSkeleton />
       ) : !total ? (
         <p className="mt-4 px-1 py-6 text-center text-[11.5px] leading-relaxed text-white/40">
           {t('liveTrades.empty')}

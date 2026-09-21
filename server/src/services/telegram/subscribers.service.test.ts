@@ -27,6 +27,9 @@ let posted: [string, string][] = [];
 /** Persistent keyboards, in the order they were attached. */
 let replyKeyboards: string[][][] = [];
 
+/** Inline buttons, as `[label, callback_data]` pairs per message. */
+let inlineButtons: [string, string][][] = [];
+
 const okReply = { status: 200, body: { ok: true, result: {} } };
 
 const realFetch = globalThis.fetch;
@@ -39,12 +42,20 @@ before(() => {
       const payload = JSON.parse(String(init?.body ?? '{}')) as {
         chat_id: string;
         text: string;
-        reply_markup?: { keyboard?: { text: string }[][] };
+        reply_markup?: {
+          keyboard?: { text: string }[][];
+          inline_keyboard?: { text: string; callback_data?: string }[][];
+        };
       };
       posted.push([payload.chat_id, payload.text]);
 
       const rows = payload.reply_markup?.keyboard;
       if (rows) replyKeyboards.push(rows.map((row) => row.map((button) => button.text)));
+
+      const inline = payload.reply_markup?.inline_keyboard;
+      if (inline) {
+        inlineButtons.push(inline.flat().map((button) => [button.text, button.callback_data ?? '']));
+      }
 
       const reply = responses[payload.chat_id] ?? okReply;
       return {
@@ -332,6 +343,7 @@ describe('subscriber roster', () => {
     responses = {};
     posted = [];
     replyKeyboards = [];
+    inlineButtons = [];
   });
 
   it('seeds the owner so a fresh deploy still alerts somebody', async () => {
@@ -546,6 +558,58 @@ describe('subscriber roster', () => {
 
     assert.ok(withHub, 'onboarding must leave a hub on screen');
     assert.deepEqual(withHub.flat(), ['📊 Statistik', '⚙️ Einstellungen', '🧮 Rechner', '📖 Leitfaden']);
+  });
+
+  it('offers the main sections as buttons, and brings the hub back with them', async () => {
+    await start(700, 'uk');
+    posted = [];
+    replyKeyboards = [];
+    inlineButtons = [];
+
+    await webhook.handleUpdate({ message: { chat: { id: 700 }, text: '/menu' } });
+
+    const buttons = inlineButtons.at(-1) ?? [];
+    assert.deepEqual(
+      buttons.map(([label]) => label),
+      ['📊 Статистика', '📖 Довідник', '🧮 Калькулятор', '⚙️ Налаштування'],
+    );
+
+    /*
+     * Inline only. Telegram carries one `reply_markup` per message, so asking
+     * for both silently drops the hub — which is how this was first written,
+     * and what this line now prevents.
+     */
+    assert.equal(replyKeyboards.length, 0, '/menu must not claim to send a hub Telegram will drop');
+  });
+
+  it('routes a menu button to the same handler the typed command uses', async () => {
+    await start(701, 'uk');
+    posted = [];
+
+    await webhook.handleUpdate({
+      callback_query: { id: 'q1', data: 'menu:guide', message: { chat: { id: 701 }, message_id: 9 } },
+    });
+    const viaButton = posted.at(-1)?.[1] ?? '';
+
+    posted = [];
+    await webhook.handleUpdate({ message: { chat: { id: 701 }, text: '/guide' } });
+    const viaCommand = posted.at(-1)?.[1] ?? '';
+
+    assert.ok(viaButton.length > 0, 'the button must answer');
+    assert.equal(viaButton, viaCommand, 'a button and its command must say the same thing');
+  });
+
+  it('describes every command it publishes, including the new ones', () => {
+    /*
+     * The welcome renders `usage` and `icon` for each primary command, and a
+     * spec missing either throws while building the first message a newcomer
+     * sees. Adding /menu did exactly that, which is why this is checked.
+     */
+    for (const entry of webhook.menuCommands()) {
+      const line = webhook.botFatherBlock('uk');
+      assert.ok(line.includes(entry.command), `${entry.command} is missing from the published list`);
+    }
+    assert.ok(webhook.botFatherBlock('uk').includes('menu'), '/menu must be published');
   });
 
   it('publishes a menu Telegram will accept', () => {

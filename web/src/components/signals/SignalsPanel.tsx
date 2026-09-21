@@ -272,7 +272,11 @@ export function SignalsPanel() {
         somewhere that looks deliberate: the summary below grows, so a short
         card gets a taller reason panel rather than a hole.
       */}
-      <m.div layout className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-4">
+      <m.div
+        layout
+        aria-busy={waiting}
+        className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-4"
+      >
         {/* As many placeholders as signals are expected, so the grid does not
             change height when the payload lands. */}
         {waiting

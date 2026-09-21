@@ -28,6 +28,7 @@ export const en = {
    * a half-translated bot, which is worse than an obviously missing one.
    */
   commandHelp: {
+    menu: "The main sections as buttons — handy if you have hidden the keyboard at the bottom.",
     settings: "Choose which strategies you want — Scalping, Day Trading, Swing. Only what is ticked reaches you.",
     balance: "Set your account size and risk per trade to get a personalised margin in every signal. <code>/balance 1000 1</code> is a $1,000 deposit at 1% risk.",
     calc: "Position size, coin quantity and margin for any levels. Leave the levels out and it prices the newest open call against your saved deposit.",
@@ -310,6 +311,9 @@ export const en = {
    * happens rather than as settings, because a reader wants to know what their
    * position will do, not which variables produced it.
    */
+  /** The one-line header over the button menu. */
+  menuIntro: ['\u{1F9ED} <b>Where to next?</b>', '', 'Pick a section below \u2014 or type the command, whichever is quicker.'].join('\n'),
+
   guideLifecycle: '🎯 How a trade is managed',
   guideLifecycleBody: [
     '🎯 <b>What happens after you are in</b>',

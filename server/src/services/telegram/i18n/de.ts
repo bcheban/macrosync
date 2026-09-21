@@ -28,6 +28,7 @@ export const de: Dictionary = {
    * a half-translated bot, which is worse than an obviously missing one.
    */
   commandHelp: {
+    menu: "Die Hauptbereiche als Buttons — praktisch, wenn du die Tastatur unten ausgeblendet hast.",
     settings: "Wähle deine Strategien — Scalping, Day Trading, Swing. Nur was angehakt ist, erreicht dich.",
     balance: "Gib Kontogröße und Risiko pro Trade an, damit jedes Signal eine persönliche Margin trägt. <code>/balance 1000 1</code> ist eine Einlage von 1000 $ bei 1% Risiko.",
     calc: "Positionsgröße, Coin-Menge und Margin für beliebige Level. Ohne Level rechnet er das jüngste Signal.",
@@ -210,6 +211,8 @@ export const de: Dictionary = {
     '',
     '<i>Heute veröffentlicht der Bot Daytrading und Swing. Beide zielen auf ein breiteres Verhältnis bei gleichem Risiko.</i>',
   ].join('\n'),
+
+  menuIntro: ['\u{1F9ED} <b>Wohin als Nächstes?</b>', '', 'Wähle unten einen Bereich \u2014 oder tippe den Befehl, was schneller geht.'].join('\n'),
 
   guideLifecycle: '🎯 Wie ein Trade geführt wird',
   guideLifecycleBody: [

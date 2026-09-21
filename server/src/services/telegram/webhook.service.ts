@@ -461,6 +461,29 @@ const glossaryLines = (specs: CommandSpec[], locale: Locale): string[] => {
 const GUIDE_TOPICS = ['lifecycle', 'strategies', 'risk', 'leverage'] as const;
 type GuideTopic = (typeof GUIDE_TOPICS)[number];
 
+/**
+ * The main destinations, as tappable buttons under a message.
+ *
+ * This sits beside the persistent hub keyboard rather than replacing it. The
+ * two answer different problems: the hub is always on screen for somebody who
+ * keeps it there, and this one works for somebody who has hidden it — Telegram
+ * lets a reader collapse a reply keyboard with one tap, and until now the only
+ * way back was to know that /start would bring it back.
+ */
+const menuKeyboard = (locale: Locale): InlineKeyboard => {
+  const t = dict(locale);
+  return [
+    [
+      { text: t.hubDeepStats, callback_data: 'menu:stats' },
+      { text: t.hubGuide, callback_data: 'menu:guide' },
+    ],
+    [
+      { text: t.hubCalculator, callback_data: 'menu:calc' },
+      { text: t.hubSettings, callback_data: 'settings:root' },
+    ],
+  ];
+};
+
 const guideKeyboard = (locale: Locale): InlineKeyboard => {
   const t = dict(locale);
   return [
@@ -657,6 +680,14 @@ async function handleCommand(
         return;
       }
 
+      /*
+       * The hub, not the inline menu.
+       *
+       * Telegram carries one `reply_markup` per message, so these are a choice
+       * rather than a pair — and on the first message the persistent one wins:
+       * it stays on screen for every message after this, where inline buttons
+       * scroll away with the welcome that carried them.
+       */
       await sendTelegramMessage(welcome(prefs.locale), { chatId, replyKeyboard: hubKeyboard(prefs.locale) });
       return;
     }
@@ -848,6 +879,19 @@ async function handleCommand(
       return;
     }
 
+    case '/menu': {
+      const locale = (await getPrefs(chatId)).locale;
+
+      /*
+       * Inline, not the hub. Telegram takes one `reply_markup` per message and
+       * inline is the one that answers this command: it arrives attached to the
+       * message the reader just asked for, and it keeps working in the history
+       * long after a reply keyboard would have been replaced.
+       */
+      await sendTelegramMessage(dict(locale).menuIntro, { chatId, keyboard: menuKeyboard(locale) });
+      return;
+    }
+
     case '/guide': {
       const locale = (await getPrefs(chatId)).locale;
       await sendTelegramMessage(guideMenu(locale), { chatId, keyboard: guideKeyboard(locale) });
@@ -919,6 +963,18 @@ async function handleCallback(query: NonNullable<TelegramUpdate['callback_query'
   const [action, argument] = (query.data ?? '').split(':');
 
   switch (action) {
+    case 'menu': {
+      /*
+       * Delegated rather than reimplemented: a button and the typed command it
+       * stands for should produce the same message, and the surest way to keep
+       * that true is to have one of them call the other.
+       */
+      await answerCallbackQuery(id);
+      const target = { stats: '/stats_deep', guide: '/guide', calc: '/calc' }[argument ?? ''];
+      if (target) await handleCommand(chat, target, {});
+      return;
+    }
+
     case 'settings': {
       /*
        * `settings:root|strategies|channels`. A bare `settings` still arrives

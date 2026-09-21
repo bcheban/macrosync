@@ -84,6 +84,18 @@
     "icon": "🔎"
   },
   {
+    "command": "menu",
+    "usage": "/menu",
+    "menu": {
+      "en": "Buttons for the main sections",
+      "uk": "Кнопки основних розділів",
+      "de": "Buttons für die Hauptbereiche"
+    },
+    "help": "The main sections as buttons, for when the keyboard at the bottom has been hidden.",
+    "primary": true,
+    "icon": "🧭"
+  },
+  {
     "command": "help",
     "usage": "/help",
     "menu": {
